@@ -10,11 +10,15 @@
 #define DUNA_OP_LOAD_ZERO         4
 #define DUNA_OP_LOAD_ONE          5
 #define DUNA_OP_LOAD_FIXNUM       6
+#define DUNA_OP_LOAD_CHAR         7
+#define DUNA_OP_INC               8
+#define DUNA_OP_DEC               9
 
 /* data types */
 #define DUNA_TYPE_NIL            1
 #define DUNA_TYPE_BOOL           2
 #define DUNA_TYPE_FIXNUM         3
+#define DUNA_TYPE_CHAR           4
 
 /* Duna data types */
 struct duna_Object_ {
@@ -25,6 +29,7 @@ struct duna_Object_ {
   /* the value of this object */
   union {
     uint8_t bool;
+    uint8_t chr;
     uint32_t fixnum;
   } value;
 };
@@ -67,6 +72,9 @@ static void write_obj(duna_Object* obj)
     break;
   case DUNA_TYPE_FIXNUM:
     printf("%d", obj->value.fixnum);
+    break;
+  case DUNA_TYPE_CHAR:
+    printf("#\\%c", obj->value.chr);
     break;
   }
 }
@@ -153,6 +161,8 @@ duna_State* duna_init(void)
     return NULL;
   }
 
+  D->accum.type = DUNA_TYPE_NIL;
+
   return D;
 }
 
@@ -166,12 +176,21 @@ void duna_close(duna_State* D)
   }
 }
 
+void duna_dump(duna_State* D)
+{
+  printf("Registers:\n");
+  printf("accum: ");
+  write_obj(&D->accum);
+  printf("\n");
+}
+
 int duna_vm_run(duna_State* D)
 {
   uint32_t dw;
   uint8_t b1, b2, b3, b4;
 
   while(D->pc < D->code_size) {
+
     switch(D->code[D->pc++]) {
 
     case DUNA_OP_LOAD_NIL:
@@ -209,7 +228,19 @@ int duna_vm_run(duna_State* D)
       D->accum.type = DUNA_TYPE_FIXNUM;
       D->accum.value.fixnum = dw;
       break;
+    case DUNA_OP_LOAD_CHAR:
+      D->accum.type = DUNA_TYPE_CHAR;
+      D->accum.value.chr = D->code[D->pc++];
+      break;
+    case DUNA_OP_INC:
+      D->accum.value.fixnum++;
+      break;
+    case DUNA_OP_DEC:
+      D->accum.value.fixnum--;
+      break;
     }
+
+    duna_dump(D);
   }
 
   return 1;
@@ -230,14 +261,6 @@ int duna_load_file(duna_State* D, const char *fname)
   return duna_vm_run(D);
 }
 
-void duna_dump(duna_State* D)
-{
-  printf("Registers:\n");
-  printf("accum: ");
-  write_obj(&D->accum);
-  printf("\n");
-}
-
 int main(int argc, char *argv[])
 {
   duna_State* D;
@@ -246,9 +269,6 @@ int main(int argc, char *argv[])
   if(!duna_load_file(D, argv[1])) {
     printf("Error!\n");
   }
-
-  /* inspecting the machine */
-  duna_dump(D);
 
   duna_close(D);
 

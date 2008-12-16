@@ -13,6 +13,11 @@
 #define DUNA_OP_LOAD_CHAR         7
 #define DUNA_OP_INC               8
 #define DUNA_OP_DEC               9
+#define DUNA_OP_FIXNUM_TO_CHAR   10
+#define DUNA_OP_CHAR_TO_FIXNUM   11
+#define DUNA_OP_NULL_P           12
+#define DUNA_OP_ZERO_P           13
+#define DUNA_OP_NOT              14
 
 /* data types */
 #define DUNA_TYPE_NIL            1
@@ -179,8 +184,8 @@ void duna_close(duna_State* D)
 void duna_dump(duna_State* D)
 {
   printf("Registers:\n");
-  printf("accum: ");
-  write_obj(&D->accum);
+  printf("\taccum: "); write_obj(&D->accum); printf("\n");
+  printf("\tPC: %d\n", D->pc);
   printf("\n");
 }
 
@@ -228,15 +233,62 @@ int duna_vm_run(duna_State* D)
       D->accum.type = DUNA_TYPE_FIXNUM;
       D->accum.value.fixnum = dw;
       break;
+
     case DUNA_OP_LOAD_CHAR:
       D->accum.type = DUNA_TYPE_CHAR;
       D->accum.value.chr = D->code[D->pc++];
       break;
+
     case DUNA_OP_INC:
       D->accum.value.fixnum++;
       break;
+
     case DUNA_OP_DEC:
       D->accum.value.fixnum--;
+      break;
+
+    case DUNA_OP_FIXNUM_TO_CHAR:
+      b1 = (uint8_t) D->accum.value.fixnum;
+
+      D->accum.type = DUNA_TYPE_CHAR;
+      D->accum.value.chr = b1;
+      break;
+
+    case DUNA_OP_CHAR_TO_FIXNUM:
+      dw = (uint32_t) D->accum.value.chr;
+
+      D->accum.type = DUNA_TYPE_FIXNUM;
+      D->accum.value.fixnum = dw;
+      break;
+
+    case DUNA_OP_NULL_P:
+      if(D->accum.type == DUNA_TYPE_NIL) {
+	D->accum.type = DUNA_TYPE_BOOL;
+	D->accum.value.bool = 1;
+      } else {
+	D->accum.type = DUNA_TYPE_BOOL;
+	D->accum.value.bool = 0;
+      }
+      break;
+
+    case DUNA_OP_ZERO_P:
+      if(D->accum.value.fixnum == 0) {
+	D->accum.type = DUNA_TYPE_BOOL;
+	D->accum.value.bool = 1;
+      } else {
+	D->accum.type = DUNA_TYPE_BOOL;
+	D->accum.value.bool = 0;
+      }
+      break;
+
+    case DUNA_OP_NOT:
+      if(D->accum.value.bool == 0) {
+	D->accum.type = DUNA_TYPE_BOOL;
+	D->accum.value.bool = 1;
+      } else {
+	D->accum.type = DUNA_TYPE_BOOL;
+	D->accum.value.bool = 0;
+      }
       break;
     }
 

@@ -18,6 +18,14 @@
 #define DUNA_OP_NULL_P           12
 #define DUNA_OP_ZERO_P           13
 #define DUNA_OP_NOT              14
+#define DUNA_OP_BOOL_P           15
+#define DUNA_OP_CHAR_P           16
+#define DUNA_OP_FIXNUM_P         17
+#define DUNA_OP_PUSH             18
+#define DUNA_OP_POP              19
+#define DUNA_OP_PLUS             20
+#define DUNA_OP_MINUS            21
+#define DUNA_OP_MULT             22
 
 /* data types */
 #define DUNA_TYPE_NIL            1
@@ -58,6 +66,15 @@ struct duna_State_ {
 
   /* accumulator register */
   duna_Object accum;
+
+  /* the machine stack */
+  duna_Object *stack;
+
+  /* stack allocated size */
+  uint32_t stack_size;
+
+  /* where is the top of the stack */
+  uint32_t stack_top;
 };
 
 typedef struct duna_State_ duna_State;
@@ -156,12 +173,24 @@ duna_State* duna_init(void)
   duna_State *D = NULL;
 
   D = (duna_State*)malloc(sizeof(duna_State));
-  D->code_size = 0;
 
+  /* code */
+  D->code_size = 0;
   D->code = (uint8_t*)malloc(sizeof(uint8_t) * 8192);
   if(D->code) {
     D->code_capacity = 8192;
   } else {
+    free(D);
+    return NULL;
+  }
+
+  /* stack */
+  D->stack_top = 0;
+  D->stack = (duna_Object*)malloc(sizeof(duna_Object) * 1024);
+  if(D->stack) {
+    D->stack_size = 1024;
+  } else {
+    free(D->code);
     free(D);
     return NULL;
   }
@@ -183,11 +212,30 @@ void duna_close(duna_State* D)
 
 void duna_dump(duna_State* D)
 {
+  uint32_t i;
+
   printf("Registers:\n");
   printf("\taccum: "); write_obj(&D->accum); printf("\n");
   printf("\tPC: %d\n", D->pc);
+
+  printf("Stack:");
+  for(i = 0; i < D->stack_top; i++) {
+    printf(" ");
+    write_obj(D->stack + i);
+  }
   printf("\n");
 }
+
+#define DUNA_SET_BOOL(cond)		\
+  do {					\
+    if(cond) {				\
+      D->accum.type = DUNA_TYPE_BOOL;	\
+      D->accum.value.bool = 1;		\
+    } else {				\
+      D->accum.type = DUNA_TYPE_BOOL;	\
+      D->accum.value.bool = 0;		\
+    }					\
+  } while(0)
 
 int duna_vm_run(duna_State* D)
 {
@@ -262,33 +310,47 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_NULL_P:
-      if(D->accum.type == DUNA_TYPE_NIL) {
-	D->accum.type = DUNA_TYPE_BOOL;
-	D->accum.value.bool = 1;
-      } else {
-	D->accum.type = DUNA_TYPE_BOOL;
-	D->accum.value.bool = 0;
-      }
+      DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_NIL);
       break;
 
     case DUNA_OP_ZERO_P:
-      if(D->accum.value.fixnum == 0) {
-	D->accum.type = DUNA_TYPE_BOOL;
-	D->accum.value.bool = 1;
-      } else {
-	D->accum.type = DUNA_TYPE_BOOL;
-	D->accum.value.bool = 0;
-      }
+      DUNA_SET_BOOL(D->accum.value.fixnum == 0);
       break;
 
     case DUNA_OP_NOT:
-      if(D->accum.value.bool == 0) {
-	D->accum.type = DUNA_TYPE_BOOL;
-	D->accum.value.bool = 1;
-      } else {
-	D->accum.type = DUNA_TYPE_BOOL;
-	D->accum.value.bool = 0;
-      }
+      DUNA_SET_BOOL(D->accum.value.bool == 0);
+      break;
+
+    case DUNA_OP_BOOL_P:
+      DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_BOOL);
+      break;
+
+    case DUNA_OP_CHAR_P:
+      DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_CHAR);
+      break;
+
+    case DUNA_OP_FIXNUM_P:
+      DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_FIXNUM);
+      break;
+
+    case DUNA_OP_PUSH:
+      D->stack[D->stack_top++] = D->accum;
+      break;
+
+    case DUNA_OP_POP:
+      D->accum = D->stack[--D->stack_top];
+      break;
+
+    case DUNA_OP_PLUS:
+      D->accum.value.fixnum += (D->stack[--D->stack_top]).value.fixnum;
+      break;
+
+    case DUNA_OP_MINUS:
+      D->accum.value.fixnum -= (D->stack[--D->stack_top]).value.fixnum;
+      break;
+
+    case DUNA_OP_MULT:
+      D->accum.value.fixnum *= (D->stack[--D->stack_top]).value.fixnum;
       break;
     }
 

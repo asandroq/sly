@@ -26,6 +26,14 @@
 #define DUNA_OP_PLUS             20
 #define DUNA_OP_MINUS            21
 #define DUNA_OP_MULT             22
+#define DUNA_OP_LOAD_0           23
+#define DUNA_OP_LOAD_1           24
+#define DUNA_OP_LOAD_2           25
+#define DUNA_OP_LOAD_3           26
+#define DUNA_OP_LOAD             27
+#define DUNA_OP_SET_FP           28
+#define DUNA_OP_SAVE_FP          29
+#define DUNA_OP_REST_FP          30
 
 /* data types */
 #define DUNA_TYPE_NIL            1
@@ -74,7 +82,10 @@ struct duna_State_ {
   uint32_t stack_size;
 
   /* where is the top of the stack */
-  uint32_t stack_top;
+  uint32_t sp;
+
+  /* the frame pointer */
+  uint32_t fp;
 };
 
 typedef struct duna_State_ duna_State;
@@ -173,6 +184,12 @@ duna_State* duna_init(void)
   duna_State *D = NULL;
 
   D = (duna_State*)malloc(sizeof(duna_State));
+  if(!D) {
+    return NULL;
+  }
+
+  D->pc = 0;
+  D->fp = 0;
 
   /* code */
   D->code_size = 0;
@@ -185,7 +202,7 @@ duna_State* duna_init(void)
   }
 
   /* stack */
-  D->stack_top = 0;
+  D->sp = 0;
   D->stack = (duna_Object*)malloc(sizeof(duna_Object) * 1024);
   if(D->stack) {
     D->stack_size = 1024;
@@ -206,6 +223,9 @@ void duna_close(duna_State* D)
     if(D->code) {
       free(D->code);
     }
+    if(D->stack) {
+      free(D->stack);
+    }
     free(D);
   }
 }
@@ -217,9 +237,10 @@ void duna_dump(duna_State* D)
   printf("Registers:\n");
   printf("\taccum: "); write_obj(&D->accum); printf("\n");
   printf("\tPC: %d\n", D->pc);
+  printf("\tFP: %d\n", D->fp);
 
   printf("Stack:");
-  for(i = 0; i < D->stack_top; i++) {
+  for(i = 0; i < D->sp; i++) {
     printf(" ");
     write_obj(D->stack + i);
   }
@@ -239,7 +260,7 @@ void duna_dump(duna_State* D)
 
 int duna_vm_run(duna_State* D)
 {
-  uint32_t dw;
+  uint32_t dw1, dw2;
   uint8_t b1, b2, b3, b4;
 
   while(D->pc < D->code_size) {
@@ -275,11 +296,11 @@ int duna_vm_run(duna_State* D)
       b2 = D->code[D->pc++];
       b3 = D->code[D->pc++];
       b4 = D->code[D->pc++];
-      dw = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
-	   ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
+      dw1 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
+	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
 
       D->accum.type = DUNA_TYPE_FIXNUM;
-      D->accum.value.fixnum = dw;
+      D->accum.value.fixnum = dw1;
       break;
 
     case DUNA_OP_LOAD_CHAR:
@@ -303,10 +324,10 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_CHAR_TO_FIXNUM:
-      dw = (uint32_t) D->accum.value.chr;
+      dw1 = (uint32_t) D->accum.value.chr;
 
       D->accum.type = DUNA_TYPE_FIXNUM;
-      D->accum.value.fixnum = dw;
+      D->accum.value.fixnum = dw1;
       break;
 
     case DUNA_OP_NULL_P:
@@ -334,23 +355,77 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_PUSH:
-      D->stack[D->stack_top++] = D->accum;
+      D->stack[D->sp++] = D->accum;
       break;
 
     case DUNA_OP_POP:
-      D->accum = D->stack[--D->stack_top];
+      b1 = D->code[D->pc++];
+      b2 = D->code[D->pc++];
+      b3 = D->code[D->pc++];
+      b4 = D->code[D->pc++];
+      dw1 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
+	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
+
+      D->sp -= dw1;
       break;
 
     case DUNA_OP_PLUS:
-      D->accum.value.fixnum += (D->stack[--D->stack_top]).value.fixnum;
+      D->accum.value.fixnum += (D->stack[--D->sp]).value.fixnum;
       break;
 
     case DUNA_OP_MINUS:
-      D->accum.value.fixnum -= (D->stack[--D->stack_top]).value.fixnum;
+      D->accum.value.fixnum -= (D->stack[--D->sp]).value.fixnum;
       break;
 
     case DUNA_OP_MULT:
-      D->accum.value.fixnum *= (D->stack[--D->stack_top]).value.fixnum;
+      D->accum.value.fixnum *= (D->stack[--D->sp]).value.fixnum;
+      break;
+
+    case DUNA_OP_LOAD_0:
+      D->accum = D->stack[D->fp];
+      break;
+
+    case DUNA_OP_LOAD_1:
+      D->accum = D->stack[D->fp-1];
+      break;
+
+    case DUNA_OP_LOAD_2:
+      D->accum = D->stack[D->fp-2];
+      break;
+
+    case DUNA_OP_LOAD_3:
+      D->accum = D->stack[D->fp-3];
+      break;
+
+    case DUNA_OP_LOAD:
+      b1 = D->code[D->pc++];
+      b2 = D->code[D->pc++];
+      b3 = D->code[D->pc++];
+      b4 = D->code[D->pc++];
+      dw1 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
+	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
+
+      b1 = D->code[D->pc++];
+      b2 = D->code[D->pc++];
+      b3 = D->code[D->pc++];
+      b4 = D->code[D->pc++];
+      dw2 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
+	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
+
+      D->accum = D->stack[D->fp-dw1];
+      break;
+
+    case DUNA_OP_SET_FP:
+      D->fp = D->sp - 1;
+      break;
+
+    case DUNA_OP_SAVE_FP:
+      (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
+      (D->stack[D->sp++]).value.fixnum = D->fp;
+      break;
+
+    case DUNA_OP_REST_FP:
+      D->fp = (D->stack[--D->sp]).value.fixnum;
       break;
     }
 

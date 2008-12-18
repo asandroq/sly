@@ -260,8 +260,8 @@ void duna_dump(duna_State* D)
 
 int duna_vm_run(duna_State* D)
 {
-  uint32_t dw1, dw2;
   uint8_t b1, b2, b3, b4;
+  uint32_t i, j, k, dw1, dw2;
 
   while(D->pc < D->code_size) {
 
@@ -359,13 +359,10 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_POP:
-      b1 = D->code[D->pc++];
-      b2 = D->code[D->pc++];
-      b3 = D->code[D->pc++];
-      b4 = D->code[D->pc++];
-      dw1 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
-	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
+      /* removing number of arguments */
+      dw1 = (D->stack[--D->sp]).value.fixnum;
 
+      /* removing arguments */
       D->sp -= dw1;
       break;
 
@@ -412,7 +409,16 @@ int duna_vm_run(duna_State* D)
       dw2 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
 	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
 
-      D->accum = D->stack[D->fp-dw1];
+      j = D->fp;
+      for(i = 0; i < dw2; i++) {
+	/* k has the number or arguments */
+	k = (D->stack[j+1]).value.fixnum;
+
+	/* j has the previous FP */
+	j = (D->stack[j-k]).value.fixnum;
+      }
+
+      D->accum = D->stack[j-dw1];
       break;
 
     case DUNA_OP_SET_FP:

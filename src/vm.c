@@ -40,6 +40,11 @@
 #define DUNA_TYPE_BOOL           2
 #define DUNA_TYPE_FIXNUM         3
 #define DUNA_TYPE_CHAR           4
+#define DUNA_TYPE_CLOSURE        5
+
+/* forward type declarations */
+typedef struct duna_Object_ duna_Object;
+typedef struct duna_GCObject_ duna_GCObject;
 
 /* Duna data types */
 struct duna_Object_ {
@@ -49,13 +54,26 @@ struct duna_Object_ {
 
   /* the value of this object */
   union {
+    /* immediates */
     uint8_t bool;
     uint8_t chr;
     uint32_t fixnum;
+
+    /* collectable objects */
+    duna_GCObject *gc;
   } value;
 };
 
-typedef struct duna_Object_ duna_Object;
+struct duna_GCObject_ {
+  uint8_t visited;
+
+  union {
+    struct {
+      uint32_t entry_point;
+      duna_Object *free_vars;
+    } closure;
+  } data;
+};
 
 /* the state of the Duna interpreter */
 struct duna_State_ {
@@ -116,7 +134,7 @@ static int load_code_from_file(duna_State* D, const char* fname)
 {
   FILE *f;
   int pc, ret;
-  char buf[256];
+  uint8_t code;
 
   /* opening input file */
   f = fopen(fname, "r");
@@ -125,13 +143,8 @@ static int load_code_from_file(duna_State* D, const char* fname)
   }
 
   /* bytecode beginning */
-  ret = fscanf(f, " %[^\n\t ]", buf);
-  if(ret == EOF || ret == 0) {
-    fclose(f);
-    return -1;
-  }
-  if(buf[0] != '(' || buf[1] != '\0') {
-    /* incorrect bytecode beginning */
+  ret = fscanf(f, " #(");
+  if(ret == EOF) {
     fclose(f);
     return -1;
   }
@@ -140,22 +153,22 @@ static int load_code_from_file(duna_State* D, const char* fname)
 
   /* reading actual code */
   while(1) {
-    ret = fscanf(f, " %[^\n\t ]", buf);
-    if(ret == EOF || ret == 0) {
+    ret = fscanf(f, " %hhu", &code);
+    if(ret == EOF) {
+      /* unexpected end */
       fclose(f);
       return -1;
     }
 
-    /* end of bytecode */
-    if(buf[0] == ')' && buf[1] == '\0') {
+    if(ret == 0) {
+      /* maybe got to end? */
+      ret = fscanf(f, ")");
       fclose(f);
-      return pc;
-    }
-
-    ret = atoi(buf);
-    if(ret > 255) {
-      fclose(f);
-      return -1;
+      if(ret == EOF) {
+	return -1;
+      } else {
+	return pc;
+      }
     }
 
     /* does the code vector has space? */
@@ -175,7 +188,7 @@ static int load_code_from_file(duna_State* D, const char* fname)
     }
 
     /* adds new read byte to code vector */
-    D->code[D->code_size++] = ret;
+    D->code[D->code_size++] = code;
   }
 }
 

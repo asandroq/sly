@@ -30,7 +30,8 @@
     (LOAD           . 27)
     (SET-FP         . 28)
     (SAVE-FP        . 29)
-    (REST-FP        . 30)))
+    (REST-FP        . 30)
+    (CREATE-CLOSURE . 31)))
 
 (define (make-compiler-state)
   (vector
@@ -91,7 +92,19 @@
     (add-to-code! cs b2)
     (add-to-code! cs b3)
     (add-to-code! cs b4)))
-  
+
+(define (insert-fixnum! cs x i)
+  (let* ((b4 (quotient  x  16777216))
+         (x4 (remainder x  16777216))
+         (b3 (quotient  x4 65536))
+         (x3 (remainder x4 65536))
+         (b2 (quotient  x3 256))
+         (b1 (remainder x3 256)))
+    (insert-into-code! cs i b1)
+    (insert-into-code! cs (+ i 1) b2)
+    (insert-into-code! cs (+ i 2) b3)
+    (insert-into-code! cs (+ i 3) b4)))
+
 ;; emit code for immediate values
 (define (emit-immediate cs x)
   (cond
@@ -148,6 +161,18 @@
                   (compile-exp cs x env))
                 exps)))
 
+(define (compile-closure cs vars body env)
+  (instr cs 'CREATE-CLOSURE)
+  (let ((i (code-size cs))
+        (new-env (cons (reverse vars) '())))
+    (emit-fixnum cs 0)
+    (compile-seq cs body new-env)
+    (instr cs 'POP)
+    (instr cs 'REST-FP)
+    (let ((j (- (code-size cs) i 4)))
+      ;; back patching jump before closure code
+      (insert-fixnum! cs j i))))
+
 (define (compile-let cs vars args body env)
   (instr cs 'SAVE-FP)
   (let loop ((new-env '())
@@ -198,6 +223,8 @@
          (binary-primm cs 'MULT x env))
         ((begin)
          (compile-seq cs (cdr x) env))
+        ((lambda)
+         (compile-closure cs (cadr x) (cddr x) env))
         ((let)
          (let ((bindings (cadr x)))
            (let ((vars (map car  bindings))

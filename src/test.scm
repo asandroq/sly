@@ -9,7 +9,9 @@
          (e (let ((z (+ 20 20)))
               (zero? (- (* 10 4) z)))))
      (+ a d)
-     ((lambda (f) (* a f)) (- c b))))
+     (let ((x (lambda (m n o)
+                (+ (* m n) o))))
+       ((lambda (f) (* a f)) (- c b)))))
 
 (compile-to-file "test.fasl" test1)
 

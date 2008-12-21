@@ -34,6 +34,7 @@
 #define DUNA_OP_SET_FP           28
 #define DUNA_OP_SAVE_FP          29
 #define DUNA_OP_REST_FP          30
+#define DUNA_OP_MAKE_CLOSURE     31
 
 /* data types */
 #define DUNA_TYPE_NIL            1
@@ -127,6 +128,11 @@ static void write_obj(duna_Object* obj)
   case DUNA_TYPE_CHAR:
     printf("#\\%c", obj->value.chr);
     break;
+  case DUNA_TYPE_CLOSURE:
+    printf("<#closure>");
+    break;
+  default:
+    printf("Unknown type!");
   }
 }
 
@@ -445,6 +451,22 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_REST_FP:
       D->fp = (D->stack[--D->sp]).value.fixnum;
+      break;
+
+    case DUNA_OP_MAKE_CLOSURE:
+      b1 = D->code[D->pc++];
+      b2 = D->code[D->pc++];
+      b3 = D->code[D->pc++];
+      b4 = D->code[D->pc++];
+      dw1 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
+	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
+
+      D->accum.type = DUNA_TYPE_CLOSURE;
+      D->accum.value.gc = (duna_GCObject*) malloc(sizeof(duna_GCObject));
+      D->accum.value.gc->data.closure.entry_point = D->pc;
+      D->accum.value.gc->data.closure.free_vars = NULL;
+
+      D->pc += dw1;
       break;
     }
 

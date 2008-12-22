@@ -148,7 +148,7 @@
        (let ((op (car x)))
          (and (assv op *primitives*) #t))))
 
-(define (emit-primitive-call cs x env)
+(define (compile-primitive-call cs x env)
   (let* ((prim (car x))
          (prim-rec (assv prim *primitives*)))
     (if prim-rec
@@ -223,27 +223,8 @@
 
 (define (compile-exp cs x env)
   (cond
-   ((primitive-call? x)
-    (emit-primitive-call cs x env))
    ((immediate? x)
     (emit-immediate cs x))
-   ((pair? x)
-    (case (car x)
-      ((begin)
-       (compile-seq cs (cdr x) env))
-      ((lambda)
-       (compile-closure cs (cadr x) (cddr x) env))
-      ((let)
-       (let ((bindings (cadr x)))
-         (let ((vars (map car  bindings))
-               (args (map cadr bindings)))
-           (compile-let cs vars args (cddr x) env))))
-      (else
-       (let ((op (car x)))
-         (if (and (pair? op)
-                  (eq? (car op) 'lambda))
-             (compile-let cs (cadr op) (cdr x) (cddr op) env)
-             (error "Expression not yet supported"))))))
    ((symbol? x)
     (let ((cont (lambda (i j)
                   (if i
@@ -267,6 +248,25 @@
                             (emit-fixnum cs j)))
                       (error "Unknown binding!")))))
       (lookup x env cont)))
+   ((primitive-call? x)
+    (compile-primitive-call cs x env))
+   ((pair? x)
+    (case (car x)
+      ((begin)
+       (compile-seq cs (cdr x) env))
+      ((lambda)
+       (compile-closure cs (cadr x) (cddr x) env))
+      ((let)
+       (let ((bindings (cadr x)))
+         (let ((vars (map car  bindings))
+               (args (map cadr bindings)))
+           (compile-let cs vars args (cddr x) env))))
+      (else
+       (let ((op (car x)))
+         (if (and (pair? op)
+                  (eq? (car op) 'lambda))
+             (compile-let cs (cadr op) (cdr x) (cddr op) env)
+             (error "Expression not yet supported"))))))
    (else
     (error "Cannot compile atom"))))
 

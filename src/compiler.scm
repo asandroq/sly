@@ -31,7 +31,9 @@
     (SET-FP         . 28)
     (SAVE-FP        . 29)
     (REST-FP        . 30)
-    (CREATE-CLOSURE . 31)))
+    (CREATE-CLOSURE . 31)
+    (CALL           . 32)
+    (RETURN         . 33)))
 
 (define (make-compiler-state)
   (vector
@@ -194,10 +196,12 @@
   (instr cs 'CREATE-CLOSURE)
   (let ((i (code-size cs))
         (new-env (cons (reverse vars) '())))
+    ;; this will be back-patched later
     (emit-fixnum cs 0)
     (compile-seq cs body new-env)
     (instr cs 'POP)
     (instr cs 'REST-FP)
+    (instr cs 'RETURN)
     (let ((j (- (code-size cs) i 4)))
       ;; back patching jump before closure code
       (insert-fixnum! cs j i))))
@@ -220,6 +224,29 @@
           (compile-exp cs exp env)
           (instr cs 'PUSH)
           (loop (cons var new-env) (cdr vars) (cdr args))))))
+
+(define (compile-application cs proc args env)
+  (instr cs 'LOAD-FIXNUM)
+  (let ((i (code-size cs)))
+    ;; this is the return address, will be back-patched later
+    (emit-fixnum cs 0)
+    (instr cs 'PUSH)
+    (instr cs 'SAVE-FP)
+    (let ((len (length args)))
+      (let loop ((args args))
+        (if (null? args)
+            (begin
+              (instr cs 'SET-FP)
+              (emit-immediate cs len)
+              (instr cs 'PUSH)
+              (compile-exp cs proc env)
+              (instr cs 'CALL)
+              ;; back-patching return address
+              (insert-fixnum! cs (code-size cs) i))
+            (let ((arg (car args)))
+              (compile-exp cs arg env)
+              (instr cs 'PUSH)
+              (loop (cdr args))))))))
 
 (define (compile-exp cs x env)
   (cond
@@ -266,7 +293,7 @@
          (if (and (pair? op)
                   (eq? (car op) 'lambda))
              (compile-let cs (cadr op) (cdr x) (cddr op) env)
-             (error "Expression not yet supported"))))))
+             (compile-application cs op (cdr x) env))))))
    (else
     (error "Cannot compile atom"))))
 

@@ -35,6 +35,8 @@
 #define DUNA_OP_SAVE_FP          29
 #define DUNA_OP_REST_FP          30
 #define DUNA_OP_MAKE_CLOSURE     31
+#define DUNA_OP_CALL             32
+#define DUNA_OP_RETURN           33
 
 /* data types */
 #define DUNA_TYPE_NIL            1
@@ -441,19 +443,24 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_SET_FP:
+      /* sets the frame pointer to the current stack top */
       D->fp = D->sp - 1;
       break;
 
     case DUNA_OP_SAVE_FP:
+      /* save frame pointer to the stack */
       (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
       (D->stack[D->sp++]).value.fixnum = D->fp;
       break;
 
     case DUNA_OP_REST_FP:
+      /* restores frame pointer from top of the stack */
       D->fp = (D->stack[--D->sp]).value.fixnum;
       break;
 
     case DUNA_OP_MAKE_CLOSURE:
+      /* following this opcode there is the size of the closure code
+	 so I can jump over it */
       b1 = D->code[D->pc++];
       b2 = D->code[D->pc++];
       b3 = D->code[D->pc++];
@@ -467,6 +474,18 @@ int duna_vm_run(duna_State* D)
       D->accum.value.gc->data.closure.free_vars = NULL;
 
       D->pc += dw1;
+      break;
+
+    case DUNA_OP_CALL:
+      /* at this point we have the return address, the frame pointer,
+	 the arguments and the number of arguments on the stack, and
+	 the functional object in the accumulator */
+      D->pc = D->accum.value.gc->data.closure.entry_point;
+      break;
+
+    case DUNA_OP_RETURN:
+      /* return address on top of stack */
+      D->pc = (D->stack[--D->sp]).value.fixnum;
       break;
     }
 

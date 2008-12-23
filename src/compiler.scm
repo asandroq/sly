@@ -33,7 +33,9 @@
     (REST-FP        . 30)
     (CREATE-CLOSURE . 31)
     (CALL           . 32)
-    (RETURN         . 33)))
+    (RETURN         . 33)
+    (SAVE-PROC      . 34)
+    (SET-PROC       . 35)))
 
 (define (make-compiler-state)
   (vector
@@ -226,6 +228,7 @@
           (loop (cons var new-env) (cdr vars) (cdr args))))))
 
 (define (compile-application cs proc args env)
+  (instr cs 'SAVE-PROC)
   (instr cs 'LOAD-FIXNUM)
   (let ((i (code-size cs)))
     ;; this is the return address, will be back-patched later
@@ -236,10 +239,11 @@
       (let loop ((args args))
         (if (null? args)
             (begin
+              (compile-exp cs proc env)
+              (instr cs 'SET-PROC)
               (instr cs 'SET-FP)
               (emit-immediate cs len)
               (instr cs 'PUSH)
-              (compile-exp cs proc env)
               (instr cs 'CALL)
               ;; back-patching return address
               (insert-fixnum! cs (code-size cs) i))

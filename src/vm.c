@@ -37,6 +37,8 @@
 #define DUNA_OP_MAKE_CLOSURE     31
 #define DUNA_OP_CALL             32
 #define DUNA_OP_RETURN           33
+#define DUNA_OP_SAVE_PROC        34
+#define DUNA_OP_SET_PROC         35
 
 /* data types */
 #define DUNA_TYPE_NIL            1
@@ -107,6 +109,9 @@ struct duna_State_ {
 
   /* the frame pointer */
   uint32_t fp;
+
+  /* the current procedure */
+  duna_Object proc;
 };
 
 typedef struct duna_State_ duna_State;
@@ -131,7 +136,7 @@ static void write_obj(duna_Object* obj)
     printf("#\\%c", obj->value.chr);
     break;
   case DUNA_TYPE_CLOSURE:
-    printf("<#closure>");
+    printf("<#closure %u>", obj->value.gc->data.closure.entry_point);
     break;
   default:
     printf("Unknown type!");
@@ -233,6 +238,10 @@ duna_State* duna_init(void)
     return NULL;
   }
 
+  /* current procedure */
+  D->proc.type = DUNA_TYPE_BOOL;
+  D->proc.value.bool = 0;
+
   D->accum.type = DUNA_TYPE_NIL;
 
   return D;
@@ -257,6 +266,7 @@ void duna_dump(duna_State* D)
 
   printf("Registers:\n");
   printf("\taccum: "); write_obj(&D->accum); printf("\n");
+  printf("\tclosure: "); write_obj(&D->proc); printf("\n");
   printf("\tPC: %d\n", D->pc);
   printf("\tFP: %d\n", D->fp);
 
@@ -477,15 +487,25 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_CALL:
-      /* at this point we have the return address, the frame pointer,
-	 the arguments and the number of arguments on the stack, and
-	 the functional object in the accumulator */
-      D->pc = D->accum.value.gc->data.closure.entry_point;
+      /*
+       * at this point we have the previous procedure, return address,
+       * the frame pointer, the arguments and the number of arguments on the stack
+       */
+      D->pc = D->proc.value.gc->data.closure.entry_point;
       break;
 
     case DUNA_OP_RETURN:
-      /* return address on top of stack */
+      /* return address and previous procedure on top of stack */
       D->pc = (D->stack[--D->sp]).value.fixnum;
+      D->proc = D->stack[--D->sp];
+      break;
+
+    case DUNA_OP_SAVE_PROC:
+      D->stack[D->sp++] = D->proc;
+      break;
+
+    case DUNA_OP_SET_PROC:
+      D->proc = D->accum;
       break;
     }
 

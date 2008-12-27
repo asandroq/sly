@@ -39,6 +39,8 @@
 #define DUNA_OP_RETURN           33
 #define DUNA_OP_SAVE_PROC        34
 #define DUNA_OP_SET_PROC         35
+#define DUNA_OP_JMP_IF           36
+#define DUNA_OP_JMP              37
 
 /* data types */
 #define DUNA_TYPE_NIL            1
@@ -506,6 +508,30 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_SET_PROC:
       D->proc = D->accum;
+      break;
+
+    case DUNA_OP_JMP_IF:
+      b1 = D->code[D->pc++];
+      b2 = D->code[D->pc++];
+      b3 = D->code[D->pc++];
+      b4 = D->code[D->pc++];
+      dw1 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
+	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
+
+      if(!(D->accum.type == DUNA_TYPE_BOOL && D->accum.value.bool == 0)) {
+	D->pc += dw1;
+      }
+      break;
+
+    case DUNA_OP_JMP:
+      b1 = D->code[D->pc++];
+      b2 = D->code[D->pc++];
+      b3 = D->code[D->pc++];
+      b4 = D->code[D->pc++];
+      dw1 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
+	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
+
+      D->pc += dw1;
       break;
     }
 

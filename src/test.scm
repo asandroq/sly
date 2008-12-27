@@ -11,7 +11,9 @@
      (+ a d)
      (let ((x (lambda (f g)
                 (* g f))))
-       (x (- c b) a))))
+       (if e
+           (x (- c b) a)
+           (x (- d a) b)))))
 
 (compile-to-file "test.fasl" test1)
 

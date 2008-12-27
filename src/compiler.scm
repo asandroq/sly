@@ -35,12 +35,14 @@
     (CALL           . 32)
     (RETURN         . 33)
     (SAVE-PROC      . 34)
-    (SET-PROC       . 35)))
+    (SET-PROC       . 35)
+    (JMP-IF         . 36)
+    (JMP            . 37)))
 
 (define (make-compiler-state)
   (vector
    0                          ;; Index of next instruction
-   (make-vector 16 0)))       ;; code vector
+   (make-vector 32 0)))       ;; code vector
 
 (define (write-code-vector cs)
   (write (vector-ref cs 1)))
@@ -194,6 +196,25 @@
                   (compile-exp cs x env))
                 exps)))
 
+(define (compile-alternative cs test then else env)
+  (compile-exp cs test env)
+  (instr cs 'JMP-IF)
+  (let ((i (code-size cs)))
+    ;; this will be back-patched later
+    (emit-fixnum cs 0)
+    (compile-exp cs else env)
+    (instr cs 'JMP)
+    (let ((j (code-size cs)))
+      ;; this will be back-patched later
+      (emit-fixnum cs 0)
+      (let ((k (code-size cs)))
+        ;; back-patching if jump
+        (insert-fixnum! cs (- k i 4) i)
+        (compile-exp cs then env)
+        (let ((m (code-size cs)))
+          ;; back-patching else jmp
+          (insert-fixnum! cs (- m j 4) j))))))
+
 (define (compile-closure cs vars body env)
   (instr cs 'CREATE-CLOSURE)
   (let ((i (code-size cs))
@@ -285,6 +306,8 @@
     (case (car x)
       ((begin)
        (compile-seq cs (cdr x) env))
+      ((if)
+       (compile-alternative cs (cadr x) (caddr x) (cadddr x) env))
       ((lambda)
        (compile-closure cs (cadr x) (cddr x) env))
       ((let)

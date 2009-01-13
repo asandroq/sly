@@ -196,7 +196,7 @@
                   (compile-exp cs x env))
                 exps)))
 
-(define (compile-alternative cs test then else env)
+(define (compile-conditional cs test then else env)
   (compile-exp cs test env)
   (instr cs 'JMP-IF)
   (let ((i (code-size cs)))
@@ -307,7 +307,7 @@
       ((begin)
        (compile-seq cs (cdr x) env))
       ((if)
-       (compile-alternative cs (cadr x) (caddr x) (cadddr x) env))
+       (compile-conditional cs (cadr x) (caddr x) (cadddr x) env))
       ((lambda)
        (compile-closure cs (cadr x) (cddr x) env))
       ((let)

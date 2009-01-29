@@ -10,9 +10,10 @@
               (zero? (- (* 10 4) z)))))
      (+ a d)
      (let ((x (lambda (f g)
-                (* g f))))
+                (* g f)))
+           (y (cons 34 c)))
        (if e
-           (x (- c b) a)
+           (cdr y)
            (x (- d a) b)))))
 
 (compile-to-file "test.fasl" test1)

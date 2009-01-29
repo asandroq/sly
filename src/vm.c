@@ -41,6 +41,9 @@
 #define DUNA_OP_SET_PROC         35
 #define DUNA_OP_JMP_IF           36
 #define DUNA_OP_JMP              37
+#define DUNA_OP_CONS             38
+#define DUNA_OP_CAR              39
+#define DUNA_OP_CDR              40
 
 /* data types */
 #define DUNA_TYPE_NIL            1
@@ -48,6 +51,7 @@
 #define DUNA_TYPE_FIXNUM         3
 #define DUNA_TYPE_CHAR           4
 #define DUNA_TYPE_CLOSURE        5
+#define DUNA_TYPE_PAIR           6
 
 /* forward type declarations */
 typedef struct duna_Object_ duna_Object;
@@ -72,15 +76,21 @@ struct duna_Object_ {
 };
 
 struct duna_GCObject_ {
-  uint8_t visited;
+  uint8_t flags;
 
   union {
     struct {
       uint32_t entry_point;
       duna_Object *free_vars;
     } closure;
+    struct {
+      duna_Object car;
+      duna_Object cdr;
+    } pair;
   } data;
 };
+
+#define DUNA_VISITED(o) (((o).value->gc.flags) & 0x01)
 
 /* the state of the Duna interpreter */
 struct duna_State_ {
@@ -139,6 +149,13 @@ static void write_obj(duna_Object* obj)
     break;
   case DUNA_TYPE_CLOSURE:
     printf("<#closure %u>", obj->value.gc->data.closure.entry_point);
+    break;
+  case DUNA_TYPE_PAIR:
+    printf("(");
+    write_obj(&obj->value.gc->data.pair.car);
+    printf(" . ");
+    write_obj(&obj->value.gc->data.pair.cdr);
+    printf(")");
     break;
   default:
     printf("Unknown type!");
@@ -295,6 +312,8 @@ int duna_vm_run(duna_State* D)
 {
   uint8_t b1, b2, b3, b4;
   uint32_t i, j, k, dw1, dw2;
+  /* still unsure about this, should be a register? */
+  duna_Object tmp;
 
   while(D->pc < D->code_size) {
 
@@ -532,6 +551,22 @@ int duna_vm_run(duna_State* D)
 	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
 
       D->pc += dw1;
+      break;
+
+    case DUNA_OP_CONS:
+      tmp = D->accum;
+      D->accum.type = DUNA_TYPE_PAIR;
+      D->accum.value.gc = (duna_GCObject*) malloc(sizeof(duna_GCObject));
+      D->accum.value.gc->data.pair.car = tmp;
+      D->accum.value.gc->data.pair.cdr = D->stack[--D->sp];
+      break;
+
+    case DUNA_OP_CAR:
+      D->accum = D->accum.value.gc->data.pair.car;
+      break;
+
+    case DUNA_OP_CDR:
+      D->accum = D->accum.value.gc->data.pair.cdr;
       break;
     }
 

@@ -37,7 +37,10 @@
     (SAVE-PROC      . 34)
     (SET-PROC       . 35)
     (JMP-IF         . 36)
-    (JMP            . 37)))
+    (JMP            . 37)
+    (CONS           . 38)
+    (CAR            . 39)
+    (CDR            . 40)))
 
 (define (make-compiler-state)
   (vector
@@ -147,7 +150,10 @@
     (integer? FIXNUM-P 1)
     (+ PLUS 2)
     (- MINUS 2)
-    (* MULT 2)))
+    (* MULT 2)
+    (cons CONS 2)
+    (car CAR 1)
+    (cdr CDR 1)))
 
 (define (primitive-call? x)
   (and (pair? x)

@@ -22,8 +22,14 @@
  */
 
 #include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
+
+#if __GNUC__ > 2
+#include <stdint.h>
+#else
+typedef unsigned char uint8_t;
+typedef unsigned int  uint32_t;
+#endif
 
 /* OPCODES */
 #define DUNA_OP_LOAD_NIL          1
@@ -188,7 +194,7 @@ static int load_code_from_file(duna_State* D, const char* fname)
 {
   FILE *f;
   int pc, ret;
-  uint8_t code;
+  unsigned int code = 0;
 
   /* opening input file */
   f = fopen(fname, "r");
@@ -207,7 +213,7 @@ static int load_code_from_file(duna_State* D, const char* fname)
 
   /* reading actual code */
   while(1) {
-    ret = fscanf(f, " %hhu", &code);
+    ret = fscanf(f, " %u", &code);
     if(ret == EOF) {
       /* unexpected end */
       fclose(f);
@@ -242,7 +248,7 @@ static int load_code_from_file(duna_State* D, const char* fname)
     }
 
     /* adds new read byte to code vector */
-    D->code[D->code_size++] = code;
+    D->code[D->code_size++] = (uint8_t)code;
   }
 }
 
@@ -413,7 +419,8 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_NOT:
-      DUNA_SET_BOOL(D->accum.value.bool == 0);
+      DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_BOOL &&
+		    D->accum.value.bool == 0);
       break;
 
     case DUNA_OP_BOOL_P:

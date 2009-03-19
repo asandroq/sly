@@ -12,9 +12,14 @@
      (let ((x (lambda (f g)
                 (* g f)))
            (y (cons 34 c)))
-       (if e
-           (cdr y)
-           (x (- d a) b)))))
+       (cond
+	((not c)
+	 (add1 c)
+	 (integer->char c))
+	(e
+	 (cdr y))
+	(else
+	 (x (- d a) b))))))
 
 (compile-to-file "test.fasl" test1)
 

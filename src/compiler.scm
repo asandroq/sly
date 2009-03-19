@@ -21,6 +21,64 @@
 ;;; THE SOFTWARE.
 ;;;
 
+;; Transform 'cond' into nested 'ifs'
+(define (transform-cond exp)
+  (let collect ((code '())
+		(clauses (reverse (cdr exp)))
+		(last? #t))
+    (if (null? clauses)
+	(if (null? code)
+	    (error "Empty COND")
+	    code)
+	(let ((clause (car clauses)))
+	  (if (pair? clause)
+	      (let ((test (transform-exp (car clause)))
+		    (body (transform-exp (cdr clause))))
+		(if (eqv? test 'else)
+		    (if last?
+			(collect (cons 'begin body)
+				 (cdr clauses)
+				 #f)
+			(error "ELSE must be last clause in COND"))
+		    (collect (list 'if
+				   test
+				   (cons 'begin body)
+				   code)
+			     (cdr clauses)
+			     #f)))
+	      (error "Ill-formed COND clause"))))))
+
+;; Transform 'let' into immediate lambda application
+(define (transform-let exp)
+  (let ((bindings (cadr exp))
+	(body (transform-exp (cddr exp))))
+    (let loop ((vars '())
+	       (args '())
+	       (bindings bindings))
+      (if (null? bindings)
+	  (cons (cons 'lambda (cons vars body)) args)
+	  (let ((binding (car bindings)))
+	    (let ((var (car binding))
+		  (arg (transform-exp (cadr binding))))
+	      (if (symbol? var)
+		  (loop (cons var vars)
+			(cons arg args)
+			(cdr bindings))
+		  (error "Ill-formed LET"))))))))
+
+;; Transforms derived syntax into primitive syntax
+(define (transform-exp exp)
+  (if (pair? exp)
+      (let ((op (car exp)))
+	(case op
+	  ((cond)
+	   (transform-cond exp))
+	  ((let)
+	   (transform-let exp))
+	  (else
+	   (map transform-exp exp))))
+      exp))
+
 ;; bytecode instructions
 (define *opcodes*
   '((LOAD-NIL       . 1)
@@ -257,7 +315,7 @@
       ;; back patching jump before closure code
       (insert-fixnum! cs j i))))
 
-(define (compile-let cs vars args body env)
+(define (compile-closed-application cs vars args body env)
   (instr cs 'SAVE-FP)
   (let loop ((new-env '())
              (vars vars)
@@ -338,22 +396,22 @@
        (compile-conditional cs (cadr x) (caddr x) (cadddr x) env))
       ((lambda)
        (compile-closure cs (cadr x) (cddr x) env))
-      ((let)
-       (let ((bindings (cadr x)))
-         (let ((vars (map car  bindings))
-               (args (map cadr bindings)))
-           (compile-let cs vars args (cddr x) env))))
       (else
        (let ((op (car x)))
          (if (and (pair? op)
                   (eq? (car op) 'lambda))
-             (compile-let cs (cadr op) (cdr x) (cddr op) env)
+             (compile-closed-application cs
+					 (cadr op)
+					 (cdr x)
+					 (cddr op)
+					 env)
              (compile-application cs op (cdr x) env))))))
    (else
     (error "Cannot compile atom"))))
 
-(define (compile cs* x)
-  (let ((cs (or cs* (make-compiler-state))))
+(define (compile cs* x*)
+  (let ((cs (or cs* (make-compiler-state)))
+	(x (transform-exp x*)))
     (compile-exp cs x '())
     (write-code-vector cs)))
 

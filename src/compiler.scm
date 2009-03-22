@@ -120,7 +120,8 @@
     (JMP            . 37)
     (CONS           . 38)
     (CAR            . 39)
-    (CDR            . 40)))
+    (CDR            . 40)
+    (LOAD-FREE      . 41)))
 
 (define (make-compiler-state)
   (vector
@@ -300,6 +301,67 @@
         (let ((m (code-size cs)))
           ;; back-patching else jmp
           (insert-fixnum! cs (- m j 4) j))))))
+
+;; Produces the union of two sets
+(define (set-union set1 set2)
+  (let loop ((set1 set1)
+	     (set2 set2))
+    (if (null? set2)
+	set1
+	(let ((item (car set2)))
+	  (if (memq item set1)
+	      (loop set1 (cdr set2))
+	      (loop (cons item set1) (cdr set2)))))))
+
+;; Produces the difference of two sets
+(define (set-minus set1 set2)
+  (let loop ((set '())
+	     (set1 set1)
+	     (set2 set2))
+    (if (null? set1)
+	set
+	(let ((item (car set1)))
+	  (if (memq item set2)
+	      (loop set (cdr set1) set2)
+	      (loop (cons item set) (cdr set1) set2))))))
+
+;; Collect free variables in expression
+(define (collect-free exp bound)
+  (if (pair? exp)
+      ;; unfortunately I need to re-enumerate
+      ;; all forms accepted by the compiler
+      (case (car exp)
+	((begin)
+	 (collect-all-free (cdr exp) bound))
+	((if)
+	 (set-union (collect-free (cadr exp) bound)
+		    (set-union (collect-free (caddr exp) bound)
+			       (collect-free (cadddr exp) bound))))
+	((lambda)
+	 (let ((vars (cadr exp))
+	       (body (cddr exp)))
+	   (collect-all-free body
+			     (set-union bound vars))))
+	(else
+	 (if (primitive-call? exp)
+	     (collect-all-free (cdr exp) bound)
+	     (collect-all-free exp bound))))
+      (if (symbol? exp)
+	  (if (memq exp bound)
+	      '()
+	      (list exp))
+	  '())))
+
+;; Collect free variables in lambda body
+(define (collect-all-free body bound)
+  (let collect ((vars '())
+		(body body))
+    (if (null? body)
+	vars
+	(let ((exp (car body)))
+	  (collect (set-union vars
+			      (collect-free exp bound))
+		   (cdr body))))))
 
 (define (compile-closure cs vars body env)
   (instr cs 'CREATE-CLOSURE)

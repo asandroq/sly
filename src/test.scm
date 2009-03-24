@@ -21,5 +21,29 @@
 	(else
 	 (x (- d a) b))))))
 
+(define test2
+  '(let ((a (* 23 67))
+	 (b (sub1 1)))
+     (cond
+      ((char? a)
+       (+ a b))
+      ((zero? b)
+       (lambda (x y)
+	 (+ a (* x y))))
+      (else
+       (integer->char a)))))
+
+(define free1
+  '(lambda (x y)
+     (+ a (* x y))))
+
+(define free2
+  '(lambda (x y)
+     (if x
+         (lambda (m n)
+           (- x (+ y m)))
+         (lambda (m o)
+           (* x (- m y))))))
+
 (compile-to-file "test.fasl" test1)
 

@@ -120,7 +120,8 @@ typedef unsigned int  uint32_t;
     (instr) == DUNA_OP_LOAD_CHAR ||    \
     (instr) == DUNA_OP_MAKE_CLOSURE || \
     (instr) == DUNA_OP_JMP_IF ||       \
-    (instr) == DUNA_OP_JMP)
+    (instr) == DUNA_OP_JMP ||          \
+    (instr) == DUNA_OP_LOAD_FREE)
 
 #define IS_TYPE_C(instr) \
    ((instr) == DUNA_OP_LOAD)
@@ -707,12 +708,19 @@ int duna_vm_run(duna_State* D)
 
       D->accum.type = DUNA_TYPE_CLOSURE;
       D->accum.value.gc = (duna_GCObject*) malloc(sizeof(duna_GCObject));
+
       /*
        * There is always a jump after this instruction, to jump over the
        * closure code. So the closure entry point is PC + 1
        */
       D->accum.value.gc->data.closure.entry_point = D->pc + 1;
-      D->accum.value.gc->data.closure.free_vars = NULL;
+
+      /* gathering free variables */
+      D->accum.value.gc->data.closure.free_vars = (duna_Object*)malloc(dw1 * sizeof(duna_Object));
+      for(i = 0; i < dw1; i++) {
+	D->accum.value.gc->data.closure.free_vars[i] = D->stack[D->sp-i-1];
+      }
+      D->sp -= dw1;
       break;
 
     case DUNA_OP_CALL:
@@ -745,6 +753,10 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_JMP:
       D->pc += EXTRACT_ARG(instr);
+      break;
+
+    case DUNA_OP_LOAD_FREE:
+      D->accum = D->proc.value.gc->data.closure.free_vars[EXTRACT_ARG(instr)];
       break;
 
     case DUNA_OP_CONS:

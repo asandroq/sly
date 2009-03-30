@@ -390,21 +390,33 @@
 			      (collect-free exp bound env))
 		   (cdr body))))))
 
+;; Compiles a lambda into code that create closures
+;; The jumps are offset by one because when the JMP
+;; instruction is executed, the PC is already pointing to
+;; the next instruction
 (define (compile-closure cs vars body free env)
   (let ((new-env (cons (reverse vars) env))
         (new-free (collect-all-free body vars env)))
     (pp new-free)
-    (instr1 cs 'CREATE-CLOSURE (length new-free))
-    (let ((i (code-size cs)))
-      ;; this will be back-patched later
-      (instr1 cs 'JMP 0)
-      (compile-seq cs body new-free new-env)
-      (instr cs 'POP)
-      (instr cs 'REST-FP)
-      (instr cs 'RETURN)
-      (let ((j (code-size cs)))
-	;; back patching jump over closure code
-	(patch-instr! cs i (- j i 1))))))
+    (pp new-env)
+    (let loop ((loop-free new-free))
+      (if (null? loop-free)
+	  (let ((len (length new-free)))
+	    (instr1 cs 'CREATE-CLOSURE len)
+	    (let ((i (code-size cs)))
+	      ;; this will be back-patched later
+	      (instr1 cs 'JMP 0)
+	      (compile-seq cs body new-free new-env)
+	      (instr cs 'POP)
+	      (instr cs 'REST-FP)
+	      (instr cs 'RETURN)
+	      (let ((j (code-size cs)))
+		;; back patching jump over closure code
+		(patch-instr! cs i (- j i 1)))))
+	  (let ((var (car loop-free)))
+	    (compile-exp cs var free env)
+	    (instr cs 'PUSH)
+	    (loop (cdr loop-free)))))))
 
 (define (compile-closed-application cs vars args body free env)
   (instr cs 'SAVE-FP)

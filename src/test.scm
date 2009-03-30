@@ -9,15 +9,17 @@
          (e (let ((z (+ 20 20)))
               (zero? (- (* 10 4) z)))))
      (+ a d)
-     (let ((x (lambda (f g)
-                (* g f)))
+     (let ((x (let ((m (* b (- b a)))
+		    (n (* c (- b a))))
+		(lambda (f g)
+		  (+ (+ m (- n f)) g))))
            (y (cons 34 c)))
        (cond
 	((not c)
 	 (add1 c)
 	 (integer->char c))
 	(e
-	 (cdr y))
+	 (x a (cdr y)))
 	(else
 	 (x (- d a) b))))))
 

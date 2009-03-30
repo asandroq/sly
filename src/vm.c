@@ -31,7 +31,34 @@ typedef unsigned char uint8_t;
 typedef unsigned int  uint32_t;
 #endif
 
-/* OPCODES */
+/*
+ * Duna bytecode is an array of 32-bit values for
+ * efficiency (data alignment), but wasteful because
+ * most instructions do not have operands. It is
+ * therefore hostile for embedded systems but optimised
+ * for 32-bit machines with large RAMs. It is gonna
+ * be like this for now for simplicity, but the
+ * situation may improve in the future.
+ *
+ * Further reading:
+ * http://compilers.iecc.com/comparch/article/04-12-156
+ *
+ * There are three types of instructions:
+ * Type A: First byte is operand, the rest is for
+ *         alignment only.
+ * Type B: First byte is operand, remaining 3 bytes
+ *         are used for single operand.
+ * Type C: First byte is operand, followed by two
+ *         12-bit operands.
+ *
+ * Type C instructions, like LOAD, have the shortest
+ * range, but fortunately they usually do not need much
+ * (most procedures have less than 4 arguments. Jumps,
+ * which are more critical, have 24-bit operands, which
+ * should be enough *grin*
+ */
+
+/* basic VM instructions */
 #define DUNA_OP_LOAD_NIL          1
 #define DUNA_OP_LOAD_FALSE        2
 #define DUNA_OP_LOAD_TRUE         3
@@ -39,41 +66,48 @@ typedef unsigned int  uint32_t;
 #define DUNA_OP_LOAD_ONE          5
 #define DUNA_OP_LOAD_FIXNUM       6
 #define DUNA_OP_LOAD_CHAR         7
-#define DUNA_OP_INC               8
-#define DUNA_OP_DEC               9
-#define DUNA_OP_FIXNUM_TO_CHAR   10
-#define DUNA_OP_CHAR_TO_FIXNUM   11
-#define DUNA_OP_NULL_P           12
-#define DUNA_OP_ZERO_P           13
-#define DUNA_OP_NOT              14
-#define DUNA_OP_BOOL_P           15
-#define DUNA_OP_CHAR_P           16
-#define DUNA_OP_FIXNUM_P         17
-#define DUNA_OP_PUSH             18
-#define DUNA_OP_POP              19
-#define DUNA_OP_PLUS             20
-#define DUNA_OP_MINUS            21
-#define DUNA_OP_MULT             22
-#define DUNA_OP_LOAD_0           23
-#define DUNA_OP_LOAD_1           24
-#define DUNA_OP_LOAD_2           25
-#define DUNA_OP_LOAD_3           26
-#define DUNA_OP_LOAD             27
-#define DUNA_OP_SET_FP           28
-#define DUNA_OP_SAVE_FP          29
-#define DUNA_OP_REST_FP          30
-#define DUNA_OP_MAKE_CLOSURE     31
-#define DUNA_OP_CALL             32
-#define DUNA_OP_RETURN           33
-#define DUNA_OP_SAVE_PROC        34
-#define DUNA_OP_SET_PROC         35
-#define DUNA_OP_JMP_IF           36
-#define DUNA_OP_JMP              37
-#define DUNA_OP_CONS             38
-#define DUNA_OP_CAR              39
-#define DUNA_OP_CDR              40
+#define DUNA_OP_PUSH              8
+#define DUNA_OP_POP               9
+#define DUNA_OP_LOAD_0           10
+#define DUNA_OP_LOAD_1           11
+#define DUNA_OP_LOAD_2           12
+#define DUNA_OP_LOAD_3           13
+#define DUNA_OP_LOAD             14
+#define DUNA_OP_SET_FP           15
+#define DUNA_OP_SAVE_FP          16
+#define DUNA_OP_REST_FP          17
+#define DUNA_OP_MAKE_CLOSURE     18
+#define DUNA_OP_CALL             19
+#define DUNA_OP_RETURN           20
+#define DUNA_OP_SAVE_PROC        21
+#define DUNA_OP_SET_PROC         22
+#define DUNA_OP_JMP_IF           23
+#define DUNA_OP_JMP              24
+#define DUNA_OP_LOAD_FREE        25
 
-/* data types */
+/* type predicates */
+#define DUNA_OP_NULL_P           81
+#define DUNA_OP_BOOL_P           82
+#define DUNA_OP_CHAR_P           83
+#define DUNA_OP_FIXNUM_P         84
+
+/* primitives optimised as instructions */
+#define DUNA_OP_INC              101
+#define DUNA_OP_DEC              102
+#define DUNA_OP_FIXNUM_TO_CHAR   103
+#define DUNA_OP_CHAR_TO_FIXNUM   104
+#define DUNA_OP_ZERO_P           105
+#define DUNA_OP_NOT              106
+#define DUNA_OP_PLUS             107
+#define DUNA_OP_MINUS            108
+#define DUNA_OP_MULT             109
+#define DUNA_OP_CONS             110
+#define DUNA_OP_CAR              111
+#define DUNA_OP_CDR              112
+
+/*
+ * data types tags
+ */
 #define DUNA_TYPE_NIL            1
 #define DUNA_TYPE_BOOL           2
 #define DUNA_TYPE_FIXNUM         3
@@ -81,6 +115,74 @@ typedef unsigned int  uint32_t;
 #define DUNA_TYPE_CLOSURE        5
 #define DUNA_TYPE_PAIR           6
 
+#define IS_TYPE_B(instr) \
+   ((instr) == DUNA_OP_LOAD_FIXNUM ||  \
+    (instr) == DUNA_OP_LOAD_CHAR ||    \
+    (instr) == DUNA_OP_MAKE_CLOSURE || \
+    (instr) == DUNA_OP_JMP_IF ||       \
+    (instr) == DUNA_OP_JMP)
+
+#define IS_TYPE_C(instr) \
+   ((instr) == DUNA_OP_LOAD)
+
+#define EXTRACT_OP(instr)   ((uint8_t)((instr) & 0x000000ff))
+#define EXTRACT_ARG(instr)  ((uint32_t)((instr) >> 8))
+#define EXTRACT_ARG1(instr) ((uint32_t)(((instr) >> 8) & 0x00000fff))
+#define EXTRACT_ARG2(instr) ((uint32_t)((instr) >> 20))
+
+/* debugging information */
+struct  opcode_ {
+  uint8_t op;
+  const char *name;
+};
+
+typedef struct opcode_ opcode_t;
+
+static opcode_t global_opcodes[] = {
+  {DUNA_OP_LOAD_NIL,          "LOAD-NIL"},
+  {DUNA_OP_LOAD_FALSE,        "LOAD-FALSE"},
+  {DUNA_OP_LOAD_TRUE,         "LOAD-TRUE"},
+  {DUNA_OP_LOAD_ZERO,         "LOAD-ZERO"},
+  {DUNA_OP_LOAD_ONE,          "LOAD-ONE"},
+  {DUNA_OP_LOAD_FIXNUM,       "LOAD-FIXNUM"},
+  {DUNA_OP_LOAD_CHAR,         "LOAD-CHAR"},
+  {DUNA_OP_PUSH,              "PUSH"},
+  {DUNA_OP_POP,               "POP"},
+  {DUNA_OP_LOAD_0,            "LOAD0"},
+  {DUNA_OP_LOAD_1,            "LOAD1"},
+  {DUNA_OP_LOAD_2,            "LOAD2"},
+  {DUNA_OP_LOAD_3,            "LOAD3"},
+  {DUNA_OP_LOAD,              "LOAD"},
+  {DUNA_OP_SET_FP,            "SET-FP"},
+  {DUNA_OP_SAVE_FP,           "SAVE-FP"},
+  {DUNA_OP_REST_FP,           "REST-FP"},
+  {DUNA_OP_MAKE_CLOSURE,      "MAKE-CLOSURE"},
+  {DUNA_OP_CALL,              "CALL"},
+  {DUNA_OP_RETURN,            "RETURN"},
+  {DUNA_OP_SAVE_PROC,         "SAVE-PROC"},
+  {DUNA_OP_SET_PROC,          "SET-PROC"},
+  {DUNA_OP_JMP_IF,            "JMP-IF"},
+  {DUNA_OP_JMP,               "JMP"},
+  {DUNA_OP_LOAD_FREE,         "LOAD-FREE"},
+  {DUNA_OP_NULL_P,            "NULL?"},
+  {DUNA_OP_BOOL_P,            "BOOL?"},
+  {DUNA_OP_CHAR_P,            "CHAR?"},
+  {DUNA_OP_FIXNUM_P,          "FIXNUM?"},
+  {DUNA_OP_INC,               "INC"},
+  {DUNA_OP_DEC,               "DEC"},
+  {DUNA_OP_FIXNUM_TO_CHAR,    "FIXNUM->CHAR"},
+  {DUNA_OP_CHAR_TO_FIXNUM,    "CHAR->FIXNUM"},
+  {DUNA_OP_ZERO_P,            "ZERO?"},
+  {DUNA_OP_NOT,               "NOT"},
+  {DUNA_OP_PLUS,              "PLUS"},
+  {DUNA_OP_MINUS,             "MINUS"},
+  {DUNA_OP_MULT,              "MULT"},
+  {DUNA_OP_CONS,              "CONS"},
+  {DUNA_OP_CAR,               "CAR"},
+  {DUNA_OP_CDR,               "CDR"},
+  {0, NULL}
+};
+  
 /* forward type declarations */
 typedef struct duna_Object_ duna_Object;
 typedef struct duna_GCObject_ duna_GCObject;
@@ -124,7 +226,7 @@ struct duna_GCObject_ {
 struct duna_State_ {
 
   /* the bytecode to be interpreted */
-  uint8_t *code;
+  uint32_t *code;
 
   /* the size of the bytecode vector used */
   uint32_t code_size;
@@ -190,11 +292,57 @@ static void write_obj(duna_Object* obj)
   }
 }
 
+static int get_next(FILE* f, uint32_t *next)
+{
+  int ret;
+
+  ret = fscanf(f, " %u", next);
+  if(ret == EOF) {
+    return -1;
+  } else if(ret == 0) {
+    /* maybe got to end? */
+    ret = fscanf(f, ")");
+    if(ret == EOF) {
+      return -1;
+    } else {
+      return 0;
+    }
+  } else {
+    return 1;
+  }
+}
+
+static int get_fixnum(FILE* f, uint32_t *num)
+{
+  int ret;
+  uint32_t b1, b2, b3, b4;
+
+  ret = get_next(f, &b1);
+  if(ret <= 0) {
+    return -1;
+  }
+  ret = get_next(f, &b2);
+  if(ret <= 0) {
+    return -1;
+  }
+  ret = get_next(f, &b3);
+  if(ret <= 0) {
+    return -1;
+  }
+  ret = get_next(f, &b4);
+  if(ret <= 0) {
+    return -1;
+  }
+
+  *num = b1 | (b2 << 8) | (b3 << 16) | (b4 << 24);
+
+  return 1;
+}
+
 static int load_code_from_file(duna_State* D, const char* fname)
 {
   FILE *f;
-  int pc, ret;
-  unsigned int code = 0;
+  uint32_t pc;
 
   /* opening input file */
   f = fopen(fname, "r");
@@ -203,8 +351,7 @@ static int load_code_from_file(duna_State* D, const char* fname)
   }
 
   /* bytecode beginning */
-  ret = fscanf(f, " #(");
-  if(ret == EOF) {
+  if(fscanf(f, " #(") == EOF) {
     fclose(f);
     return -1;
   }
@@ -213,31 +360,49 @@ static int load_code_from_file(duna_State* D, const char* fname)
 
   /* reading actual code */
   while(1) {
-    ret = fscanf(f, " %u", &code);
-    if(ret == EOF) {
+    int ret;
+    uint32_t instr, dw1, dw2;
+
+    ret = get_next(f, &instr);
+    if(ret == -1) {
       /* unexpected end */
       fclose(f);
       return -1;
     }
+    if(ret == 0 || instr == 0) {
+      /* real end */
+      return pc;
+    }
 
-    if(ret == 0) {
-      /* maybe got to end? */
-      ret = fscanf(f, ")");
-      fclose(f);
-      if(ret == EOF) {
+    /* retrieve operands if any */
+    if(IS_TYPE_B(instr)) {
+      ret = get_fixnum(f, &dw1);
+      if(ret < 0) {
+	fclose(f);
 	return -1;
-      } else {
-	return pc;
       }
+      instr |= (dw1 << 8);
+
+    } else if(IS_TYPE_C(instr)) {
+      if(get_fixnum(f, &dw1) < 0) {
+	fclose(f);
+	return -1;
+      }
+
+      if(get_fixnum(f, &dw2) < 0) {
+	fclose(f);
+	return -1;
+      }
+      
+      instr |= (dw1 << 8) | (dw2 << 20);
     }
 
     /* does the code vector has space? */
     if(D->code_size == D->code_capacity) {
-      uint8_t *code;
-      uint32_t size;
+      uint32_t *code, size;
 
       size = D->code_size * 3 / 2;
-      code = (uint8_t*)realloc(D->code, size);
+      code = (uint32_t*)realloc(D->code, size);
       if(!code) {
 	fclose(f);
 	return -1;
@@ -248,7 +413,7 @@ static int load_code_from_file(duna_State* D, const char* fname)
     }
 
     /* adds new read byte to code vector */
-    D->code[D->code_size++] = (uint8_t)code;
+    D->code[D->code_size++] = instr;
   }
 }
 
@@ -266,7 +431,7 @@ duna_State* duna_init(void)
 
   /* code */
   D->code_size = 0;
-  D->code = (uint8_t*)malloc(sizeof(uint8_t) * 8192);
+  D->code = (uint32_t*)malloc(sizeof(uint32_t) * 8192);
   if(D->code) {
     D->code_capacity = 8192;
   } else {
@@ -307,9 +472,45 @@ void duna_close(duna_State* D)
   }
 }
 
+static void dump_instr(uint32_t instr)
+{
+  uint8_t op;
+  opcode_t* dbg;
+
+  op = EXTRACT_OP(instr);
+  for(dbg = global_opcodes; dbg->name != NULL; dbg++) {
+    if(dbg->op == op) {
+      printf("%u\t%s", (uint32_t)op, dbg->name);
+      if(IS_TYPE_B(op)) {
+	printf(" %u", EXTRACT_ARG(instr));
+      } else if(IS_TYPE_C(op)) {
+	printf(" %u %u", EXTRACT_ARG1(instr),
+                         EXTRACT_ARG2(instr));
+      }
+      break;
+    }
+  }
+}
+
+static void disassemble(duna_State* D)
+{
+  uint32_t i;
+
+  printf("Code listing:\n");
+  for(i = 0; i < D->code_size; i++) {
+    printf("\t%u\t", i);
+    dump_instr(D->code[i]);
+    printf("\n");
+  }
+}
+
 void duna_dump(duna_State* D)
 {
   uint32_t i;
+
+  printf("Instruction: ");
+  dump_instr(D->code[D->pc]);
+  printf("\n");
 
   printf("Registers:\n");
   printf("\taccum: "); write_obj(&D->accum); printf("\n");
@@ -322,7 +523,7 @@ void duna_dump(duna_State* D)
     printf(" ");
     write_obj(D->stack + i);
   }
-  printf("\n");
+  printf("\n\n");
 }
 
 #define DUNA_SET_BOOL(cond)		\
@@ -338,14 +539,18 @@ void duna_dump(duna_State* D)
 
 int duna_vm_run(duna_State* D)
 {
-  uint8_t b1, b2, b3, b4;
-  uint32_t i, j, k, dw1, dw2;
-  /* still unsure about this, should be a register? */
-  duna_Object tmp;
-
   while(D->pc < D->code_size) {
+    register uint32_t instr;
+    uint32_t i, j, k, dw1, dw2;
+    /* still unsure about this, should be a register? */
+    duna_Object tmp;
 
-    switch(D->code[D->pc++]) {
+    /* debugging */
+    duna_dump(D);
+
+    instr = D->code[D->pc++];
+
+    switch(EXTRACT_OP(instr)) {
 
     case DUNA_OP_LOAD_NIL:
       D->accum.type = DUNA_TYPE_NIL;
@@ -372,20 +577,13 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_LOAD_FIXNUM:
-      b1 = D->code[D->pc++];
-      b2 = D->code[D->pc++];
-      b3 = D->code[D->pc++];
-      b4 = D->code[D->pc++];
-      dw1 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
-	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
-
       D->accum.type = DUNA_TYPE_FIXNUM;
-      D->accum.value.fixnum = dw1;
+      D->accum.value.fixnum = EXTRACT_ARG(instr);
       break;
 
     case DUNA_OP_LOAD_CHAR:
       D->accum.type = DUNA_TYPE_CHAR;
-      D->accum.value.chr = D->code[D->pc++];
+      D->accum.value.chr = (uint8_t) EXTRACT_ARG(instr);
       break;
 
     case DUNA_OP_INC:
@@ -397,17 +595,13 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_FIXNUM_TO_CHAR:
-      b1 = (uint8_t) D->accum.value.fixnum;
-
       D->accum.type = DUNA_TYPE_CHAR;
-      D->accum.value.chr = b1;
+      D->accum.value.chr = (uint8_t) D->accum.value.fixnum;
       break;
 
     case DUNA_OP_CHAR_TO_FIXNUM:
-      dw1 = (uint32_t) D->accum.value.chr;
-
       D->accum.type = DUNA_TYPE_FIXNUM;
-      D->accum.value.fixnum = dw1;
+      D->accum.value.fixnum = (uint32_t) D->accum.value.chr;
       break;
 
     case DUNA_OP_NULL_P:
@@ -476,19 +670,8 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_LOAD:
-      b1 = D->code[D->pc++];
-      b2 = D->code[D->pc++];
-      b3 = D->code[D->pc++];
-      b4 = D->code[D->pc++];
-      dw1 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
-	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
-
-      b1 = D->code[D->pc++];
-      b2 = D->code[D->pc++];
-      b3 = D->code[D->pc++];
-      b4 = D->code[D->pc++];
-      dw2 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
-	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
+      dw1 = EXTRACT_ARG1(instr);
+      dw2 = EXTRACT_ARG2(instr);
 
       j = D->fp;
       for(i = 0; i < dw2; i++) {
@@ -519,21 +702,17 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_MAKE_CLOSURE:
-      /* following this opcode there is the size of the closure code
-	 so I can jump over it */
-      b1 = D->code[D->pc++];
-      b2 = D->code[D->pc++];
-      b3 = D->code[D->pc++];
-      b4 = D->code[D->pc++];
-      dw1 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
-	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
+      /* number of free variables */
+      dw1 = EXTRACT_ARG(instr);
 
       D->accum.type = DUNA_TYPE_CLOSURE;
       D->accum.value.gc = (duna_GCObject*) malloc(sizeof(duna_GCObject));
-      D->accum.value.gc->data.closure.entry_point = D->pc;
+      /*
+       * There is always a jump after this instruction, to jump over the
+       * closure code. So the closure entry point is PC + 1
+       */
+      D->accum.value.gc->data.closure.entry_point = D->pc + 1;
       D->accum.value.gc->data.closure.free_vars = NULL;
-
-      D->pc += dw1;
       break;
 
     case DUNA_OP_CALL:
@@ -559,27 +738,13 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_JMP_IF:
-      b1 = D->code[D->pc++];
-      b2 = D->code[D->pc++];
-      b3 = D->code[D->pc++];
-      b4 = D->code[D->pc++];
-      dw1 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
-	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
-
       if(!(D->accum.type == DUNA_TYPE_BOOL && D->accum.value.bool == 0)) {
-	D->pc += dw1;
+	D->pc += EXTRACT_ARG(instr);
       }
       break;
 
     case DUNA_OP_JMP:
-      b1 = D->code[D->pc++];
-      b2 = D->code[D->pc++];
-      b3 = D->code[D->pc++];
-      b4 = D->code[D->pc++];
-      dw1 = ((uint32_t)b1)       | ((uint32_t)b2 << 8) |
-	    ((uint32_t)b3 << 16) | ((uint32_t)b4 << 24);
-
-      D->pc += dw1;
+      D->pc += EXTRACT_ARG(instr);
       break;
 
     case DUNA_OP_CONS:
@@ -598,8 +763,6 @@ int duna_vm_run(duna_State* D)
       D->accum = D->accum.value.gc->data.pair.cdr;
       break;
     }
-
-    duna_dump(D);
   }
 
   return 1;

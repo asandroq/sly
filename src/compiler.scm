@@ -81,6 +81,7 @@
 
 ;; bytecode instructions
 (define *opcodes*
+  ;; basic VM instructions
   '((LOAD-NIL       . 1)
     (LOAD-FALSE     . 2)
     (LOAD-TRUE      . 3)
@@ -88,54 +89,88 @@
     (LOAD-ONE       . 5)
     (LOAD-FIXNUM    . 6)
     (LOAD-CHAR      . 7)
-    (INC            . 8)
-    (DEC            . 9)
-    (FIXNUM-TO-CHAR . 10)
-    (CHAR-TO-FIXNUM . 11)
-    (NULL-P         . 12)
-    (ZERO-P         . 13)
-    (NOT            . 14)
-    (BOOL-P         . 15)
-    (CHAR-P         . 16)
-    (FIXNUM-P       . 17)
-    (PUSH           . 18)
-    (POP            . 19)
-    (PLUS           . 20)
-    (MINUS          . 21)
-    (MULT           . 22)
-    (LOAD0          . 23)
-    (LOAD1          . 24)
-    (LOAD2          . 25)
-    (LOAD3          . 26)
-    (LOAD           . 27)
-    (SET-FP         . 28)
-    (SAVE-FP        . 29)
-    (REST-FP        . 30)
-    (CREATE-CLOSURE . 31)
-    (CALL           . 32)
-    (RETURN         . 33)
-    (SAVE-PROC      . 34)
-    (SET-PROC       . 35)
-    (JMP-IF         . 36)
-    (JMP            . 37)
-    (CONS           . 38)
-    (CAR            . 39)
-    (CDR            . 40)
-    (LOAD-FREE      . 41)))
+    (PUSH           . 8)
+    (POP            . 9)
+    (LOAD0          . 10)
+    (LOAD1          . 11)
+    (LOAD2          . 12)
+    (LOAD3          . 13)
+    (LOAD           . 14)
+    (SET-FP         . 15)
+    (SAVE-FP        . 16)
+    (REST-FP        . 17)
+    (CREATE-CLOSURE . 18)
+    (CALL           . 19)
+    (RETURN         . 20)
+    (SAVE-PROC      . 21)
+    (SET-PROC       . 22)
+    (JMP-IF         . 23)
+    (JMP            . 24)
+    (LOAD-FREE      . 25)
+
+    ;; type predicates
+    (NULL-P         . 81)
+    (BOOL-P         . 82)
+    (CHAR-P         . 83)
+    (FIXNUM-P       . 84)
+
+    ;; primitives optimised as instructions
+    (INC            . 101)
+    (DEC            . 102)
+    (FIXNUM-TO-CHAR . 103)
+    (CHAR-TO-FIXNUM . 104)
+    (ZERO-P         . 105)
+    (NOT            . 106)
+    (PLUS           . 107)
+    (MINUS          . 108)
+    (MULT           . 109)
+    (CONS           . 110)
+    (CAR            . 111)
+    (CDR            . 112)))
 
 (define (make-compiler-state)
   (vector
    0                          ;; Index of next instruction
    (make-vector 32 0)))       ;; code vector
 
-(define (write-code-vector cs)
-  (write (vector-ref cs 1)))
-
 (define (code-capacity cs)
   (vector-length (vector-ref cs 1)))
 
 (define (code-size cs)
   (vector-ref cs 0))
+
+(define (write-fixnum x)
+  (let* ((b4 (quotient  x  16777216))
+         (x4 (remainder x  16777216))
+         (b3 (quotient  x4 65536))
+         (x3 (remainder x4 65536))
+         (b2 (quotient  x3 256))
+         (b1 (remainder x3 256)))
+    (display b1)
+    (display " ")
+    (display b2)
+    (display " ")
+    (display b3)
+    (display " ")
+    (display b4)
+    (display " ")))
+
+(define (write-code-vector cs)
+  (display "#( ")
+  (let ((code (vector-ref cs 1))
+	(code-size (code-size cs)))
+    (let loop ((i 0))
+      (if (= i code-size)
+	  (display ")")
+	  (let ((instr (vector-ref code i)))
+	    (let ((op   (vector-ref instr 0))
+		  (arg1 (vector-ref instr 1))
+		  (arg2 (vector-ref instr 2)))
+	      (display (cdr (assv op *opcodes*)))
+	      (display " ")
+	      (if arg1 (write-fixnum arg1))
+	      (if arg2 (write-fixnum arg2)))
+	    (loop (+ i 1)))))))
 
 (define (extend-code-vector! cs)
   (let* ((len (vector-length (vector-ref cs 1)))
@@ -148,52 +183,32 @@
             (vector-set! new-vec i (vector-ref (vector-ref cs 1) i))
             (loop (+ i 1)))))))
 
-(define (add-to-code! cs byte)
+(define (add-to-code! cs instr)
   (let ((i (code-size cs)))
     (and (= i (code-capacity cs))
          (extend-code-vector! cs))
     (vector-set! cs 0 (+ i 1))
-    (vector-set! (vector-ref cs 1) i byte)))
+    (vector-set! (vector-ref cs 1) i instr)))
 
-(define (insert-into-code! cs i byte)
-  (vector-set! (vector-ref cs 1) i byte))
+(define (instr cs op)
+  (add-to-code! cs (vector op #f #f)))
 
-(define (instr cs i . args)
-  (add-to-code! cs (cdr (assv i *opcodes*)))
-  (or (null? args)
-      (for-each (lambda (x)
-                  (add-to-code! cs x))
-                args)))
+(define (instr1 cs op arg)
+  (add-to-code! cs (vector op arg #f)))
+
+(define (instr2 cs op arg1 arg2)
+  (add-to-code! cs (vector op arg1 arg2)))
+
+;; used by code that need to patch previously emitted
+;; instructions
+(define (patch-instr! cs i arg)
+  (vector-set! (vector-ref (vector-ref cs 1) i) 1 arg))
 
 (define (immediate? x)
   (or (char? x)
       (boolean? x)
       (integer? x)
       (null? x)))
-
-(define (emit-fixnum cs x)
-  (let* ((b4 (quotient  x  16777216))
-         (x4 (remainder x  16777216))
-         (b3 (quotient  x4 65536))
-         (x3 (remainder x4 65536))
-         (b2 (quotient  x3 256))
-         (b1 (remainder x3 256)))
-    (add-to-code! cs b1)
-    (add-to-code! cs b2)
-    (add-to-code! cs b3)
-    (add-to-code! cs b4)))
-
-(define (insert-fixnum! cs x i)
-  (let* ((b4 (quotient  x  16777216))
-         (x4 (remainder x  16777216))
-         (b3 (quotient  x4 65536))
-         (x3 (remainder x4 65536))
-         (b2 (quotient  x3 256))
-         (b1 (remainder x3 256)))
-    (insert-into-code! cs i b1)
-    (insert-into-code! cs (+ i 1) b2)
-    (insert-into-code! cs (+ i 2) b3)
-    (insert-into-code! cs (+ i 3) b4)))
 
 ;; emit code for immediate values
 (define (emit-immediate cs x)
@@ -205,7 +220,7 @@
         (instr cs 'LOAD-TRUE)
         (instr cs 'LOAD-FALSE)))
    ((char? x)
-    (instr cs 'LOAD-CHAR (char->integer x)))
+    (instr1 cs 'LOAD-CHAR (char->integer x)))
    ((integer? x)
     (case x
       ((0)
@@ -213,8 +228,7 @@
       ((1)
        (instr cs 'LOAD-ONE))
       (else
-       (instr cs 'LOAD-FIXNUM)
-       (emit-fixnum cs x))))
+       (instr1 cs 'LOAD-FIXNUM x))))
    (else
     (error "unknown immediate"))))
 
@@ -298,22 +312,20 @@
 
 (define (compile-conditional cs test then else free env)
   (compile-exp cs test free env)
-  (instr cs 'JMP-IF)
   (let ((i (code-size cs)))
     ;; this will be back-patched later
-    (emit-fixnum cs 0)
+    (instr1 cs 'JMP-IF 0)
     (compile-exp cs else free env)
-    (instr cs 'JMP)
     (let ((j (code-size cs)))
       ;; this will be back-patched later
-      (emit-fixnum cs 0)
+      (instr1 cs 'JMP 0)
       (let ((k (code-size cs)))
         ;; back-patching if jump
-        (insert-fixnum! cs (- k i 4) i)
+        (patch-instr! cs i (- k i 1))
         (compile-exp cs then free env)
         (let ((m (code-size cs)))
           ;; back-patching else jmp
-          (insert-fixnum! cs (- m j 4) j))))))
+          (patch-instr! cs j (- m j 1)))))))
 
 ;; Produces the union of two sets
 (define (set-union set1 set2)
@@ -379,20 +391,20 @@
 		   (cdr body))))))
 
 (define (compile-closure cs vars body free env)
-  (instr cs 'CREATE-CLOSURE)
-  (let ((i (code-size cs))
-        (new-env (cons (reverse vars) env))
+  (let ((new-env (cons (reverse vars) env))
         (new-free (collect-all-free body vars env)))
     (pp new-free)
-    ;; this will be back-patched later
-    (emit-fixnum cs 0)
-    (compile-seq cs body new-free new-env)
-    (instr cs 'POP)
-    (instr cs 'REST-FP)
-    (instr cs 'RETURN)
-    (let ((j (- (code-size cs) i 4)))
-      ;; back patching jump before closure code
-      (insert-fixnum! cs j i))))
+    (instr1 cs 'CREATE-CLOSURE (length new-free))
+    (let ((i (code-size cs)))
+      ;; this will be back-patched later
+      (instr1 cs 'JMP 0)
+      (compile-seq cs body new-free new-env)
+      (instr cs 'POP)
+      (instr cs 'REST-FP)
+      (instr cs 'RETURN)
+      (let ((j (code-size cs)))
+	;; back patching jump over closure code
+	(patch-instr! cs i (- j i 1))))))
 
 (define (compile-closed-application cs vars args body free env)
   (instr cs 'SAVE-FP)
@@ -415,10 +427,9 @@
 
 (define (compile-application cs proc args free env)
   (instr cs 'SAVE-PROC)
-  (instr cs 'LOAD-FIXNUM)
   (let ((i (code-size cs)))
     ;; this is the return address, will be back-patched later
-    (emit-fixnum cs 0)
+    (instr1 cs 'LOAD-FIXNUM 0)
     (instr cs 'PUSH)
     (instr cs 'SAVE-FP)
     (let ((len (length args)))
@@ -432,7 +443,8 @@
               (instr cs 'PUSH)
               (instr cs 'CALL)
               ;; back-patching return address
-              (insert-fixnum! cs (code-size cs) i))
+	      ;; this not a position-independent value
+              (patch-instr! cs i (code-size cs)))
             (let ((arg (car args)))
               (compile-exp cs arg free env)
               (instr cs 'PUSH)
@@ -456,17 +468,10 @@
                             ((3)
                              (instr cs 'LOAD3))
                             (else
-                             (instr cs 'LOAD)
-                             (emit-fixnum cs i)
-                             (emit-fixnum cs 0)))
-                          (begin
-                            (instr cs 'LOAD)
-                            (emit-fixnum cs i)
-                            (emit-fixnum cs j)))
+                             (instr2 cs 'LOAD i 0)))
+			  (instr2 cs 'LOAD i j))
                       (if k
-                          (begin
-                            (instr cs 'LOAD-FREE)
-                            (emit-fixnum cs k))
+			  (instr1 cs 'LOAD-FREE k)
                           (error "Unknown binding!"))))))
       (lookup x free env cont)))
    ((primitive-call? x)

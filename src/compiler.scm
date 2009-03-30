@@ -107,6 +107,8 @@
     (JMP-IF         . 23)
     (JMP            . 24)
     (LOAD-FREE      . 25)
+    (SAVE-CONT      . 26)
+    (REST-CONT      . 27)
 
     ;; type predicates
     (NULL-P         . 81)
@@ -368,6 +370,8 @@
 	       (body (cddr exp)))
 	   (collect-all-free body
 			     (set-union bound vars) env)))
+	((call/cc)
+	 (collect-free (cadr exp) bound env))
 	(else
 	 (if (primitive-call? exp)
 	     (collect-all-free (cdr exp) bound env)
@@ -397,8 +401,6 @@
 (define (compile-closure cs vars body free env)
   (let ((new-env (cons (reverse vars) env))
         (new-free (collect-all-free body vars env)))
-    (pp new-free)
-    (pp new-env)
     (let loop ((loop-free new-free))
       (if (null? loop-free)
 	  (let ((len (length new-free)))
@@ -462,6 +464,44 @@
               (instr cs 'PUSH)
               (loop (cdr args))))))))
 
+;; creates a closure that will restore a saved
+;; continuation if called - the continuation
+;; is stored in the closure as a free variable
+(define (create-continuation-closure cs)
+  (instr1 cs 'CREATE-CLOSURE 1)
+  ;; jump over closure code
+  (instr1 cs 'JMP 6)
+  ;; value given to the continuation
+  (instr cs 'LOAD0)
+  (instr cs 'PUSH)
+  (instr1 cs 'LOAD-FREE 0)
+  (instr cs 'REST-CONT)
+  ;; there is no need to pop args, there are none
+  ;; but we must restore the frame pointer and the
+  ;; return address saved in call/cc
+  (instr cs 'REST-FP)
+  (instr cs 'RETURN))
+
+(define (compile-call/cc cs exp free env)
+  (instr cs 'SAVE-PROC)
+  (let ((i (code-size cs)))
+    ;; this is the return address, will be back-patched later
+    (instr1 cs 'LOAD-FIXNUM 0)
+    (instr cs 'PUSH)
+    (instr cs 'SAVE-FP)
+    (instr cs 'SAVE-CONT)
+    (instr cs 'PUSH)
+    (create-continuation-closure cs)
+    (instr cs 'PUSH)    
+    (compile-exp cs exp free env)
+    (instr cs 'SET-PROC)
+    (instr cs 'SET-FP)
+    (instr cs 'LOAD-ONE)
+    (instr cs 'PUSH)
+    (instr cs 'CALL)
+    ;; back-patching return address
+    (patch-instr! cs i (code-size cs))))
+
 (define (compile-exp cs x free env)
   (cond
    ((immediate? x)
@@ -496,6 +536,8 @@
        (compile-conditional cs (cadr x) (caddr x) (cadddr x) free env))
       ((lambda)
        (compile-closure cs (cadr x) (cddr x) free env))
+      ((call/cc)
+       (compile-call/cc cs (cadr x) free env))
       (else
        (let ((op (car x)))
          (if (and (pair? op)

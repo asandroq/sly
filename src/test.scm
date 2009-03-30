@@ -12,13 +12,17 @@
      (let ((x (let ((m (* b (- b a)))
 		    (n (* c (- b a))))
 		(lambda (f g)
-		  (+ (+ m (- n f)) g))))
-           (y (cons 34 c)))
+		  (let ((i m)
+			(k (lambda (m z)
+			     (+ (+ m (- z n)) g))))
+		    (k f i)))))
+           (y (call/cc (lambda (cont)
+			 (cons (cont 34) c)))))
        (cond
 	((not c)
 	 (add1 c)
 	 (integer->char c))
-	(e
+	((not e)
 	 (x a (cdr y)))
 	(else
 	 (x (- d a) b))))))

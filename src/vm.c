@@ -84,6 +84,8 @@ typedef unsigned int  uint32_t;
 #define DUNA_OP_JMP_IF           23
 #define DUNA_OP_JMP              24
 #define DUNA_OP_LOAD_FREE        25
+#define DUNA_OP_SAVE_CONT        26
+#define DUNA_OP_REST_CONT        27
 
 /* type predicates */
 #define DUNA_OP_NULL_P           81
@@ -114,6 +116,7 @@ typedef unsigned int  uint32_t;
 #define DUNA_TYPE_CHAR           4
 #define DUNA_TYPE_CLOSURE        5
 #define DUNA_TYPE_PAIR           6
+#define DUNA_TYPE_CONTINUATION   7
 
 #define IS_TYPE_B(instr) \
    ((instr) == DUNA_OP_LOAD_FIXNUM ||  \
@@ -165,6 +168,8 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_JMP_IF,            "JMP-IF"},
   {DUNA_OP_JMP,               "JMP"},
   {DUNA_OP_LOAD_FREE,         "LOAD-FREE"},
+  {DUNA_OP_SAVE_CONT,         "SAVE-CONT"},
+  {DUNA_OP_REST_CONT,         "REST-CONT"},
   {DUNA_OP_NULL_P,            "NULL?"},
   {DUNA_OP_BOOL_P,            "BOOL?"},
   {DUNA_OP_CHAR_P,            "CHAR?"},
@@ -218,6 +223,10 @@ struct duna_GCObject_ {
       duna_Object car;
       duna_Object cdr;
     } pair;
+    struct {
+      uint32_t size;
+      duna_Object *stack;
+    } continuation;
   } data;
 };
 
@@ -287,6 +296,9 @@ static void write_obj(duna_Object* obj)
     printf(" . ");
     write_obj(&obj->value.gc->data.pair.cdr);
     printf(")");
+    break;
+  case DUNA_TYPE_CONTINUATION:
+    printf("<#continuation %u>", obj->value.gc->data.continuation.size);
     break;
   default:
     printf("Unknown type!");
@@ -757,6 +769,27 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_LOAD_FREE:
       D->accum = D->proc.value.gc->data.closure.free_vars[EXTRACT_ARG(instr)];
+      break;
+
+    case DUNA_OP_SAVE_CONT:
+      D->accum.type = DUNA_TYPE_CONTINUATION;
+      D->accum.value.gc = (duna_GCObject*)malloc(sizeof(duna_GCObject));
+
+      /* copying stack */
+      D->accum.value.gc->data.continuation.size = D->sp;
+      D->accum.value.gc->data.continuation.stack = (duna_Object*)malloc(D->sp * sizeof(duna_Object));
+      memcpy(D->accum.value.gc->data.continuation.stack, D->stack, D->sp);
+      break;
+
+    case DUNA_OP_REST_CONT:
+      /* return value is on the stack */
+      tmp = D->stack[--D->sp];
+
+      /* restoring stack */
+      D->sp = D->accum.value.gc->data.continuation.size;
+      memcpy(D->stack, D->accum.value.gc->data.continuation.stack, D->sp);
+
+      D->accum = tmp;
       break;
 
     case DUNA_OP_CONS:

@@ -23,6 +23,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #if __GNUC__ > 2
 #include <stdint.h>
@@ -86,6 +87,10 @@ typedef unsigned int  uint32_t;
 #define DUNA_OP_LOAD_FREE        25
 #define DUNA_OP_SAVE_CONT        26
 #define DUNA_OP_REST_CONT        27
+#define DUNA_OP_ASSIGN           28
+#define DUNA_OP_ASSIGN_FREE      29
+#define DUNA_OP_BOX              30
+#define DUNA_OP_OPEN_BOX         31
 
 /* type predicates */
 #define DUNA_OP_NULL_P           81
@@ -117,6 +122,7 @@ typedef unsigned int  uint32_t;
 #define DUNA_TYPE_CLOSURE        5
 #define DUNA_TYPE_PAIR           6
 #define DUNA_TYPE_CONTINUATION   7
+#define DUNA_TYPE_BOX            8
 
 #define IS_TYPE_B(instr) \
    ((instr) == DUNA_OP_LOAD_FIXNUM ||  \
@@ -124,10 +130,13 @@ typedef unsigned int  uint32_t;
     (instr) == DUNA_OP_MAKE_CLOSURE || \
     (instr) == DUNA_OP_JMP_IF ||       \
     (instr) == DUNA_OP_JMP ||          \
-    (instr) == DUNA_OP_LOAD_FREE)
+    (instr) == DUNA_OP_LOAD_FREE ||    \
+    (instr) == DUNA_OP_ASSIGN_FREE ||  \
+    (instr) == DUNA_OP_BOX)
 
 #define IS_TYPE_C(instr) \
-   ((instr) == DUNA_OP_LOAD)
+   ((instr) == DUNA_OP_LOAD ||         \
+    (instr) == DUNA_OP_ASSIGN)
 
 #define EXTRACT_OP(instr)   ((uint8_t)((instr) & 0x000000ff))
 #define EXTRACT_ARG(instr)  ((uint32_t)((instr) >> 8))
@@ -170,6 +179,10 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_LOAD_FREE,         "LOAD-FREE"},
   {DUNA_OP_SAVE_CONT,         "SAVE-CONT"},
   {DUNA_OP_REST_CONT,         "REST-CONT"},
+  {DUNA_OP_ASSIGN,            "ASSIGN"},
+  {DUNA_OP_ASSIGN_FREE,       "ASSIGN-FREE"},
+  {DUNA_OP_BOX,               "BOX"},
+  {DUNA_OP_OPEN_BOX,          "OPEN-BOX"},
   {DUNA_OP_NULL_P,            "NULL?"},
   {DUNA_OP_BOOL_P,            "BOOL?"},
   {DUNA_OP_CHAR_P,            "CHAR?"},
@@ -215,6 +228,9 @@ struct duna_GCObject_ {
   uint8_t flags;
 
   union {
+    struct {
+      duna_Object value;
+    } box;
     struct {
       uint32_t entry_point;
       duna_Object *free_vars;
@@ -299,6 +315,10 @@ static void write_obj(duna_Object* obj)
     break;
   case DUNA_TYPE_CONTINUATION:
     printf("<#continuation %u>", obj->value.gc->data.continuation.size);
+    break;
+  case DUNA_TYPE_BOX:
+    printf("#&");
+    write_obj(&obj->value.gc->data.box.value);
     break;
   default:
     printf("Unknown type!");
@@ -552,6 +572,9 @@ void duna_dump(duna_State* D)
 
 int duna_vm_run(duna_State* D)
 {
+
+  disassemble(D);
+
   while(D->pc < D->code_size) {
     register uint32_t instr;
     uint32_t i, j, k, dw1, dw2;
@@ -790,6 +813,41 @@ int duna_vm_run(duna_State* D)
       memcpy(D->stack, D->accum.value.gc->data.continuation.stack, D->sp);
 
       D->accum = tmp;
+      break;
+
+    case DUNA_OP_ASSIGN:
+      dw1 = EXTRACT_ARG1(instr);
+      dw2 = EXTRACT_ARG2(instr);
+
+      j = D->fp;
+      for(i = 0; i < dw2; i++) {
+	/* k has the number or arguments */
+	k = (D->stack[j+1]).value.fixnum;
+
+	/* j has the previous FP */
+	j = (D->stack[j-k]).value.fixnum;
+      }
+
+      assert((D->stack[j-dw1]).type == DUNA_TYPE_BOX);
+      (D->stack[j-dw1]).value.gc->data.box.value = D->accum;
+      break;
+
+    case DUNA_OP_ASSIGN_FREE:
+      assert((D->proc.value.gc->data.closure.free_vars[EXTRACT_ARG(instr)]).type == DUNA_TYPE_BOX);
+      (D->proc.value.gc->data.closure.free_vars[EXTRACT_ARG(instr)]).value.gc->data.box.value = D->accum;
+      break;
+  
+    case DUNA_OP_BOX:
+      i = D->fp-EXTRACT_ARG(instr);
+
+      tmp.type = DUNA_TYPE_BOX;
+      tmp.value.gc = (duna_GCObject*)malloc(sizeof(duna_GCObject));
+      tmp.value.gc->data.box.value = D->stack[i];
+      D->stack[i] = tmp;
+      break;
+
+    case DUNA_OP_OPEN_BOX:
+      D->accum = D->accum.value.gc->data.box.value;
       break;
 
     case DUNA_OP_CONS:

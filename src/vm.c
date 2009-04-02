@@ -88,6 +88,7 @@ typedef unsigned int  uint32_t;
 #define DUNA_OP_FRAME            26
 #define DUNA_OP_SET_FP           27
 #define DUNA_OP_TAIL_CALL        28
+#define DUNA_OP_HALT             29
 
 /* type predicates */
 #define DUNA_OP_NULL_P           81
@@ -178,6 +179,7 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_FRAME,             "FRAME"},
   {DUNA_OP_SET_FP,            "SET-FP"},
   {DUNA_OP_TAIL_CALL,         "TAIL-CALL"},
+  {DUNA_OP_HALT,              "HALT"},
   {DUNA_OP_NULL_P,            "NULL?"},
   {DUNA_OP_BOOL_P,            "BOOL?"},
   {DUNA_OP_CHAR_P,            "CHAR?"},
@@ -375,7 +377,7 @@ static int load_code_from_file(duna_State* D, const char* fname)
   /* opening input file */
   f = fopen(fname, "r");
   if(!f) {
-    return 0;
+    return -1;
   }
 
   /* bytecode beginning */
@@ -409,6 +411,16 @@ static int load_code_from_file(duna_State* D, const char* fname)
 	fclose(f);
 	return -1;
       }
+
+      /*
+       * if instruction is FRAME, the return address
+       * encoded must be patched to account for
+       * the current code offset
+       */
+      if(instr == DUNA_OP_FRAME) {
+	dw1 += pc;
+      }
+
       instr |= (dw1 << 8);
 
     } else if(IS_TYPE_C(instr)) {
@@ -466,6 +478,9 @@ duna_State* duna_init(void)
     free(D);
     return NULL;
   }
+  /* instruction to halt the machine always at address 0 */
+  D->code[0] = (uint32_t) DUNA_OP_HALT;
+  D->code_size = 1;
 
   /* stack */
   D->sp = 0;
@@ -477,6 +492,16 @@ duna_State* duna_init(void)
     free(D);
     return NULL;
   }
+  /* initial frame on stack with address of halt instruction */
+  (D->stack[0]).type = DUNA_TYPE_FIXNUM;
+  (D->stack[0]).value.fixnum = 0;
+  (D->stack[1]).type = DUNA_TYPE_BOOL;
+  (D->stack[1]).value.bool = 0;
+  (D->stack[2]).type = DUNA_TYPE_FIXNUM;
+  (D->stack[2]).value.fixnum = 0;
+  (D->stack[3]).type = DUNA_TYPE_FIXNUM;
+  (D->stack[3]).value.fixnum = 0;
+  D->sp = 4;
 
   /* current procedure */
   D->proc.type = DUNA_TYPE_BOOL;
@@ -589,10 +614,11 @@ void duna_dump(duna_State* D)
  */
 int duna_vm_run(duna_State* D)
 {
+  int go_on = 1;
 
   disassemble(D);
 
-  while(D->pc < D->code_size) {
+  while(go_on) {
     register uint32_t instr;
     uint32_t i, j, k, dw1, dw2;
     /* still unsure about this, should be a register? */
@@ -600,6 +626,7 @@ int duna_vm_run(duna_State* D)
 
     /* debugging */
     duna_dump(D);
+    assert(D->pc < D->code_size);
 
     instr = D->code[D->pc++];
 
@@ -898,6 +925,10 @@ int duna_vm_run(duna_State* D)
       
       /* jumping to closure body */
       D->pc = D->proc.value.gc->data.closure.entry_point;
+      break;
+
+    case DUNA_OP_HALT:
+      go_on = 0;
       break;
 
     case DUNA_OP_CONS:

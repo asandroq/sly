@@ -179,6 +179,7 @@
     (FRAME          . 26)
     (SET-FP         . 27)
     (TAIL-CALL      . 28)
+    (HALT           . 29)
 
     ;; type predicates
     (NULL-P         . 81)
@@ -694,6 +695,9 @@
   (let ((cs (or cs* (make-compiler-state)))
 	(x (transform-exp x*)))
     (compile-exp cs x '() '() '() #t)
+    ;; this RETURN jumps to the code that
+    ;; loaded this expression
+    (instr cs 'RETURN)
     (write-code-vector cs)))
 
 (define (compile-to-file file x)

@@ -159,29 +159,26 @@
     (LOAD-FIXNUM    . 6)
     (LOAD-CHAR      . 7)
     (PUSH           . 8)
-    (POP            . 9)
-    (LOAD0          . 10)
-    (LOAD1          . 11)
-    (LOAD2          . 12)
-    (LOAD3          . 13)
-    (LOAD           . 14)
-    (SET-FP         . 15)
-    (SAVE-FP        . 16)
-    (REST-FP        . 17)
-    (CREATE-CLOSURE . 18)
-    (CALL           . 19)
-    (RETURN         . 20)
-    (SAVE-PROC      . 21)
-    (SET-PROC       . 22)
-    (JMP-IF         . 23)
-    (JMP            . 24)
-    (LOAD-FREE      . 25)
-    (SAVE-CONT      . 26)
-    (REST-CONT      . 27)
-    (ASSIGN         . 28)
-    (ASSIGN-FREE    . 29)
-    (BOX            . 30)
-    (OPEN-BOX       . 31)
+    (LOAD0          . 9)
+    (LOAD1          . 10)
+    (LOAD2          . 11)
+    (LOAD3          . 12)
+    (LOAD           . 13)
+    (MAKE-CLOSURE   . 14)
+    (CALL           . 15)
+    (RETURN         . 16)
+    (JMP-IF         . 17)
+    (JMP            . 18)
+    (LOAD-FREE      . 19)
+    (SAVE-CONT      . 20)
+    (REST-CONT      . 21)
+    (ASSIGN         . 22)
+    (ASSIGN-FREE    . 23)
+    (BOX            . 24)
+    (OPEN-BOX       . 25)
+    (FRAME          . 26)
+    (SET-FP         . 27)
+    (TAIL-CALL      . 28)
 
     ;; type predicates
     (NULL-P         . 81)
@@ -358,37 +355,41 @@
               (arity (caddr prim-rec)))
           (cond
            ((= arity 1)
-            (compile-exp cs (cadr x) free sets env)
+            (compile-exp cs (cadr x) free sets env #f)
             (instr cs code))
            ((= arity 2)
-            (compile-exp cs (caddr x) free sets env)
+            (compile-exp cs (caddr x) free sets env #f)
             (instr cs 'PUSH)
-            (compile-exp cs (cadr x) free sets env)
+            (compile-exp cs (cadr x) free sets env #f)
             (instr cs code))
            (else
             (error "Primitive with unknown arity"))))
         (error "Unknown primitive"))))
 
-(define (compile-seq cs exps free sets env)
+(define (compile-seq cs exps free sets env tail?)
   (if (null? exps)
-      (instr cs 'LOAD-NIL)
-      (for-each (lambda (x)
-                  (compile-exp cs x free sets env))
-                exps)))
-
-(define (compile-conditional cs test then else free sets env)
-  (compile-exp cs test free sets env)
+      (error "Empty BEGIN")
+      (let loop ((x (car exps))
+		 (exps (cdr exps)))
+	(if (null? exps)
+	    (compile-exp cs x free sets env tail?)
+	    (begin
+	      (compile-exp cs x free sets env #f)
+	      (loop (car exps) (cdr exps)))))))
+	
+(define (compile-conditional cs test then else free sets env tail?)
+  (compile-exp cs test free sets env #f)
   (let ((i (code-size cs)))
     ;; this will be back-patched later
     (instr1 cs 'JMP-IF 0)
-    (compile-exp cs else free sets env)
+    (compile-exp cs else free sets env tail?)
     (let ((j (code-size cs)))
       ;; this will be back-patched later
       (instr1 cs 'JMP 0)
       (let ((k (code-size cs)))
         ;; back-patching if jump
         (patch-instr! cs i (- k i 1))
-        (compile-exp cs then free sets env)
+        (compile-exp cs then free sets env tail?)
         (let ((m (code-size cs)))
           ;; back-patching else jmp
           (patch-instr! cs j (- m j 1)))))))
@@ -512,7 +513,7 @@
     (let loop ((loop-free new-free))
       (if (null? loop-free)
 	  (let ((len (length new-free)))
-	    (instr1 cs 'CREATE-CLOSURE len)
+	    (instr1 cs 'MAKE-CLOSURE len)
 	    (let ((i (code-size cs)))
 	      ;; this will be back-patched later
 	      (instr1 cs 'JMP 0)
@@ -522,9 +523,8 @@
 			   (reverse new-free)
 			   (set-union new-sets
 				      (set-intersection sets new-free))
-			   new-env)
-	      (instr cs 'POP)
-	      (instr cs 'REST-FP)
+			   new-env
+			   #t)
 	      (instr cs 'RETURN)
 	      (let ((j (code-size cs)))
 		;; back patching jump over closure code
@@ -544,55 +544,58 @@
 
 (define (compile-closed-application cs vars args body free sets env)
   (let ((new-sets (collect-all-sets body vars env)))
-    (instr cs 'SAVE-FP)
-    (let loop ((sec '())
-	       (new-vars vars)
-	       (args args))
-      (if (null? new-vars)
-	  (let ((len (length sec))
-		(new-env (cons sec env)))
-	    (instr cs 'SET-FP)
-	    (emit-immediate cs len)
-	    (instr cs 'PUSH)
-	    (make-boxes cs (reverse vars) new-sets)
-	    (compile-seq cs
-			 body
-			 free
-			 (set-union new-sets
-				    (collect-deep-sets sets
-						       free
-						       new-env))
-			 new-env)
-	    (instr cs 'POP)
-	    (instr cs 'REST-FP))
-	  (let ((var (car new-vars))
-		(exp (car args)))
-	    (compile-exp cs exp free sets env)
-	    (instr cs 'PUSH)
-	    (loop (cons var sec) (cdr new-vars) (cdr args)))))))
+    ;; this is the return address, wil be back-patched
+    (let ((i (code-size cs)))
+      (instr1 cs 'FRAME 0)
+      (let loop ((sec '())
+		 (new-vars vars)
+		 (args args))
+	(if (null? new-vars)
+	    (let ((len (length sec))
+		  (new-env (cons sec env)))
+	      (instr cs 'SET-FP)
+	      (emit-immediate cs len)
+	      (instr cs 'PUSH)
+	      (make-boxes cs (reverse vars) new-sets)
+	      (compile-seq
+	       cs
+	       body
+	       free
+	       (set-union new-sets
+			  (collect-deep-sets sets
+					     free
+					     new-env))
+	       new-env
+	       #t)
+	      (instr cs 'RETURN)
+	      ;; back-patching return address
+	      (patch-instr! cs i (code-size cs)))
+	    (let ((var (car new-vars))
+		  (exp (car args)))
+	      (compile-exp cs exp free sets env #f)
+	      (instr cs 'PUSH)
+	      (loop (cons var sec)
+		    (cdr new-vars)
+		    (cdr args))))))))
 
-(define (compile-application cs proc args free sets env)
-  (instr cs 'SAVE-PROC)
+(define (compile-application cs proc args free sets env tail?)
   (let ((i (code-size cs)))
     ;; this is the return address, will be back-patched later
-    (instr1 cs 'LOAD-FIXNUM 0)
-    (instr cs 'PUSH)
-    (instr cs 'SAVE-FP)
+    (or tail? (instr1 cs 'FRAME 0))
     (let ((len (length args)))
       (let loop ((args args))
         (if (null? args)
             (begin
-              (compile-exp cs proc free sets env)
-              (instr cs 'SET-PROC)
-              (instr cs 'SET-FP)
               (emit-immediate cs len)
-              (instr cs 'PUSH)
-              (instr cs 'CALL)
+	      (instr cs 'PUSH)
+              (compile-exp cs proc free sets env #f)
+              (instr cs (if tail? 'TAIL-CALL 'CALL))
               ;; back-patching return address
 	      ;; this not a position-independent value
-              (patch-instr! cs i (code-size cs)))
+              (if (not tail?)
+		  (patch-instr! cs i (code-size cs))))
             (let ((arg (car args)))
-              (compile-exp cs arg free sets env)
+              (compile-exp cs arg free sets env #f)
               (instr cs 'PUSH)
               (loop (cdr args))))))))
 
@@ -600,41 +603,34 @@
 ;; continuation if called - the continuation
 ;; is stored in the closure as a free variable
 (define (create-continuation-closure cs)
-  (instr1 cs 'CREATE-CLOSURE 1)
+  (instr1 cs 'MAKE-CLOSURE 1)
   ;; jump over closure code
-  (instr1 cs 'JMP 6)
+  (instr1 cs 'JMP 5)
   ;; value given to the continuation
   (instr cs 'LOAD0)
   (instr cs 'PUSH)
   (instr1 cs 'LOAD-FREE 0)
   (instr cs 'REST-CONT)
-  ;; there is no need to pop args, there are none
-  ;; but we must restore the frame pointer and the
-  ;; return address saved in call/cc
-  (instr cs 'REST-FP)
   (instr cs 'RETURN))
 
-(define (compile-call/cc cs exp free sets env)
-  (instr cs 'SAVE-PROC)
+(define (compile-call/cc cs exp free sets env tail?)
   (let ((i (code-size cs)))
     ;; this is the return address, will be back-patched later
-    (instr1 cs 'LOAD-FIXNUM 0)
+    (or tail? (instr1 cs 'FRAME 0))
+    (instr cs 'LOAD-ZERO)
     (instr cs 'PUSH)
-    (instr cs 'SAVE-FP)
     (instr cs 'SAVE-CONT)
     (instr cs 'PUSH)
     (create-continuation-closure cs)
     (instr cs 'PUSH)
     ;; calling closure given to call/cc with
     ;; continuation-restoring closure as sole argument
-    (compile-exp cs exp free sets env)
-    (instr cs 'SET-PROC)
-    (instr cs 'SET-FP)
     (instr cs 'LOAD-ONE)
     (instr cs 'PUSH)
-    (instr cs 'CALL)
+    (compile-exp cs exp free sets env #f)
+    (instr cs (if tail? 'TAIL-CALL 'CALL))
     ;; back-patching return address
-    (patch-instr! cs i (code-size cs))))
+    (or tail? (patch-instr! cs i (code-size cs)))))
 
 (define (compile-assignment cs var exp free sets env)
   (let ((cont (lambda (i j k)
@@ -643,7 +639,7 @@
 		    (if k
 			(instr1 cs 'ASSIGN-FREE k)
 			(error "Unknown binding"))))))
-    (compile-exp cs exp free sets env)
+    (compile-exp cs exp free sets env #f)
     (lookup var free env cont)))
 
 (define (compile-reference cs var free sets env)
@@ -651,7 +647,7 @@
   (and (memq var sets)
        (instr cs 'OPEN-BOX)))
 
-(define (compile-exp cs x free sets env)
+(define (compile-exp cs x free sets env tail?)
   (cond
    ((immediate? x)
     (emit-immediate cs x))
@@ -662,13 +658,20 @@
    ((pair? x)
     (case (car x)
       ((begin)
-       (compile-seq cs (cdr x) free sets env))
+       (compile-seq cs (cdr x) free sets env tail?))
       ((if)
-       (compile-conditional cs (cadr x) (caddr x) (cadddr x) free sets env))
+       (compile-conditional cs
+			    (cadr x)
+			    (caddr x)
+			    (cadddr x)
+			    free
+			    sets
+			    env
+			    tail?))
       ((lambda)
        (compile-closure cs (cadr x) (cddr x) free sets env))
       ((call/cc)
-       (compile-call/cc cs (cadr x) free sets env))
+       (compile-call/cc cs (cadr x) free sets env tail?))
       ((set!)
        (compile-assignment cs (cadr x) (caddr x) free sets env))
       (else
@@ -682,14 +685,15 @@
                                          free
 					 sets
 					 env)
-             (compile-application cs op (cdr x) free sets env))))))
+             (compile-application cs op (cdr x) free sets env tail?))))))
    (else
     (error "Cannot compile atom"))))
 
+;; compiles a top-level expression
 (define (compile cs* x*)
   (let ((cs (or cs* (make-compiler-state)))
 	(x (transform-exp x*)))
-    (compile-exp cs x '() '() '())
+    (compile-exp cs x '() '() '() #t)
     (write-code-vector cs)))
 
 (define (compile-to-file file x)

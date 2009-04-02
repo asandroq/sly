@@ -68,29 +68,26 @@ typedef unsigned int  uint32_t;
 #define DUNA_OP_LOAD_FIXNUM       6
 #define DUNA_OP_LOAD_CHAR         7
 #define DUNA_OP_PUSH              8
-#define DUNA_OP_POP               9
-#define DUNA_OP_LOAD_0           10
-#define DUNA_OP_LOAD_1           11
-#define DUNA_OP_LOAD_2           12
-#define DUNA_OP_LOAD_3           13
-#define DUNA_OP_LOAD             14
-#define DUNA_OP_SET_FP           15
-#define DUNA_OP_SAVE_FP          16
-#define DUNA_OP_REST_FP          17
-#define DUNA_OP_MAKE_CLOSURE     18
-#define DUNA_OP_CALL             19
-#define DUNA_OP_RETURN           20
-#define DUNA_OP_SAVE_PROC        21
-#define DUNA_OP_SET_PROC         22
-#define DUNA_OP_JMP_IF           23
-#define DUNA_OP_JMP              24
-#define DUNA_OP_LOAD_FREE        25
-#define DUNA_OP_SAVE_CONT        26
-#define DUNA_OP_REST_CONT        27
-#define DUNA_OP_ASSIGN           28
-#define DUNA_OP_ASSIGN_FREE      29
-#define DUNA_OP_BOX              30
-#define DUNA_OP_OPEN_BOX         31
+#define DUNA_OP_LOAD_0            9
+#define DUNA_OP_LOAD_1           10
+#define DUNA_OP_LOAD_2           11
+#define DUNA_OP_LOAD_3           12
+#define DUNA_OP_LOAD             13
+#define DUNA_OP_MAKE_CLOSURE     14
+#define DUNA_OP_CALL             15
+#define DUNA_OP_RETURN           16
+#define DUNA_OP_JMP_IF           17
+#define DUNA_OP_JMP              18
+#define DUNA_OP_LOAD_FREE        19
+#define DUNA_OP_SAVE_CONT        20
+#define DUNA_OP_REST_CONT        21
+#define DUNA_OP_ASSIGN           22
+#define DUNA_OP_ASSIGN_FREE      23
+#define DUNA_OP_BOX              24
+#define DUNA_OP_OPEN_BOX         25
+#define DUNA_OP_FRAME            26
+#define DUNA_OP_SET_FP           27
+#define DUNA_OP_TAIL_CALL        28
 
 /* type predicates */
 #define DUNA_OP_NULL_P           81
@@ -132,7 +129,8 @@ typedef unsigned int  uint32_t;
     (instr) == DUNA_OP_JMP ||          \
     (instr) == DUNA_OP_LOAD_FREE ||    \
     (instr) == DUNA_OP_ASSIGN_FREE ||  \
-    (instr) == DUNA_OP_BOX)
+    (instr) == DUNA_OP_BOX ||          \
+    (instr) == DUNA_OP_FRAME)
 
 #define IS_TYPE_C(instr) \
    ((instr) == DUNA_OP_LOAD ||         \
@@ -160,20 +158,14 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_LOAD_FIXNUM,       "LOAD-FIXNUM"},
   {DUNA_OP_LOAD_CHAR,         "LOAD-CHAR"},
   {DUNA_OP_PUSH,              "PUSH"},
-  {DUNA_OP_POP,               "POP"},
   {DUNA_OP_LOAD_0,            "LOAD0"},
   {DUNA_OP_LOAD_1,            "LOAD1"},
   {DUNA_OP_LOAD_2,            "LOAD2"},
   {DUNA_OP_LOAD_3,            "LOAD3"},
   {DUNA_OP_LOAD,              "LOAD"},
-  {DUNA_OP_SET_FP,            "SET-FP"},
-  {DUNA_OP_SAVE_FP,           "SAVE-FP"},
-  {DUNA_OP_REST_FP,           "REST-FP"},
   {DUNA_OP_MAKE_CLOSURE,      "MAKE-CLOSURE"},
   {DUNA_OP_CALL,              "CALL"},
   {DUNA_OP_RETURN,            "RETURN"},
-  {DUNA_OP_SAVE_PROC,         "SAVE-PROC"},
-  {DUNA_OP_SET_PROC,          "SET-PROC"},
   {DUNA_OP_JMP_IF,            "JMP-IF"},
   {DUNA_OP_JMP,               "JMP"},
   {DUNA_OP_LOAD_FREE,         "LOAD-FREE"},
@@ -183,6 +175,9 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_ASSIGN_FREE,       "ASSIGN-FREE"},
   {DUNA_OP_BOX,               "BOX"},
   {DUNA_OP_OPEN_BOX,          "OPEN-BOX"},
+  {DUNA_OP_FRAME,             "FRAME"},
+  {DUNA_OP_SET_FP,            "SET-FP"},
+  {DUNA_OP_TAIL_CALL,         "TAIL-CALL"},
   {DUNA_OP_NULL_P,            "NULL?"},
   {DUNA_OP_BOOL_P,            "BOOL?"},
   {DUNA_OP_CHAR_P,            "CHAR?"},
@@ -570,6 +565,28 @@ void duna_dump(duna_State* D)
     }					\
   } while(0)
 
+/*
+ * When a call to a procedure is to be
+ * performed, the stack must have this
+ * configuration:
+ *
+ *      +=====================+
+ *      | number of arguments |
+ *      +---------------------+
+ *      |        arg 1        |
+ *      |          .          |
+ *      |          .          |
+ *      |          .          |
+ *      |        arg N        |
+ *      +---------------------+
+ *      | saved frame pointer |
+ *      +---------------------+
+ *      |   saved procedure   !
+ *      +---------------------+
+ *      |    return address   |
+ *      +=====================+
+ *      |    previous frame   |
+ */
 int duna_vm_run(duna_State* D)
 {
 
@@ -669,14 +686,6 @@ int duna_vm_run(duna_State* D)
       D->stack[D->sp++] = D->accum;
       break;
 
-    case DUNA_OP_POP:
-      /* removing number of arguments */
-      dw1 = (D->stack[--D->sp]).value.fixnum;
-
-      /* removing arguments */
-      D->sp -= dw1;
-      break;
-
     case DUNA_OP_PLUS:
       D->accum.value.fixnum += (D->stack[--D->sp]).value.fixnum;
       break;
@@ -721,22 +730,6 @@ int duna_vm_run(duna_State* D)
       D->accum = D->stack[j-dw1];
       break;
 
-    case DUNA_OP_SET_FP:
-      /* sets the frame pointer to the current stack top */
-      D->fp = D->sp - 1;
-      break;
-
-    case DUNA_OP_SAVE_FP:
-      /* save frame pointer to the stack */
-      (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
-      (D->stack[D->sp++]).value.fixnum = D->fp;
-      break;
-
-    case DUNA_OP_REST_FP:
-      /* restores frame pointer from top of the stack */
-      D->fp = (D->stack[--D->sp]).value.fixnum;
-      break;
-
     case DUNA_OP_MAKE_CLOSURE:
       /* number of free variables */
       dw1 = EXTRACT_ARG(instr);
@@ -760,24 +753,33 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_CALL:
       /*
-       * at this point we have the previous procedure, return address,
-       * the frame pointer, the arguments and the number of arguments on the stack
+       * setting frame pointer, skipping
+       * number of arguments on top of stack
        */
+      D->fp = D->sp - 2;
+
+      /* setting current procedure */
+      D->proc = D->accum;
+
+      /* jumping to closure body */
       D->pc = D->proc.value.gc->data.closure.entry_point;
       break;
 
     case DUNA_OP_RETURN:
-      /* return address and previous procedure on top of stack */
-      D->pc = (D->stack[--D->sp]).value.fixnum;
+      /* removing number of arguments */
+      dw1 = (D->stack[--D->sp]).value.fixnum;
+
+      /* removing arguments */
+      D->sp -= dw1;
+
+      /* restoring previous frame pointer */
+      D->fp = (D->stack[--D->sp]).value.fixnum;
+
+      /* restoring previous procedure */
       D->proc = D->stack[--D->sp];
-      break;
 
-    case DUNA_OP_SAVE_PROC:
-      D->stack[D->sp++] = D->proc;
-      break;
-
-    case DUNA_OP_SET_PROC:
-      D->proc = D->accum;
+      /* jumping to return address */
+      D->pc = (D->stack[--D->sp]).value.fixnum;
       break;
 
     case DUNA_OP_JMP_IF:
@@ -795,13 +797,18 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_SAVE_CONT:
+      dw1 = D->sp * sizeof(duna_Object);
+
       D->accum.type = DUNA_TYPE_CONTINUATION;
       D->accum.value.gc = (duna_GCObject*)malloc(sizeof(duna_GCObject));
 
       /* copying stack */
       D->accum.value.gc->data.continuation.size = D->sp;
-      D->accum.value.gc->data.continuation.stack = (duna_Object*)malloc(D->sp * sizeof(duna_Object));
-      memcpy(D->accum.value.gc->data.continuation.stack, D->stack, D->sp);
+      D->accum.value.gc->data.continuation.stack = (duna_Object*)malloc(dw1);
+      memcpy(D->accum.value.gc->data.continuation.stack, D->stack, dw1);
+
+      /* removing number of arguments from the stack */
+      D->sp--;
       break;
 
     case DUNA_OP_REST_CONT:
@@ -810,7 +817,7 @@ int duna_vm_run(duna_State* D)
 
       /* restoring stack */
       D->sp = D->accum.value.gc->data.continuation.size;
-      memcpy(D->stack, D->accum.value.gc->data.continuation.stack, D->sp);
+      memcpy(D->stack, D->accum.value.gc->data.continuation.stack, D->sp * sizeof(duna_Object));
 
       D->accum = tmp;
       break;
@@ -847,7 +854,50 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_OPEN_BOX:
+      assert(D->accum.type == DUNA_TYPE_BOX);
       D->accum = D->accum.value.gc->data.box.value;
+      break;
+
+    case DUNA_OP_FRAME:
+      /* pushing return address */
+      (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
+      (D->stack[D->sp++]).value.fixnum = EXTRACT_ARG(instr);
+
+      /* pushing current procedure */
+      D->stack[D->sp++] = D->proc;
+
+      /* pushing frame pointer */
+      (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
+      (D->stack[D->sp++]).value.fixnum = D->fp;
+      break;
+
+    case DUNA_OP_SET_FP:
+      D->fp = D->sp - 1;
+      break;
+
+    case DUNA_OP_TAIL_CALL:
+      /*
+       * the arguments to the callee must be shifted down
+       * removing the arguments of the caller
+       */
+      dw1 = (D->stack[D->sp-1]).value.fixnum;
+      dw2 = (D->stack[D->fp+1]).value.fixnum;
+      i = D->fp - dw1 + 1;
+      j = D->sp - dw2 - 1;
+      D->sp = i + dw1 + 1;
+      memcpy(D->stack+i, D->stack+j, (dw1+1) * sizeof(duna_Object));
+
+      /*
+       * setting frame pointer, skipping
+       * number of arguments on top of stack
+       */
+      D->fp = D->sp - 2;
+      
+      /* setting current procedure */
+      D->proc = D->accum;
+      
+      /* jumping to closure body */
+      D->pc = D->proc.value.gc->data.closure.entry_point;
       break;
 
     case DUNA_OP_CONS:

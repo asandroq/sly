@@ -21,36 +21,18 @@
 			 (cons (cont 34) c)))))
        (cond
 	((not c)
-	 (add1 c)
 	 (integer->char c))
 	((not e)
 	 (x a (cdr y)))
 	(else
-	 (x (- d a) b))))))
+	 (add1 c)
+	 (and c (x (- d a) b)))))))
 
 (define test2
-  '(let ((a (* 23 67))
-	 (b (sub1 1)))
-     (cond
-      ((char? a)
-       (+ a b))
-      ((zero? b)
-       (lambda (x y)
-	 (+ a (* x y))))
-      (else
-       (integer->char a)))))
-
-(define free1
-  '(lambda (x y)
-     (+ a (* x y))))
-
-(define free2
-  '(lambda (x y)
-     (if x
-         (lambda (m n)
-           (- x (+ y m)))
-         (lambda (m o)
-           (* x (- m y))))))
+  '(let loop ((a (cons 1 (cons 2 (cons 3 '())))))
+     (if (null? a)
+	 #t
+	 (loop (cdr a)))))
 
 (compile-to-file "test.fasl" test1)
 

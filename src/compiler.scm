@@ -90,6 +90,32 @@
 ;; Preprocessing
 ;;
 
+;; Transform 'and' into series of 'ifs'
+(define (transform-and exp)
+  (let ((exps (cdr exp)))
+    (if (null? exps)
+	'#t
+	(let ((test (car exps))
+	      (rest (cdr exps)))
+	  (if (null? rest)
+	      (let ((var (gensym)))
+		(transform-exp
+		 (list 'let (list (list var test))
+		       (list 'if var var '#f))))
+	      (list 'if test (transform-exp (cons 'and rest)) '#f))))))
+
+(define (transform-or exp)
+  (let ((exps (cdr exp)))
+    (if (null? exps)
+	'#f
+	(let ((test (car exps))
+	      (rest (cdr exps)))
+	  (if (null? rest)
+	      test
+	      (let ((var (gensym)))
+		(list 'let (list (list var test))
+		      (list 'if var var (transform-exp (cons 'or rest))))))))))
+
 ;; Transform 'cond' into nested 'ifs'
 (define (transform-cond exp)
   (let collect ((code '())
@@ -170,15 +196,44 @@
 			(cons (list 'set! var exp) body)
 			(cdr bindings)))))))))
 
+;; Transform named 'let' into 'letrec'
+(define (transform-named-let exp)
+  (let ((name (cadr exp))
+	(bindings (caddr exp))
+	(body (cdddr exp)))
+    (let loop ((vars '())
+	       (exps '())
+	       (bindings bindings))
+      (if (null? bindings)
+	  (transform-exp
+	   (list 'letrec (list (list name
+				     (cons 'lambda
+					   (cons vars body))))
+		 (cons name exps)))
+	  (let ((binding (car bindings)))
+	    (let ((var (car binding))
+		  (exp (cadr binding)))
+	      (if (symbol? var)
+		  (loop (cons var vars)
+			(cons exp exps)
+			(cdr bindings))
+		  (error "Ill-formed named LET"))))))))
+
 ;; Transforms derived syntax into primitive syntax
 (define (transform-exp exp)
   (if (pair? exp)
       (let ((op (car exp)))
 	(case op
+	  ((and)
+	   (transform-and exp))
+	  ((or)
+	   (transform-or exp))
 	  ((cond)
 	   (transform-cond exp))
 	  ((let)
-	   (transform-let exp))
+	   (if (symbol? (cadr exp))
+	       (transform-named-let exp)
+	       (transform-let exp)))
 	  ((let*)
 	   (transform-let* exp))
 	  ((letrec)

@@ -135,6 +135,41 @@
 			(cdr bindings))
 		  (error "Ill-formed LET"))))))))
 
+;; Transform let* into cascade of 'lets'
+(define (transform-let* exp)
+  (let ((bindings (cadr exp))
+	(body (cddr exp)))
+    (if (null? bindings)
+	(transform-exp (cons 'begin body))
+	(let ((first (car bindings))
+	      (rest (cdr bindings)))
+	  (if (null? rest)
+	      (transform-exp (cons 'let
+				   (cons bindings body)))
+	      (transform-exp (list 'let
+				   (list first)
+				   (cons 'let* (cons rest body)))))))))
+
+;; Transform 'letrec' into 'lambda' plus assignments
+(define (transform-letrec exp)
+  (let ((bindings (cadr exp))
+	(body (cddr exp)))
+    (if (null? bindings)
+	(cons 'begin body)
+	(let loop ((vars '())
+		   (mocks '())
+		   (body (transform-exp body))
+		   (bindings bindings))
+	  (if (null? bindings)
+	      (cons (cons 'lambda (cons vars body)) mocks)
+	      (let ((binding (car bindings)))
+		(let ((var (car binding))
+		      (exp (transform-exp (cadr binding))))
+		  (loop (cons var vars)
+			(cons '#f mocks)
+			(cons (list 'set! var exp) body)
+			(cdr bindings)))))))))
+
 ;; Transforms derived syntax into primitive syntax
 (define (transform-exp exp)
   (if (pair? exp)
@@ -144,6 +179,10 @@
 	   (transform-cond exp))
 	  ((let)
 	   (transform-let exp))
+	  ((let*)
+	   (transform-let* exp))
+	  ((letrec)
+	   (transform-letrec exp))
 	  (else
 	   (map transform-exp exp))))
       exp))

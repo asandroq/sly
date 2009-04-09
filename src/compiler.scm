@@ -271,9 +271,12 @@
     (BOX            . 24)
     (OPEN-BOX       . 25)
     (FRAME          . 26)
-    (SET-FP         . 27)
-    (TAIL-CALL      . 28)
-    (HALT           . 29)
+    (TAIL-CALL      . 27)
+    (HALT           . 28)
+    (LOAD-LOCAL     . 29)
+    (INSERT-BOX     . 30)
+    (ASSIGN-LOCAL   . 31)
+    (POP            . 32)
 
     ;; type predicates
     (NULL-P         . 81)
@@ -331,12 +334,10 @@
 	  (display ")")
 	  (let ((instr (vector-ref code i)))
 	    (let ((op   (vector-ref instr 0))
-		  (arg1 (vector-ref instr 1))
-		  (arg2 (vector-ref instr 2)))
+		  (arg1 (vector-ref instr 1)))
 	      (display (cdr (assv op *opcodes*)))
 	      (display " ")
-	      (if arg1 (write-fixnum arg1))
-	      (if arg2 (write-fixnum arg2)))
+	      (if arg1 (write-fixnum arg1)))
 	    (loop (+ i 1)))))))
 
 (define (extend-code-vector! cs)
@@ -358,13 +359,10 @@
     (vector-set! (vector-ref cs 1) i instr)))
 
 (define (instr cs op)
-  (add-to-code! cs (vector op #f #f)))
+  (add-to-code! cs (vector op #f)))
 
 (define (instr1 cs op arg)
-  (add-to-code! cs (vector op arg #f)))
-
-(define (instr2 cs op arg1 arg2)
-  (add-to-code! cs (vector op arg1 arg2)))
+  (add-to-code! cs (vector op arg)))
 
 ;; used by code that need to patch previously emitted
 ;; instructions
@@ -417,32 +415,57 @@
     (car CAR 1)
     (cdr CDR 1)))
 
-(define (lookup var free env ret)
+(define (lookup var free locals env ret)
   (let ((k (index-of var free)))
     (if k
-        (ret #f #f k)
-        (let loop ((j 0)
-                   (env env))
-          (if (null? env)
-              (ret #f #f #f)
-              (let ((sec (car env)))
-                (let ((i (index-of var sec)))
-                  (if i
-                      (ret i j #f)
-                      (loop (+ j 1) (cdr env))))))))))
+        (ret 'free k)
+	;; the index of the last var of locals
+	;; that matches must be the one returned
+	(let ((len (length locals))
+	      (locals-rev (reverse locals)))
+	  (let ((j (index-of var locals-rev)))
+	  (if j
+	      (ret 'local (- len j 1))
+	      (if (null? env)
+		  (ret #f #f)
+		  (let ((i (index-of var (car env))))
+		    (if i
+			(ret 'bound i)
+			(ret #f #f))))))))))
 
-(define (not-in-env? var env)
-  (let ((cont (lambda (i j k)
-                (not i))))
-    (lookup var '() env cont)))
+(define (bound? var locals env)
+  (or (index-of var locals)
+      (let loop ((b env))
+	(if (null? b)
+	    #f
+	    (let ((sec (car b)))
+	      (if (index-of var sec)
+		  #t
+		  (loop (cdr b))))))))
 
-(define (primitive-call? x env)
+;; if wannabe free var is nowhere in env
+;; it's actually a global, if it is in the
+;; *first* section of env, it is bound
+;; otherwise it is free
+(define (free? var bound env)
+  (and (not (index-of var bound))
+       (if (null? env)
+	   #f
+	   (let loop ((e (cdr env)))
+	     (if (null? e)
+		 #f
+		 (let ((sec (car e)))
+		   (if (index-of var sec)
+		       #t
+		       (loop (cdr e)))))))))
+
+(define (primitive-call? x locals env)
   (and (pair? x)
        (let ((op (car x)))
-         (and (not-in-env? op env)
+         (and (not (bound? op locals env))
 	      (assv op *primitives*) #t))))
 
-(define (compile-primitive-call cs x free sets env)
+(define (compile-primitive-call cs x sets free locals env)
   (let* ((prim (car x))
          (prim-rec (assv prim *primitives*)))
     (if prim-rec
@@ -450,49 +473,44 @@
               (arity (caddr prim-rec)))
           (cond
            ((= arity 1)
-            (compile-exp cs (cadr x) free sets env #f)
+            (compile-exp cs (cadr x) sets free locals env #f)
             (instr cs code))
            ((= arity 2)
-            (compile-exp cs (caddr x) free sets env #f)
+            (compile-exp cs (caddr x) sets free locals env #f)
             (instr cs 'PUSH)
-            (compile-exp cs (cadr x) free sets env #f)
+            (compile-exp cs (cadr x) sets free locals env #f)
             (instr cs code))
            (else
             (error "Primitive with unknown arity"))))
         (error "Unknown primitive"))))
 
-(define (compile-seq cs exps free sets env tail?)
+(define (compile-seq cs exps sets free locals env tail?)
   (if (null? exps)
       (error "Empty BEGIN")
       (let loop ((x (car exps))
 		 (exps (cdr exps)))
 	(if (null? exps)
-	    (compile-exp cs x free sets env tail?)
+	    (compile-exp cs x sets free locals env tail?)
 	    (begin
-	      (compile-exp cs x free sets env #f)
+	      (compile-exp cs x sets free locals env #f)
 	      (loop (car exps) (cdr exps)))))))
 	
-(define (compile-conditional cs test then else free sets env tail?)
-  (compile-exp cs test free sets env #f)
+(define (compile-conditional cs test then else sets free locals env tail?)
+  (compile-exp cs test sets free locals env #f)
   (let ((i (code-size cs)))
     ;; this will be back-patched later
     (instr1 cs 'JMP-IF 0)
-    (compile-exp cs else free sets env tail?)
+    (compile-exp cs else sets free locals env tail?)
     (let ((j (code-size cs)))
       ;; this will be back-patched later
       (instr1 cs 'JMP 0)
       (let ((k (code-size cs)))
         ;; back-patching if jump
         (patch-instr! cs i (- k i 1))
-        (compile-exp cs then free sets env tail?)
+        (compile-exp cs then sets free locals env tail?)
         (let ((m (code-size cs)))
           ;; back-patching else jmp
           (patch-instr! cs j (- m j 1)))))))
-
-;; if wannabe free var is not in env, it's actually a global
-(define (free? var bound env)
-  (not (or (memq var bound)
-	   (not-in-env? var env))))
 
 ;; Collect free variables in expression
 (define (collect-free exp bound env)
@@ -518,7 +536,7 @@
 	   (set-union (collect-free exp bound env)
 		      (if (free? var bound env) (list var) '()))))
 	(else
-	 (if (primitive-call? exp env)
+	 (if (primitive-call? exp bound env)
 	     (collect-free (cdr exp) bound env)
 	     (collect-all-free exp bound env))))
       (if (symbol? exp)
@@ -551,9 +569,7 @@
 	   (set-union (collect-sets exp bound env)
 		      (if (memq var bound) (list var) '()))))
 	(else
-	 (if (primitive-call? exp env)
-	     (collect-all-sets (cdr exp) bound env)
-	     (collect-all-sets exp bound env))))
+	 (collect-all-sets exp bound env)))
       '()))
 
 (define (create-collect-all f)
@@ -573,107 +589,93 @@
 (define (make-boxes cs vars sets)
   (for-each (lambda (v)
 	      (and (memq v sets)
-		   (instr1 cs 'BOX (index-of v vars))))
+		   (instr1 cs 'INSERT-BOX (index-of v vars))))
 	    vars))
 
-(define (compile-binding cs var free env)
-  (let ((cont (lambda (i j k)
-		(if i
-		    (if (zero? j)
-			(case i
-			  ((0)
-			   (instr cs 'LOAD0))
-			  ((1)
-			   (instr cs 'LOAD1))
-			  ((2)
-			   (instr cs 'LOAD2))
-			  ((3)
-			   (instr cs 'LOAD3))
-			  (else
-			   (instr2 cs 'LOAD i 0)))
-			(instr2 cs 'LOAD i j))
-		    (if k
-			(instr1 cs 'LOAD-FREE k)
-			(error "Unknown binding!"))))))
-    (lookup var free env cont)))
+(define (compile-binding cs var free locals env)
+  (let ((cont (lambda (t i)
+		(if t
+		    (case t
+		      ((free)
+		       (instr1 cs 'LOAD-FREE i))
+		      ((local)
+		       (instr1 cs 'LOAD-LOCAL i))
+		      ((bound)
+		       (case i
+			 ((0)
+			  (instr cs 'LOAD0))
+			 ((1)
+			  (instr cs 'LOAD1))
+			 ((2)
+			  (instr cs 'LOAD2))
+			 ((3)
+			  (instr cs 'LOAD3))
+			 (else
+			  (instr1 cs 'LOAD i))))
+		      (else
+		       (error "Unknown binding type!")))
+		    (error "Unknown binding!")))))
+    (lookup var free locals env cont)))
 
 ;; Compiles a lambda into code that create closures
 ;; The jumps are offset by one because when the JMP
 ;; instruction is executed, the PC is already pointing to
 ;; the next instruction
-(define (compile-closure cs vars body free sets env)
-  (let ((new-env (cons (reverse vars) env))
-        (new-free (collect-all-free body vars env))
-	(new-sets (collect-all-sets body vars env)))
-    (let loop ((loop-free new-free))
-      (if (null? loop-free)
-	  (let ((len (length new-free)))
-	    (instr1 cs 'MAKE-CLOSURE len)
-	    (let ((i (code-size cs)))
-	      ;; this will be back-patched later
-	      (instr1 cs 'JMP 0)
-	      (make-boxes cs (reverse vars) new-sets)
-	      (compile-seq cs
-			   body
-			   (reverse new-free)
-			   (set-union new-sets
-				      (set-intersection sets new-free))
-			   new-env
-			   #t)
-	      (instr cs 'RETURN)
-	      (let ((j (code-size cs)))
-		;; back patching jump over closure code
-		(patch-instr! cs i (- j i 1)))))
-	  (let ((var (car loop-free)))
-	    (compile-binding cs var free env)
-	    (instr cs 'PUSH)
-	    (loop (cdr loop-free)))))))
+(define (compile-closure cs vars body sets free locals env)
+  (let ((new-env (cons (reverse vars)
+		       (cons locals env))))
+    (let ((new-free (collect-all-free body vars new-env))
+	  (new-sets (collect-all-sets body vars new-env)))
+      (let loop ((loop-free new-free))
+	(if (null? loop-free)
+	    (let ((len (length new-free)))
+	      (instr1 cs 'MAKE-CLOSURE len)
+	      (let ((i (code-size cs)))
+		;; this will be back-patched later
+		(instr1 cs 'JMP 0)
+		(make-boxes cs (reverse vars) new-sets)
+		(compile-seq cs
+			     body
+			     (set-union new-sets
+					(set-intersection sets new-free))
+			     (reverse new-free)
+			     '()
+			     new-env
+			     #t)
+		(instr cs 'RETURN)
+		(let ((j (code-size cs)))
+		  ;; back patching jump over closure code
+		  (patch-instr! cs i (- j i 1)))))
+	    (let ((var (car loop-free)))
+	      (compile-binding cs var free locals env)
+	      (instr cs 'PUSH)
+	      (loop (cdr loop-free))))))))
 
-(define (collect-deep-sets sets free env)
-  (if (null? env)
-      '()
-      (foldl (lambda (a b)
-	       (set-union a (set-intersection sets b)))
-	     (set-intersection sets free)
-	     (cdr env))))
-
-(define (compile-closed-application cs vars args body free sets env)
+(define (compile-closed-application cs vars args body sets free locals env tail?)
   (let ((new-sets (collect-all-sets body vars env)))
-    ;; this is the return address, wil be back-patched
-    (let ((i (code-size cs)))
-      (instr1 cs 'FRAME 0)
-      (let loop ((sec '())
-		 (new-vars vars)
-		 (args args))
-	(if (null? new-vars)
-	    (let ((len (length sec))
-		  (new-env (cons sec env)))
-	      (instr cs 'SET-FP)
-	      (emit-immediate cs len)
-	      (instr cs 'PUSH)
-	      (make-boxes cs (reverse vars) new-sets)
-	      (compile-seq
-	       cs
-	       body
-	       free
-	       (set-union new-sets
-			  (collect-deep-sets sets
-					     free
-					     new-env))
-	       new-env
-	       #t)
-	      (instr cs 'RETURN)
-	      ;; back-patching return address
-	      (patch-instr! cs i (code-size cs)))
-	    (let ((var (car new-vars))
-		  (exp (car args)))
-	      (compile-exp cs exp free sets env #f)
-	      (instr cs 'PUSH)
-	      (loop (cons var sec)
-		    (cdr new-vars)
-		    (cdr args))))))))
+    (let loop ((new-vars vars)
+	       (args args))
+      (if (null? new-vars)
+	  (begin
+	    (compile-seq
+	     cs
+	     body
+	     (set-union new-sets sets)
+	     free
+	     (append locals vars)
+	     env
+	     tail?)
+	    (or tail? (instr1 cs 'POP (length vars))))
+	  (let ((var (car new-vars))
+		(exp (car args)))
+	    (compile-exp cs exp sets free locals env #f)
+	    (and (memq var new-sets)
+		 (instr cs 'BOX))
+	    (instr cs 'PUSH)
+	    (loop (cdr new-vars)
+		  (cdr args)))))))
 
-(define (compile-application cs proc args free sets env tail?)
+(define (compile-application cs proc args sets free locals env tail?)
   (let ((i (code-size cs)))
     ;; this is the return address, will be back-patched later
     (or tail? (instr1 cs 'FRAME 0))
@@ -683,14 +685,14 @@
             (begin
               (emit-immediate cs len)
 	      (instr cs 'PUSH)
-              (compile-exp cs proc free sets env #f)
+              (compile-exp cs proc sets free locals env #f)
               (instr cs (if tail? 'TAIL-CALL 'CALL))
               ;; back-patching return address
 	      ;; this not a position-independent value
               (if (not tail?)
 		  (patch-instr! cs i (code-size cs))))
             (let ((arg (car args)))
-              (compile-exp cs arg free sets env #f)
+              (compile-exp cs arg sets free locals env #f)
               (instr cs 'PUSH)
               (loop (cdr args))))))))
 
@@ -708,7 +710,7 @@
   (instr cs 'REST-CONT)
   (instr cs 'RETURN))
 
-(define (compile-call/cc cs exp free sets env tail?)
+(define (compile-call/cc cs exp sets free locals env tail?)
   (let ((i (code-size cs)))
     ;; this is the return address, will be back-patched later
     (or tail? (instr1 cs 'FRAME 0))
@@ -722,65 +724,75 @@
     ;; continuation-restoring closure as sole argument
     (instr cs 'LOAD-ONE)
     (instr cs 'PUSH)
-    (compile-exp cs exp free sets env #f)
+    (compile-exp cs exp sets free locals env #f)
     (instr cs (if tail? 'TAIL-CALL 'CALL))
     ;; back-patching return address
     (or tail? (patch-instr! cs i (code-size cs)))))
 
-(define (compile-assignment cs var exp free sets env)
-  (let ((cont (lambda (i j k)
-		(if i
-		    (instr2 cs 'ASSIGN i j)
-		    (if k
-			(instr1 cs 'ASSIGN-FREE k)
-			(error "Unknown binding"))))))
-    (compile-exp cs exp free sets env #f)
-    (lookup var free env cont)))
+(define (compile-assignment cs var exp sets free locals env)
+  (let ((cont (lambda (t i)
+		(if t
+		    (case t
+		      ((free)
+		       (instr1 cs 'ASSIGN-FREE i))
+		      ((local)
+		       (instr1 cs 'ASSIGN-LOCAL i))
+		      ((bound)
+		       (instr1 cs 'ASSIGN i))
+		      (else
+		       (error "Unknown binding type")))
+		    (error "Unknown binding")))))
+    (compile-exp cs exp sets free locals env #f)
+    (lookup var free locals env cont)))
 
-(define (compile-reference cs var free sets env)
-  (compile-binding cs var free env)
+(define (compile-reference cs var sets free locals env)
+  (compile-binding cs var free locals env)
   (and (memq var sets)
        (instr cs 'OPEN-BOX)))
 
-(define (compile-exp cs x free sets env tail?)
+(define (compile-exp cs x sets free locals env tail?)
   (cond
    ((immediate? x)
     (emit-immediate cs x))
    ((symbol? x)
-    (compile-reference cs x free sets env))
-   ((primitive-call? x env)
-    (compile-primitive-call cs x free sets env))
+    (compile-reference cs x sets free locals env))
+   ((primitive-call? x locals env)
+    (compile-primitive-call cs x sets free locals env))
    ((pair? x)
     (case (car x)
       ((begin)
-       (compile-seq cs (cdr x) free sets env tail?))
+       (compile-seq cs (cdr x) sets free locals env tail?))
       ((if)
        (compile-conditional cs
 			    (cadr x)
 			    (caddr x)
 			    (cadddr x)
-			    free
 			    sets
+			    free
+			    locals
 			    env
 			    tail?))
       ((lambda)
-       (compile-closure cs (cadr x) (cddr x) free sets env))
+       (compile-closure cs (cadr x) (cddr x) sets free locals env))
       ((call/cc)
-       (compile-call/cc cs (cadr x) free sets env tail?))
+       (compile-call/cc cs (cadr x) sets free locals env tail?))
       ((set!)
-       (compile-assignment cs (cadr x) (caddr x) free sets env))
+       (compile-assignment cs (cadr x) (caddr x) sets free locals env))
       (else
        (let ((op (car x)))
-         (if (and (pair? op)
-                  (eq? (car op) 'lambda))
+;         (if (and (pair? op)
+;                  (eq? (car op) 'lambda))
+         (if #f
              (compile-closed-application cs
 					 (cadr op)
 					 (cdr x)
 					 (cddr op)
-                                         free
 					 sets
-					 env)
-             (compile-application cs op (cdr x) free sets env tail?))))))
+                                         free
+					 locals
+					 env
+					 tail?)
+             (compile-application cs op (cdr x) sets free locals env tail?))))))
    (else
     (error "Cannot compile atom"))))
 
@@ -788,7 +800,7 @@
 (define (compile cs* x*)
   (let ((cs (or cs* (make-compiler-state)))
 	(x (transform-exp x*)))
-    (compile-exp cs x '() '() '() #t)
+    (compile-exp cs x '() '() '() '() #t)
     ;; this RETURN jumps to the code that
     ;; loaded this expression
     (instr cs 'RETURN)

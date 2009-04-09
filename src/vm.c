@@ -44,19 +44,11 @@ typedef unsigned int  uint32_t;
  * Further reading:
  * http://compilers.iecc.com/comparch/article/04-12-156
  *
- * There are three types of instructions:
+ * There are two types of instructions:
  * Type A: First byte is operand, the rest is for
  *         alignment only.
  * Type B: First byte is operand, remaining 3 bytes
  *         are used for single operand.
- * Type C: First byte is operand, followed by two
- *         12-bit operands.
- *
- * Type C instructions, like LOAD, have the shortest
- * range, but fortunately they usually do not need much
- * (most procedures have less than 4 arguments. Jumps,
- * which are more critical, have 24-bit operands, which
- * should be enough *grin*
  */
 
 /* basic VM instructions */
@@ -86,9 +78,12 @@ typedef unsigned int  uint32_t;
 #define DUNA_OP_BOX              24
 #define DUNA_OP_OPEN_BOX         25
 #define DUNA_OP_FRAME            26
-#define DUNA_OP_SET_FP           27
-#define DUNA_OP_TAIL_CALL        28
-#define DUNA_OP_HALT             29
+#define DUNA_OP_TAIL_CALL        27
+#define DUNA_OP_HALT             28
+#define DUNA_OP_LOAD_LOCAL       29
+#define DUNA_OP_INSERT_BOX       30
+#define DUNA_OP_ASSIGN_LOCAL     31
+#define DUNA_OP_POP              32
 
 /* type predicates */
 #define DUNA_OP_NULL_P           81
@@ -130,17 +125,16 @@ typedef unsigned int  uint32_t;
     (instr) == DUNA_OP_JMP ||          \
     (instr) == DUNA_OP_LOAD_FREE ||    \
     (instr) == DUNA_OP_ASSIGN_FREE ||  \
-    (instr) == DUNA_OP_BOX ||          \
-    (instr) == DUNA_OP_FRAME)
-
-#define IS_TYPE_C(instr) \
-   ((instr) == DUNA_OP_LOAD ||         \
-    (instr) == DUNA_OP_ASSIGN)
+    (instr) == DUNA_OP_FRAME ||        \
+    (instr) == DUNA_OP_INSERT_BOX ||   \
+    (instr) == DUNA_OP_ASSIGN_LOCAL || \
+    (instr) == DUNA_OP_LOAD ||         \
+    (instr) == DUNA_OP_ASSIGN ||       \
+    (instr) == DUNA_OP_LOAD_LOCAL ||   \
+    (instr) == DUNA_OP_POP)
 
 #define EXTRACT_OP(instr)   ((uint8_t)((instr) & 0x000000ff))
 #define EXTRACT_ARG(instr)  ((uint32_t)((instr) >> 8))
-#define EXTRACT_ARG1(instr) ((uint32_t)(((instr) >> 8) & 0x00000fff))
-#define EXTRACT_ARG2(instr) ((uint32_t)((instr) >> 20))
 
 /* debugging information */
 struct  opcode_ {
@@ -177,9 +171,12 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_BOX,               "BOX"},
   {DUNA_OP_OPEN_BOX,          "OPEN-BOX"},
   {DUNA_OP_FRAME,             "FRAME"},
-  {DUNA_OP_SET_FP,            "SET-FP"},
   {DUNA_OP_TAIL_CALL,         "TAIL-CALL"},
   {DUNA_OP_HALT,              "HALT"},
+  {DUNA_OP_LOAD_LOCAL,        "LOAD-LOCAL"},
+  {DUNA_OP_INSERT_BOX,        "INSERT-BOX"},
+  {DUNA_OP_ASSIGN_LOCAL,      "ASSIGN-LOCAL"},
+  {DUNA_OP_POP,               "POP"},
   {DUNA_OP_NULL_P,            "NULL?"},
   {DUNA_OP_BOOL_P,            "BOOL?"},
   {DUNA_OP_CHAR_P,            "CHAR?"},
@@ -391,7 +388,7 @@ static int load_code_from_file(duna_State* D, const char* fname)
   /* reading actual code */
   while(1) {
     int ret;
-    uint32_t instr, dw1, dw2;
+    uint32_t instr, dw1;
 
     ret = get_next(f, &instr);
     if(ret == -1) {
@@ -423,18 +420,6 @@ static int load_code_from_file(duna_State* D, const char* fname)
 
       instr |= (dw1 << 8);
 
-    } else if(IS_TYPE_C(instr)) {
-      if(get_fixnum(f, &dw1) < 0) {
-	fclose(f);
-	return -1;
-      }
-
-      if(get_fixnum(f, &dw2) < 0) {
-	fclose(f);
-	return -1;
-      }
-      
-      instr |= (dw1 << 8) | (dw2 << 20);
     }
 
     /* does the code vector has space? */
@@ -502,6 +487,7 @@ duna_State* duna_init(void)
   (D->stack[3]).type = DUNA_TYPE_FIXNUM;
   (D->stack[3]).value.fixnum = 0;
   D->sp = 4;
+  D->fp = 3;
 
   /* current procedure */
   D->proc.type = DUNA_TYPE_BOOL;
@@ -536,9 +522,6 @@ static void dump_instr(uint32_t instr)
       printf("%u\t%s", (uint32_t)op, dbg->name);
       if(IS_TYPE_B(op)) {
 	printf(" %u", EXTRACT_ARG(instr));
-      } else if(IS_TYPE_C(op)) {
-	printf(" %u %u", EXTRACT_ARG1(instr),
-                         EXTRACT_ARG2(instr));
       }
       break;
     }
@@ -620,7 +603,7 @@ int duna_vm_run(duna_State* D)
 
   while(go_on) {
     register uint32_t instr;
-    uint32_t i, j, k, dw1, dw2;
+    uint32_t i, j, dw1, dw2;
     /* still unsure about this, should be a register? */
     duna_Object tmp;
 
@@ -726,35 +709,23 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_LOAD_0:
-      D->accum = D->stack[D->fp];
-      break;
-
-    case DUNA_OP_LOAD_1:
       D->accum = D->stack[D->fp-1];
       break;
 
-    case DUNA_OP_LOAD_2:
+    case DUNA_OP_LOAD_1:
       D->accum = D->stack[D->fp-2];
       break;
 
-    case DUNA_OP_LOAD_3:
+    case DUNA_OP_LOAD_2:
       D->accum = D->stack[D->fp-3];
       break;
 
+    case DUNA_OP_LOAD_3:
+      D->accum = D->stack[D->fp-4];
+      break;
+
     case DUNA_OP_LOAD:
-      dw1 = EXTRACT_ARG1(instr);
-      dw2 = EXTRACT_ARG2(instr);
-
-      j = D->fp;
-      for(i = 0; i < dw2; i++) {
-	/* k has the number or arguments */
-	k = (D->stack[j+1]).value.fixnum;
-
-	/* j has the previous FP */
-	j = (D->stack[j-k]).value.fixnum;
-      }
-
-      D->accum = D->stack[j-dw1];
+      D->accum = D->stack[D->fp-EXTRACT_ARG(instr)-1];
       break;
 
     case DUNA_OP_MAKE_CLOSURE:
@@ -780,10 +751,9 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_CALL:
       /*
-       * setting frame pointer, skipping
-       * number of arguments on top of stack
+       * setting frame pointer
        */
-      D->fp = D->sp - 2;
+      D->fp = D->sp - 1;
 
       /* setting current procedure */
       D->proc = D->accum;
@@ -850,34 +820,21 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_ASSIGN:
-      dw1 = EXTRACT_ARG1(instr);
-      dw2 = EXTRACT_ARG2(instr);
-
-      j = D->fp;
-      for(i = 0; i < dw2; i++) {
-	/* k has the number or arguments */
-	k = (D->stack[j+1]).value.fixnum;
-
-	/* j has the previous FP */
-	j = (D->stack[j-k]).value.fixnum;
-      }
-
-      assert((D->stack[j-dw1]).type == DUNA_TYPE_BOX);
-      (D->stack[j-dw1]).value.gc->data.box.value = D->accum;
+      assert((D->stack[D->fp-EXTRACT_ARG(instr)-1]).type == DUNA_TYPE_BOX);
+      (D->stack[D->fp-EXTRACT_ARG(instr)-1]).value.gc->data.box.value = D->accum;
       break;
 
     case DUNA_OP_ASSIGN_FREE:
       assert((D->proc.value.gc->data.closure.free_vars[EXTRACT_ARG(instr)]).type == DUNA_TYPE_BOX);
       (D->proc.value.gc->data.closure.free_vars[EXTRACT_ARG(instr)]).value.gc->data.box.value = D->accum;
       break;
-  
-    case DUNA_OP_BOX:
-      i = D->fp-EXTRACT_ARG(instr);
 
+    case DUNA_OP_BOX:
       tmp.type = DUNA_TYPE_BOX;
       tmp.value.gc = (duna_GCObject*)malloc(sizeof(duna_GCObject));
-      tmp.value.gc->data.box.value = D->stack[i];
-      D->stack[i] = tmp;
+      tmp.value.gc->data.box.value = D->accum;
+
+      D->accum = tmp;
       break;
 
     case DUNA_OP_OPEN_BOX:
@@ -898,27 +855,29 @@ int duna_vm_run(duna_State* D)
       (D->stack[D->sp++]).value.fixnum = D->fp;
       break;
 
-    case DUNA_OP_SET_FP:
-      D->fp = D->sp - 1;
-      break;
-
     case DUNA_OP_TAIL_CALL:
       /*
        * the arguments to the callee must be shifted down
        * removing the arguments of the caller
        */
+      /* number of arguments newly pushed */
       dw1 = (D->stack[D->sp-1]).value.fixnum;
-      dw2 = (D->stack[D->fp+1]).value.fixnum;
-      i = D->fp - dw1 + 1;
-      j = D->sp - dw2 - 1;
-      D->sp = i + dw1 + 1;
+
+      /* number of arguments of old procedure */
+      dw2 = (D->stack[D->fp]).value.fixnum;
+
+      /* where to copy the new values */
+      i = D->fp - dw2;
+
+      /* where the values will be copied from */
+      j = D->sp - dw1 - 1;
       memcpy(D->stack+i, D->stack+j, (dw1+1) * sizeof(duna_Object));
 
       /*
-       * setting frame pointer, skipping
-       * number of arguments on top of stack
+       * setting stack and frame pointer
        */
-      D->fp = D->sp - 2;
+      D->sp = i + dw1 + 1;
+      D->fp = D->sp - 1;
       
       /* setting current procedure */
       D->proc = D->accum;
@@ -929,6 +888,28 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_HALT:
       go_on = 0;
+      break;
+
+    case DUNA_OP_LOAD_LOCAL:
+      D->accum = D->stack[D->fp+EXTRACT_ARG(instr)+1];
+      break;
+
+    case DUNA_OP_INSERT_BOX:
+      i = D->fp-EXTRACT_ARG(instr)-1;
+
+      tmp.type = DUNA_TYPE_BOX;
+      tmp.value.gc = (duna_GCObject*)malloc(sizeof(duna_GCObject));
+      tmp.value.gc->data.box.value = D->stack[i];
+      D->stack[i] = tmp;
+      break;
+
+    case DUNA_OP_ASSIGN_LOCAL:
+      assert((D->stack[D->fp+EXTRACT_ARG(instr)+1]).type == DUNA_TYPE_BOX);
+      (D->stack[D->fp+EXTRACT_ARG(instr)+1]).value.gc->data.box.value = D->accum;
+      break;
+
+    case DUNA_OP_POP:
+      D->sp -= EXTRACT_ARG(instr);
       break;
 
     case DUNA_OP_CONS:

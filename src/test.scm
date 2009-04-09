@@ -34,5 +34,10 @@
 	 #t
 	 (loop (cdr a)))))
 
+(define test3
+  '(let ((a 1)
+	 (b 2))
+     (+ a b)))
+
 (compile-to-file "test.fasl" test1)
 

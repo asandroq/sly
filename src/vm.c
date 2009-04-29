@@ -196,12 +196,15 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_CDR,               "CDR"},
   {0, NULL}
 };
-  
+
+/*
+ * Data types
+ */
+
 /* forward type declarations */
 typedef struct duna_Object_ duna_Object;
 typedef struct duna_GCObject_ duna_GCObject;
 
-/* Duna data types */
 struct duna_Object_ {
 
   /* the runtime type tag */
@@ -219,32 +222,215 @@ struct duna_Object_ {
   } value;
 };
 
-struct duna_GCObject_ {
-  uint8_t flags;
+#define DUNA_GC_BASE uint32_t type
 
-  union {
-    struct {
-      duna_Object value;
-    } box;
-    struct {
-      uint32_t entry_point;
-      duna_Object *free_vars;
-    } closure;
-    struct {
-      duna_Object car;
-      duna_Object cdr;
-    } pair;
-    struct {
-      uint32_t size;
-      duna_Object *stack;
-    } continuation;
-  } data;
+struct duna_GCObject_ {
+  DUNA_GC_BASE;
 };
 
-#define DUNA_VISITED(o) (((o).value->gc.flags) & 0x01)
+struct duna_Box_ {
+  DUNA_GC_BASE;
+  duna_Object value;
+};
+
+typedef struct duna_Box_ duna_Box;
+
+struct duna_Closure_ {
+  DUNA_GC_BASE;
+  uint32_t entry_point;
+  duna_Object free_vars[1];
+};
+
+typedef struct duna_Closure_ duna_Closure;
+
+struct duna_Pair_ {
+  DUNA_GC_BASE;
+  duna_Object car;
+  duna_Object cdr;  
+};
+
+typedef struct duna_Pair_ duna_Pair;
+
+struct duna_Continuation_ {
+  DUNA_GC_BASE;
+  uint32_t size;
+  duna_Object stack[1];
+};
+
+typedef struct duna_Continuation_ duna_Continuation;
+
+/*
+ * the store, i.e., memory
+ */
+
+#define DUNA_INITIAL_SPACE_SIZE ((uint32_t)(1 << 8))
+
+typedef struct duna_Store_ duna_Store;
+
+struct duna_Store_ {
+  
+  /* the total size of a semispace */
+  uint32_t capacity;
+
+  /* the used size of the semispace */
+  uint32_t size;
+
+  /* address of memory received from OS */
+  void *os_address;
+
+  /* the space from where objects are copied */
+  void *from_space;
+
+  /* the space to which objects are copied */
+  void *to_space;
+};
+
+static int init_store(duna_Store *S)
+{
+  /* alloc heap */
+  S->from_space = malloc(DUNA_INITIAL_SPACE_SIZE * 2);
+  if(S->from_space == NULL) {
+    return 0;
+  }
+
+  S->size = 0;
+  S->os_address = S->from_space;
+  S->capacity = DUNA_INITIAL_SPACE_SIZE;
+  S->to_space = S->from_space + (DUNA_INITIAL_SPACE_SIZE);
+
+  return 1;
+}
+
+static void finish_store(duna_Store *S)
+{
+  free(S->os_address);
+  S->size = S->capacity = 0;
+  S->from_space = S->to_space = NULL;
+}
+
+static void gc(duna_Store* S)
+{
+  S = S;
+  fprintf(stderr, "Doing GC!\n");
+}
+
+static int expand_store(duna_Store* S)
+{
+  void *tmp;
+  uint32_t old_size, size;
+
+  old_size = S->capacity;
+
+  /* new size is 30% larger, multiple of 4 */
+  size = old_size * 4 / 3;
+  size += size % 4;
+  fprintf(stderr, "Expanding store from %u to %u\n", old_size, size);
+  
+  tmp = realloc(S->os_address, size * 2);
+  if(tmp == NULL) {
+    return 0;
+  } else {
+    if(S->os_address == S->to_space) {
+      /* argh */
+      memcpy(S->from_space, S->to_space, S->size);
+    }
+    S->capacity = size;
+    S->os_address = tmp;
+    S->from_space = tmp;
+    S->to_space = tmp + size;
+    return 1;
+  }
+}
+
+static void* alloc_from_store(duna_Store *S, uint32_t size)
+{
+  void *ret;
+
+  if(S->size + size > S->capacity) {
+    /* not enough space, try to find some */
+    gc(S);
+
+    while(S->size + size > S->capacity) {
+      /* expand store until it fits */
+      if(expand_store(S) == 0) {
+	return NULL;
+      }
+    }
+  }
+
+  /* allocs from the from space */
+  ret = S->from_space + S->size;
+  S->size += size;
+
+  return ret;
+}
+
+static duna_Box *alloc_box(duna_Store *S)
+{
+  duna_Box *ret;
+
+  ret = (duna_Box*)alloc_from_store(S, sizeof(duna_Box));
+  if(ret) {
+    ret->type = DUNA_TYPE_BOX;
+  }
+
+  return ret;
+}
+
+static duna_Closure *alloc_closure(duna_Store *S, uint32_t nr_vars)
+{
+  uint32_t size;
+  duna_Closure *ret;
+
+  size = sizeof(duna_Closure) +
+         (nr_vars == 0 ? 0 : (nr_vars-1)) * sizeof(duna_Object);
+
+  ret = (duna_Closure*) alloc_from_store(S, size);
+  if(ret) {
+    ret->type = DUNA_TYPE_CLOSURE;
+  }
+
+  return ret;
+}
+
+static duna_Pair *alloc_pair(duna_Store *S)
+{
+  duna_Pair *ret;
+
+  ret = (duna_Pair*) alloc_from_store(S, sizeof(duna_Pair));
+  if(ret) {
+    ret->type = DUNA_TYPE_PAIR;
+  }
+
+  return ret;
+}
+
+static duna_Continuation *alloc_continuation(duna_Store *S, uint32_t stack_size)
+{
+  uint32_t size;
+  duna_Continuation *ret;
+
+  size = sizeof(duna_Continuation) + (stack_size-1) * sizeof(duna_Object);
+  ret = (duna_Continuation*)alloc_from_store(S, size);
+  if(ret) {
+    ret->type = DUNA_TYPE_CONTINUATION;
+    ret->size = stack_size;
+  }
+
+  return ret;
+}
+
+/*
+ * the virtual machine
+ */
 
 /* the state of the Duna interpreter */
+typedef struct duna_State_ duna_State;
+
 struct duna_State_ {
+
+  /* VM memory */
+  duna_Store store;
 
   /* the bytecode to be interpreted */
   uint32_t *code;
@@ -277,178 +463,17 @@ struct duna_State_ {
   duna_Object proc;
 };
 
-typedef struct duna_State_ duna_State;
-
-static void write_obj(duna_Object* obj)
-{
-  switch(obj->type) {
-  case DUNA_TYPE_NIL:
-    printf("()");
-    break;
-  case DUNA_TYPE_BOOL:
-    if(obj->value.bool) {
-      printf("#t");
-    } else {
-      printf("#f");
-    }
-    break;
-  case DUNA_TYPE_FIXNUM:
-    printf("%d", obj->value.fixnum);
-    break;
-  case DUNA_TYPE_CHAR:
-    printf("#\\%c", obj->value.chr);
-    break;
-  case DUNA_TYPE_CLOSURE:
-    printf("<#closure %u>", obj->value.gc->data.closure.entry_point);
-    break;
-  case DUNA_TYPE_PAIR:
-    printf("(");
-    write_obj(&obj->value.gc->data.pair.car);
-    printf(" . ");
-    write_obj(&obj->value.gc->data.pair.cdr);
-    printf(")");
-    break;
-  case DUNA_TYPE_CONTINUATION:
-    printf("<#continuation %u>", obj->value.gc->data.continuation.size);
-    break;
-  case DUNA_TYPE_BOX:
-    printf("#&");
-    write_obj(&obj->value.gc->data.box.value);
-    break;
-  default:
-    printf("Unknown type!");
-  }
-}
-
-static int get_next(FILE* f, uint32_t *next)
-{
-  int ret;
-
-  ret = fscanf(f, " %u", next);
-  if(ret == EOF) {
-    return -1;
-  } else if(ret == 0) {
-    /* maybe got to end? */
-    ret = fscanf(f, ")");
-    if(ret == EOF) {
-      return -1;
-    } else {
-      return 0;
-    }
-  } else {
-    return 1;
-  }
-}
-
-static int get_fixnum(FILE* f, uint32_t *num)
-{
-  int ret;
-  uint32_t b1, b2, b3, b4;
-
-  ret = get_next(f, &b1);
-  if(ret <= 0) {
-    return -1;
-  }
-  ret = get_next(f, &b2);
-  if(ret <= 0) {
-    return -1;
-  }
-  ret = get_next(f, &b3);
-  if(ret <= 0) {
-    return -1;
-  }
-  ret = get_next(f, &b4);
-  if(ret <= 0) {
-    return -1;
-  }
-
-  *num = b1 | (b2 << 8) | (b3 << 16) | (b4 << 24);
-
-  return 1;
-}
-
-static int load_code_from_file(duna_State* D, const char* fname)
-{
-  FILE *f;
-  uint32_t pc;
-
-  /* opening input file */
-  f = fopen(fname, "r");
-  if(!f) {
-    return -1;
-  }
-
-  /* bytecode beginning */
-  if(fscanf(f, " #(") == EOF) {
-    fclose(f);
-    return -1;
-  }
-
-  pc = D->code_size;
-
-  /* reading actual code */
-  while(1) {
-    int ret;
-    uint32_t instr, dw1;
-
-    ret = get_next(f, &instr);
-    if(ret == -1) {
-      /* unexpected end */
-      fclose(f);
-      return -1;
-    }
-    if(ret == 0 || instr == 0) {
-      /* real end */
-      return pc;
-    }
-
-    /* retrieve operands if any */
-    if(IS_TYPE_B(instr)) {
-      ret = get_fixnum(f, &dw1);
-      if(ret < 0) {
-	fclose(f);
-	return -1;
-      }
-
-      /*
-       * if instruction is FRAME, the return address
-       * encoded must be patched to account for
-       * the current code offset
-       */
-      if(instr == DUNA_OP_FRAME) {
-	dw1 += pc;
-      }
-
-      instr |= (dw1 << 8);
-
-    }
-
-    /* does the code vector has space? */
-    if(D->code_size == D->code_capacity) {
-      uint32_t *code, size;
-
-      size = D->code_size * 3 / 2;
-      code = (uint32_t*)realloc(D->code, size);
-      if(!code) {
-	fclose(f);
-	return -1;
-      }
-
-      D->code = code;
-      D->code_capacity = size;
-    }
-
-    /* adds new read byte to code vector */
-    D->code[D->code_size++] = instr;
-  }
-}
-
 duna_State* duna_init(void)
 {
   duna_State *D = NULL;
 
   D = (duna_State*)malloc(sizeof(duna_State));
   if(!D) {
+    return NULL;
+  }
+
+  /* store */
+  if(init_store(&D->store) == 0) {
     return NULL;
   }
 
@@ -502,6 +527,7 @@ duna_State* duna_init(void)
 void duna_close(duna_State* D)
 {
   if(D) {
+    finish_store(&D->store);
     if(D->code) {
       free(D->code);
     }
@@ -511,6 +537,55 @@ void duna_close(duna_State* D)
     free(D);
   }
 }
+
+/*
+ * writer
+ */
+
+static void write_obj(duna_Object* obj)
+{
+  switch(obj->type) {
+  case DUNA_TYPE_NIL:
+    printf("()");
+    break;
+  case DUNA_TYPE_BOOL:
+    if(obj->value.bool) {
+      printf("#t");
+    } else {
+      printf("#f");
+    }
+    break;
+  case DUNA_TYPE_FIXNUM:
+    printf("%d", obj->value.fixnum);
+    break;
+  case DUNA_TYPE_CHAR:
+    printf("#\\%c", obj->value.chr);
+    break;
+  case DUNA_TYPE_CLOSURE:
+    printf("<#closure %u>", ((duna_Closure*)obj->value.gc)->entry_point);
+    break;
+  case DUNA_TYPE_PAIR:
+    printf("(");
+    write_obj(&(((duna_Pair*)obj->value.gc)->car));
+    printf(" . ");
+    write_obj(&(((duna_Pair*)obj->value.gc)->cdr));
+    printf(")");
+    break;
+  case DUNA_TYPE_CONTINUATION:
+    printf("<#continuation %u>", ((duna_Continuation*)obj->value.gc)->size);
+    break;
+  case DUNA_TYPE_BOX:
+    printf("#&");
+    write_obj(&(((duna_Box*)obj->value.gc)->value));
+    break;
+  default:
+    printf("Unknown type!");
+  }
+}
+
+/*
+ * debugging
+ */
 
 static void dump_instr(uint32_t instr)
 {
@@ -563,6 +638,15 @@ void duna_dump(duna_State* D)
   printf("\n\n");
 }
 
+static void check_alloc(duna_State *D, void* ptr)
+{
+  if(ptr == NULL) {
+    fprintf(stderr, "duna: Out of memory!\n");
+    duna_close(D);
+    exit(13);
+  }
+}
+
 #define DUNA_SET_BOOL(cond)		\
   do {					\
     if(cond) {				\
@@ -609,7 +693,7 @@ int duna_vm_run(duna_State* D)
     duna_Object tmp;
 
     /* debugging */
-    duna_dump(D);
+    /*duna_dump(D);*/
     assert(D->pc < D->code_size);
 
     instr = D->code[D->pc++];
@@ -734,18 +818,18 @@ int duna_vm_run(duna_State* D)
       dw1 = EXTRACT_ARG(instr);
 
       D->accum.type = DUNA_TYPE_CLOSURE;
-      D->accum.value.gc = (duna_GCObject*) malloc(sizeof(duna_GCObject));
+      D->accum.value.gc = (duna_GCObject*) alloc_closure(&D->store, dw1);
+      check_alloc(D, D->accum.value.gc);
 
       /*
        * There is always a jump after this instruction, to jump over the
        * closure code. So the closure entry point is PC + 1
        */
-      D->accum.value.gc->data.closure.entry_point = D->pc + 1;
+      ((duna_Closure*)D->accum.value.gc)->entry_point = D->pc + 1;
 
       /* gathering free variables */
-      D->accum.value.gc->data.closure.free_vars = (duna_Object*)malloc(dw1 * sizeof(duna_Object));
       for(i = 0; i < dw1; i++) {
-	D->accum.value.gc->data.closure.free_vars[i] = D->stack[D->sp-i-1];
+	((duna_Closure*)D->accum.value.gc)->free_vars[i] = D->stack[D->sp-i-1];
       }
       D->sp -= dw1;
       break;
@@ -760,7 +844,7 @@ int duna_vm_run(duna_State* D)
       D->proc = D->accum;
 
       /* jumping to closure body */
-      D->pc = D->proc.value.gc->data.closure.entry_point;
+      D->pc = ((duna_Closure*)D->proc.value.gc)->entry_point;
       break;
 
     case DUNA_OP_RETURN:
@@ -791,19 +875,18 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_LOAD_FREE:
-      D->accum = D->proc.value.gc->data.closure.free_vars[EXTRACT_ARG(instr)];
+      D->accum = ((duna_Closure*)D->proc.value.gc)->free_vars[EXTRACT_ARG(instr)];
       break;
 
     case DUNA_OP_SAVE_CONT:
       dw1 = D->sp * sizeof(duna_Object);
 
       D->accum.type = DUNA_TYPE_CONTINUATION;
-      D->accum.value.gc = (duna_GCObject*)malloc(sizeof(duna_GCObject));
+      D->accum.value.gc = (duna_GCObject*) alloc_continuation(&D->store, D->sp);
+      check_alloc(D, D->accum.value.gc);
 
       /* copying stack */
-      D->accum.value.gc->data.continuation.size = D->sp;
-      D->accum.value.gc->data.continuation.stack = (duna_Object*)malloc(dw1);
-      memcpy(D->accum.value.gc->data.continuation.stack, D->stack, dw1);
+      memcpy(((duna_Continuation*)D->accum.value.gc)->stack, D->stack, dw1);
 
       /* removing number of arguments from the stack */
       D->sp--;
@@ -814,33 +897,35 @@ int duna_vm_run(duna_State* D)
       tmp = D->stack[--D->sp];
 
       /* restoring stack */
-      D->sp = D->accum.value.gc->data.continuation.size;
-      memcpy(D->stack, D->accum.value.gc->data.continuation.stack, D->sp * sizeof(duna_Object));
+      D->sp = ((duna_Continuation*)D->accum.value.gc)->size;
+      memcpy(D->stack, ((duna_Continuation*)D->accum.value.gc)->stack, D->sp * sizeof(duna_Object));
 
       D->accum = tmp;
       break;
 
     case DUNA_OP_ASSIGN:
       assert((D->stack[D->fp-EXTRACT_ARG(instr)-1]).type == DUNA_TYPE_BOX);
-      (D->stack[D->fp-EXTRACT_ARG(instr)-1]).value.gc->data.box.value = D->accum;
+      ((duna_Box*)(D->stack[D->fp-EXTRACT_ARG(instr)-1]).value.gc)->value = D->accum;
       break;
 
     case DUNA_OP_ASSIGN_FREE:
-      assert((D->proc.value.gc->data.closure.free_vars[EXTRACT_ARG(instr)]).type == DUNA_TYPE_BOX);
-      (D->proc.value.gc->data.closure.free_vars[EXTRACT_ARG(instr)]).value.gc->data.box.value = D->accum;
+      assert((((duna_Closure*)D->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).type == DUNA_TYPE_BOX);
+      ((duna_Box*)(((duna_Closure*)D->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).value.gc)->value = D->accum;
       break;
 
     case DUNA_OP_BOX:
-      tmp.type = DUNA_TYPE_BOX;
-      tmp.value.gc = (duna_GCObject*)malloc(sizeof(duna_GCObject));
-      tmp.value.gc->data.box.value = D->accum;
+      tmp = D->accum;
 
-      D->accum = tmp;
+      D->accum.type = DUNA_TYPE_BOX;
+      D->accum.value.gc = (duna_GCObject*) alloc_box(&D->store);
+      check_alloc(D, D->accum.value.gc);
+
+      ((duna_Box*)D->accum.value.gc)->value = tmp;
       break;
 
     case DUNA_OP_OPEN_BOX:
       assert(D->accum.type == DUNA_TYPE_BOX);
-      D->accum = D->accum.value.gc->data.box.value;
+      D->accum = ((duna_Box*)D->accum.value.gc)->value;
       break;
 
     case DUNA_OP_FRAME:
@@ -884,10 +969,12 @@ int duna_vm_run(duna_State* D)
       D->proc = D->accum;
       
       /* jumping to closure body */
-      D->pc = D->proc.value.gc->data.closure.entry_point;
+      D->pc = ((duna_Closure*)D->proc.value.gc)->entry_point;
       break;
 
     case DUNA_OP_HALT:
+      write_obj(&D->accum);
+      printf("\n");
       go_on = 0;
       break;
 
@@ -899,14 +986,16 @@ int duna_vm_run(duna_State* D)
       i = D->fp-EXTRACT_ARG(instr)-1;
 
       tmp.type = DUNA_TYPE_BOX;
-      tmp.value.gc = (duna_GCObject*)malloc(sizeof(duna_GCObject));
-      tmp.value.gc->data.box.value = D->stack[i];
+      tmp.value.gc = (duna_GCObject*) alloc_box(&D->store);
+      check_alloc(D, tmp.value.gc);
+
+      ((duna_Box*)tmp.value.gc)->value = D->stack[i];
       D->stack[i] = tmp;
       break;
 
     case DUNA_OP_ASSIGN_LOCAL:
       assert((D->stack[D->fp+EXTRACT_ARG(instr)+1]).type == DUNA_TYPE_BOX);
-      (D->stack[D->fp+EXTRACT_ARG(instr)+1]).value.gc->data.box.value = D->accum;
+      ((duna_Box*)(D->stack[D->fp+EXTRACT_ARG(instr)+1]).value.gc)->value = D->accum;
       break;
 
     case DUNA_OP_POP:
@@ -916,22 +1005,151 @@ int duna_vm_run(duna_State* D)
     case DUNA_OP_CONS:
       tmp = D->accum;
       D->accum.type = DUNA_TYPE_PAIR;
-      D->accum.value.gc = (duna_GCObject*) malloc(sizeof(duna_GCObject));
-      D->accum.value.gc->data.pair.car = tmp;
-      D->accum.value.gc->data.pair.cdr = D->stack[--D->sp];
+      D->accum.value.gc = (duna_GCObject*) alloc_pair(&D->store);
+      check_alloc(D, D->accum.value.gc);
+
+      ((duna_Pair*)D->accum.value.gc)->car = tmp;
+      ((duna_Pair*)D->accum.value.gc)->cdr = D->stack[--D->sp];
       break;
 
     case DUNA_OP_CAR:
-      D->accum = D->accum.value.gc->data.pair.car;
+      D->accum = ((duna_Pair*)D->accum.value.gc)->car;
       break;
 
     case DUNA_OP_CDR:
-      D->accum = D->accum.value.gc->data.pair.cdr;
+      D->accum = ((duna_Pair*)D->accum.value.gc)->cdr;
       break;
     }
   }
 
   return 1;
+}
+
+/*
+ * loading
+ */
+
+static int get_next(FILE* f, uint32_t *next)
+{
+  int ret;
+
+  ret = fscanf(f, " %u", next);
+  if(ret == EOF) {
+    return -1;
+  } else if(ret == 0) {
+    /* maybe got to end? */
+    ret = fscanf(f, ")");
+    if(ret == EOF) {
+      return -1;
+    } else {
+      return 0;
+    }
+  } else {
+    return 1;
+  }
+}
+
+static int get_fixnum(FILE* f, uint32_t *num)
+{
+  int ret;
+  uint32_t b1, b2, b3, b4;
+
+  ret = get_next(f, &b1);
+  if(ret <= 0) {
+    return -1;
+  }
+  ret = get_next(f, &b2);
+  if(ret <= 0) {
+    return -1;
+  }
+  ret = get_next(f, &b3);
+  if(ret <= 0) {
+    return -1;
+  }
+  ret = get_next(f, &b4);
+  if(ret <= 0) {
+    return -1;
+  }
+
+  *num = b1 | (b2 << 8) | (b3 << 16) | (b4 << 24);
+
+  return 1;
+}
+
+static int load_code_from_file(duna_State* D, const char* fname)
+{
+  FILE *f;
+  uint32_t pc;
+
+  /* opening input file */
+  f = fopen(fname, "r");
+  if(!f) {
+    return -1;
+  }
+
+  /* bytecode beginning */
+  if(fscanf(f, " #(") == EOF) {
+    fclose(f);
+    return -1;
+  }
+
+  pc = D->code_size;
+
+  /* reading actual code */
+  while(1) {
+    int ret;
+    uint32_t instr, dw1;
+
+    ret = get_next(f, &instr);
+    if(ret == -1) {
+      /* unexpected end */
+      fclose(f);
+      return -1;
+    }
+    if(ret == 0 || instr == 0) {
+      /* real end */
+      return pc;
+    }
+
+    /* retrieve operands if any */
+    if(IS_TYPE_B(instr)) {
+      ret = get_fixnum(f, &dw1);
+      if(ret < 0) {
+	fclose(f);
+	return -1;
+      }
+
+      /*
+       * if instruction is FRAME, the return address
+       * encoded must be patched to account for
+       * the current code offset
+       */
+      if(instr == DUNA_OP_FRAME) {
+	dw1 += pc;
+      }
+
+      instr |= (dw1 << 8);
+
+    }
+
+    /* does the code vector has space? */
+    if(D->code_size == D->code_capacity) {
+      uint32_t *code, size;
+
+      size = D->code_size * 3 / 2;
+      code = (uint32_t*)realloc(D->code, size);
+      if(!code) {
+	fclose(f);
+	return -1;
+      }
+
+      D->code = code;
+      D->code_capacity = size;
+    }
+
+    /* adds new read byte to code vector */
+    D->code[D->code_size++] = instr;
+  }
 }
 
 int duna_load_file(duna_State* D, const char *fname)
@@ -948,6 +1166,11 @@ int duna_load_file(duna_State* D, const char *fname)
 
   return duna_vm_run(D);
 }
+
+
+/*
+ * entry point
+ */
 
 int main(int argc, char *argv[])
 {

@@ -113,10 +113,11 @@ typedef unsigned int  uint32_t;
 #define DUNA_TYPE_BOOL           2
 #define DUNA_TYPE_FIXNUM         3
 #define DUNA_TYPE_CHAR           4
-#define DUNA_TYPE_CLOSURE        5
-#define DUNA_TYPE_PAIR           6
-#define DUNA_TYPE_CONTINUATION   7
-#define DUNA_TYPE_BOX            8
+#define DUNA_TYPE_SYMBOL         5
+#define DUNA_TYPE_CLOSURE        6
+#define DUNA_TYPE_PAIR           7
+#define DUNA_TYPE_CONTINUATION   8
+#define DUNA_TYPE_BOX            9
 
 #define IS_TYPE_B(instr) \
    ((instr) == DUNA_OP_LOAD_FIXNUM ||  \
@@ -205,6 +206,21 @@ static opcode_t global_opcodes[] = {
 typedef struct duna_Object_ duna_Object;
 typedef struct duna_GCObject_ duna_GCObject;
 
+/*
+ * entry in the symbol table
+ * symbols are not collected
+ */
+typedef struct duna_Symbol_ duna_Symbol;
+
+struct duna_Symbol_ {
+  /* symbol textual representation */
+  uint8_t *str;
+
+  /* next symbol in chain */
+  duna_Symbol *next;
+};
+
+/* value types */
 struct duna_Object_ {
 
   /* the runtime type tag */
@@ -216,6 +232,7 @@ struct duna_Object_ {
     uint8_t bool;
     uint8_t chr;
     uint32_t fixnum;
+    duna_Symbol *symbol;
 
     /* collectable objects */
     duna_GCObject *gc;
@@ -570,16 +587,21 @@ static duna_Continuation *alloc_continuation(duna_Store *S, uint32_t stack_size)
  * the virtual machine
  */
 
+/* an entry in a environment */
+struct duna_Env_Item_ {
+  /* entry in the symbol table */
+  duna_Symbol *symbol;
+
+  /* the actual value */
+  duna_Object value;
+};
+
+typedef struct duna_Env_Item_ duna_Env_Item;
+
 /* the state of the Duna interpreter */
 typedef struct duna_State_ duna_State;
 
 struct duna_State_ {
-
-  /* VM memory */
-  duna_Store store;
-
-  /* the bytecode to be interpreted */
-  uint32_t *code;
 
   /* the size of the bytecode vector used */
   uint32_t code_size;
@@ -587,17 +609,11 @@ struct duna_State_ {
   /* the total capacity of the bytecode vector */
   uint32_t code_capacity;
 
-  /* the program counter */
-  uint32_t pc;
-
-  /* accumulator register */
-  duna_Object accum;
-
-  /* the machine stack */
-  duna_Object *stack;
-
   /* stack allocated size */
   uint32_t stack_size;
+
+  /* size of global environment */
+  uint32_t global_env_size;
 
   /* where is the top of the stack */
   uint32_t sp;
@@ -605,8 +621,26 @@ struct duna_State_ {
   /* the frame pointer */
   uint32_t fp;
 
+  /* the program counter */
+  uint32_t pc;
+
+  /* the bytecode to be interpreted */
+  uint32_t *code;
+
+  /* the machine stack */
+  duna_Object *stack;
+
+  /* global environment */
+  duna_Env_Item *global_env;
+
+  /* accumulator register */
+  duna_Object accum;
+
   /* the current procedure */
   duna_Object proc;
+
+  /* VM memory */
+  duna_Store store;
 };
 
 /* garbage collector callback */
@@ -620,38 +654,48 @@ static struct gc_data gc_data;
 
 static duna_Object* gc_callback(void *ud)
 {
-  duna_Object *obj;
   struct gc_data *gc_data;
 
   gc_data = (struct gc_data*) ud;
 
-  if(gc_data->state == 0) {
-    /* stack */
-    obj = &gc_data->D->stack[gc_data->count++];
-    if(gc_data->count == gc_data->D->sp) {
-      gc_data->state++;
-      gc_data->count = 0;
-    }
-  } else if(gc_data->state == 1) {
-    /* registers */
-    if(gc_data->count == 0) {
-      obj = &gc_data->D->accum;
-      gc_data->count++;
-    } else if(gc_data->count == 1) {
-      obj = &gc_data->D->proc;
-      gc_data->count++;
+  for(;;) {
+    if(gc_data->state == 0) {
+      /* stack */
+      if(gc_data->count == gc_data->D->sp) {
+	gc_data->state++;
+	gc_data->count = 0;
+	continue;
+      } else {
+	return &gc_data->D->stack[gc_data->count++];
+      }
+    } else if(gc_data->state == 1) {
+      /* globals */
+      if(gc_data->count == gc_data->D->global_env_size) {
+	gc_data->state++;
+	gc_data->count = 0;
+	continue;
+      } else {
+	return &gc_data->D->global_env[gc_data->count++].value;
+      }
+    } else if(gc_data->state == 2) {
+      /* registers */
+      if(gc_data->count == 0) {
+	gc_data->count++;
+	return &gc_data->D->accum;
+      } else if(gc_data->count == 1) {
+	gc_data->count++;
+	return &gc_data->D->proc;
+      } else {
+	gc_data->state++;
+	gc_data->count = 0;
+	continue;
+      }
     } else {
       gc_data->state = 0;
       gc_data->count = 0;
-      obj = NULL;
+      return NULL;
     }
-  } else {
-    gc_data->state = 0;
-    gc_data->count = 0;
-    obj = NULL;
   }
-
-  return obj;
 }
 
 duna_State* duna_init(void)
@@ -709,6 +753,10 @@ duna_State* duna_init(void)
   D->sp = 4;
   D->fp = 3;
 
+  /* globals */
+  D->global_env = NULL;
+  D->global_env_size = 0;
+
   /* current procedure */
   D->proc.type = DUNA_TYPE_BOOL;
   D->proc.value.bool = 0;
@@ -754,6 +802,9 @@ static void write_obj(duna_Object* obj)
     break;
   case DUNA_TYPE_CHAR:
     printf("#\\%c", obj->value.chr);
+    break;
+  case DUNA_TYPE_SYMBOL:
+    printf("%s", obj->value.symbol->str);
     break;
   case DUNA_TYPE_CLOSURE:
     printf("<#closure %u>", ((duna_Closure*)obj->value.gc)->entry_point);

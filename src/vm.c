@@ -270,10 +270,18 @@ typedef struct duna_Continuation_ duna_Continuation;
 
 /*
  * this callback is called by the garbage collector
- * to get all the heap roots. It must return NULL
+ * to get all the mutator roots. It must return NULL
  * when there are no more roots to scan
  */
 typedef duna_Object* (*duna_Roots_Callback)(void*);
+
+/* forward reference to object in to-space */
+typedef struct duna_Forward_Ref_ duna_Forward_Ref;
+
+struct duna_Forward_Ref_ {
+  DUNA_GC_BASE;
+  duna_GCObject *ref;
+};
 
 typedef struct duna_Store_ duna_Store;
 
@@ -328,54 +336,61 @@ static void finish_store(duna_Store *S)
   S->roots_cb = S->roots_cb_data = NULL;
 }
 
+static uint32_t sizeof_gcobj(duna_GCObject* obj)
+{
+  uint32_t size;
+
+  switch(obj->type) {
+  case DUNA_TYPE_CLOSURE:
+    size = ((duna_Closure*)obj)->nr_free;
+    size = sizeof(duna_Closure) +
+           (size == 0 ? 0 : size - 1) * sizeof(duna_Object);
+    break;
+
+  case DUNA_TYPE_PAIR:
+    size = sizeof(duna_Pair);
+    break;
+
+  case DUNA_TYPE_CONTINUATION:
+    size = sizeof(duna_Continuation) +
+           (((duna_Continuation*)obj)->size-1) * sizeof(duna_Object);
+    break;
+
+  case DUNA_TYPE_BOX:
+    size = sizeof(duna_Box);
+    break;
+  default:
+    size = 0;
+  };
+
+  return size;
+}
+
 static void copy_object(duna_Store* S, duna_Object* obj)
 {
   void *to;
   uint32_t size;
 
-  /*
-   * when an object is copied the forwarding
-   * pointer is put inside a Box, which is
-   * the smallest object and therefore always
-   * fits
-   */
-
-  if(obj->value.gc->type == DUNA_FORWARD_TAG) {
-    /* already copied, just update pointer */
-    obj->value.gc = ((duna_Box*)obj->value.gc)->value.value.gc;
+  if(DUNA_IMMEDIATE_P(obj)) {
+    /* if not heap-allocated, bail */
     return;
   }
 
+  if(obj->value.gc->type == DUNA_FORWARD_TAG) {
+    /* already copied, just update pointer */
+    obj->value.gc = ((duna_Forward_Ref*)obj->value.gc)->ref;
+    return;
+  }
+
+  /* copying */
   to = S->to_space + S->size;
-  switch(obj->type) {
-  case DUNA_TYPE_CLOSURE:
-    size = ((duna_Closure*)obj->value.gc)->nr_free;
-    size = sizeof(duna_Closure) + (size == 0 ? 0 : size - 1) * sizeof(duna_Object);
-    memcpy(to, obj->value.gc, size);
-    S->size += size;
-    break;
-
-  case DUNA_TYPE_PAIR:
-    memcpy(to, obj->value.gc, sizeof(duna_Pair));
-    S->size += sizeof(duna_Pair);
-    break;
-
-  case DUNA_TYPE_CONTINUATION:
-    size = sizeof(duna_Continuation) +
-           (((duna_Continuation*)obj->value.gc)->size-1) * sizeof(duna_Object);
-    memcpy(to, obj->value.gc, size);
-    S->size += size;
-    break;
-
-  case DUNA_TYPE_BOX:
-    memcpy(to, obj->value.gc, sizeof(duna_Box));
-    S->size += sizeof(duna_Box);
-    break;
-  };
+  size = sizeof_gcobj(obj->value.gc);
+  memcpy(to, obj->value.gc, size);
+  S->size += size;
 
   /* leave a forwarding pointer and update */
   obj->value.gc->type = DUNA_FORWARD_TAG;
-  ((duna_Box*)obj->value.gc)->value.value.gc = to;
+  ((duna_Forward_Ref*)obj->value.gc)->ref = to;
   obj->value.gc = to;
 }
 
@@ -387,28 +402,61 @@ static void collect_garbage(duna_Store* S)
    */
   void *scan;
   duna_Object *obj;
-
-  fprintf(stderr, "Doing GC!\n");
+  uint32_t old_size;
 
   if(!S->roots_cb) {
     return;
   }
 
-  /* copying roots */
+  old_size = S->size;
   S->size = 0;
+
+  /* copying roots */
   while((obj = S->roots_cb(S->roots_cb_data))) {
-    if(!DUNA_IMMEDIATE_P(obj)) {
-      copy_object(S, obj);
-    }
+    copy_object(S, obj);
   }
 
   /* now scan to-space */
   scan = S->to_space;
+  while(scan < S->to_space + S->size) {
+    uint32_t i, size;
+    duna_GCObject *gcobj;
 
-  /* exchange spaces */
+    gcobj = scan;
+    size = sizeof_gcobj(gcobj);
+
+    switch(gcobj->type) {
+    case DUNA_TYPE_CLOSURE:
+      for(i = 0; i < ((duna_Closure*)gcobj)->nr_free; i++) {
+	copy_object(S, &(((duna_Closure*)gcobj)->free_vars[i]));
+      }
+      break;
+
+    case DUNA_TYPE_PAIR:
+      copy_object(S, &((duna_Pair*)gcobj)->car);
+      copy_object(S, &((duna_Pair*)gcobj)->car);
+      break;
+
+    case DUNA_TYPE_CONTINUATION:
+      for(i = 0; i < ((duna_Continuation*)gcobj)->size; i++) {
+	copy_object(S, &(((duna_Continuation*)gcobj)->stack[i]));
+      }
+      break;
+
+    case DUNA_TYPE_BOX:
+      copy_object(S, &((duna_Box*)gcobj)->value);
+      break;
+    };
+
+    scan += size;
+  }
+
+  /* swap spaces */
   scan = S->from_space;
   S->from_space = S->to_space;
   S->to_space = scan;
+
+  printf("GC: before: %u after: %u\n", old_size, S->size);
 }
 
 static int expand_store(duna_Store* S)
@@ -561,6 +609,51 @@ struct duna_State_ {
   duna_Object proc;
 };
 
+/* garbage collector callback */
+
+struct gc_data {
+  duna_State *D;
+  uint32_t state, count;
+};
+
+static struct gc_data gc_data;
+
+static duna_Object* gc_callback(void *ud)
+{
+  duna_Object *obj;
+  struct gc_data *gc_data;
+
+  gc_data = (struct gc_data*) ud;
+
+  if(gc_data->state == 0) {
+    /* stack */
+    obj = &gc_data->D->stack[gc_data->count++];
+    if(gc_data->count == gc_data->D->sp) {
+      gc_data->state++;
+      gc_data->count = 0;
+    }
+  } else if(gc_data->state == 1) {
+    /* registers */
+    if(gc_data->count == 0) {
+      obj = &gc_data->D->accum;
+      gc_data->count++;
+    } else if(gc_data->count == 1) {
+      obj = &gc_data->D->proc;
+      gc_data->count++;
+    } else {
+      gc_data->state = 0;
+      gc_data->count = 0;
+      obj = NULL;
+    }
+  } else {
+    gc_data->state = 0;
+    gc_data->count = 0;
+    obj = NULL;
+  }
+
+  return obj;
+}
+
 duna_State* duna_init(void)
 {
   duna_State *D = NULL;
@@ -571,7 +664,10 @@ duna_State* duna_init(void)
   }
 
   /* store */
-  if(init_store(&D->store, NULL, NULL) == 0) {
+  gc_data.D = D;
+  gc_data.state = 0;
+  gc_data.count = 0;
+  if(init_store(&D->store, gc_callback, &gc_data) == 0) {
     return NULL;
   }
 
@@ -791,7 +887,7 @@ int duna_vm_run(duna_State* D)
     duna_Object tmp;
 
     /* debugging */
-    /*duna_dump(D);*/
+    duna_dump(D);
     assert(D->pc < D->code_size);
 
     instr = D->code[D->pc++];
@@ -915,9 +1011,10 @@ int duna_vm_run(duna_State* D)
       /* number of free variables */
       dw1 = EXTRACT_ARG(instr);
 
-      D->accum.type = DUNA_TYPE_CLOSURE;
-      D->accum.value.gc = (duna_GCObject*) alloc_closure(&D->store, dw1);
-      check_alloc(D, D->accum.value.gc);
+      tmp.type = DUNA_TYPE_CLOSURE;
+      tmp.value.gc = (duna_GCObject*) alloc_closure(&D->store, dw1);
+      check_alloc(D, tmp.value.gc);
+      D->accum = tmp;
 
       /*
        * There is always a jump after this instruction, to jump over the
@@ -979,9 +1076,10 @@ int duna_vm_run(duna_State* D)
     case DUNA_OP_SAVE_CONT:
       dw1 = D->sp * sizeof(duna_Object);
 
-      D->accum.type = DUNA_TYPE_CONTINUATION;
-      D->accum.value.gc = (duna_GCObject*) alloc_continuation(&D->store, D->sp);
-      check_alloc(D, D->accum.value.gc);
+      tmp.type = DUNA_TYPE_CONTINUATION;
+      tmp.value.gc = (duna_GCObject*) alloc_continuation(&D->store, D->sp);
+      check_alloc(D, tmp.value.gc);
+      D->accum = tmp;
 
       /* copying stack */
       memcpy(((duna_Continuation*)D->accum.value.gc)->stack, D->stack, dw1);
@@ -1012,13 +1110,12 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_BOX:
-      tmp = D->accum;
+      tmp.type = DUNA_TYPE_BOX;
+      tmp.value.gc = (duna_GCObject*) alloc_box(&D->store);
+      check_alloc(D, tmp.value.gc);
 
-      D->accum.type = DUNA_TYPE_BOX;
-      D->accum.value.gc = (duna_GCObject*) alloc_box(&D->store);
-      check_alloc(D, D->accum.value.gc);
-
-      ((duna_Box*)D->accum.value.gc)->value = tmp;
+      ((duna_Box*)tmp.value.gc)->value = D->accum;
+      D->accum = tmp;
       break;
 
     case DUNA_OP_OPEN_BOX:
@@ -1101,13 +1198,13 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_CONS:
-      tmp = D->accum;
-      D->accum.type = DUNA_TYPE_PAIR;
-      D->accum.value.gc = (duna_GCObject*) alloc_pair(&D->store);
-      check_alloc(D, D->accum.value.gc);
+      tmp.type = DUNA_TYPE_PAIR;
+      tmp.value.gc = (duna_GCObject*) alloc_pair(&D->store);
+      check_alloc(D, tmp.value.gc);
 
-      ((duna_Pair*)D->accum.value.gc)->car = tmp;
-      ((duna_Pair*)D->accum.value.gc)->cdr = D->stack[--D->sp];
+      ((duna_Pair*)tmp.value.gc)->car = D->accum;
+      ((duna_Pair*)tmp.value.gc)->cdr = D->stack[--D->sp];
+      D->accum = tmp;
       break;
 
     case DUNA_OP_CAR:

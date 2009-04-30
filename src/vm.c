@@ -238,6 +238,7 @@ typedef struct duna_Box_ duna_Box;
 struct duna_Closure_ {
   DUNA_GC_BASE;
   uint32_t entry_point;
+  uint32_t nr_free;
   duna_Object free_vars[1];
 };
 
@@ -263,7 +264,16 @@ typedef struct duna_Continuation_ duna_Continuation;
  * the store, i.e., memory
  */
 
-#define DUNA_INITIAL_SPACE_SIZE ((uint32_t)(1 << 8))
+#define DUNA_INITIAL_SPACE_SIZE     ((uint32_t)(1 << 8))
+#define DUNA_IMMEDIATE_P(o)         ((o)->type < DUNA_TYPE_CLOSURE)
+#define DUNA_FORWARD_TAG            199
+
+/*
+ * this callback is called by the garbage collector
+ * to get all the heap roots. It must return NULL
+ * when there are no more roots to scan
+ */
+typedef duna_Object* (*duna_Roots_Callback)(void*);
 
 typedef struct duna_Store_ duna_Store;
 
@@ -283,9 +293,15 @@ struct duna_Store_ {
 
   /* the space to which objects are copied */
   void *to_space;
+
+  /* roots callback */
+  duna_Roots_Callback roots_cb;
+
+  /* opaque data to pass to callback */
+  void *roots_cb_data;
 };
 
-static int init_store(duna_Store *S)
+static int init_store(duna_Store *S, duna_Roots_Callback cb, void* ud)
 {
   /* alloc heap */
   S->from_space = malloc(DUNA_INITIAL_SPACE_SIZE * 2);
@@ -298,6 +314,9 @@ static int init_store(duna_Store *S)
   S->capacity = DUNA_INITIAL_SPACE_SIZE;
   S->to_space = S->from_space + (DUNA_INITIAL_SPACE_SIZE);
 
+  S->roots_cb = cb;
+  S->roots_cb_data = ud;
+
   return 1;
 }
 
@@ -306,12 +325,90 @@ static void finish_store(duna_Store *S)
   free(S->os_address);
   S->size = S->capacity = 0;
   S->from_space = S->to_space = NULL;
+  S->roots_cb = S->roots_cb_data = NULL;
 }
 
-static void gc(duna_Store* S)
+static void copy_object(duna_Store* S, duna_Object* obj)
 {
-  S = S;
+  void *to;
+  uint32_t size;
+
+  /*
+   * when an object is copied the forwarding
+   * pointer is put inside a Box, which is
+   * the smallest object and therefore always
+   * fits
+   */
+
+  if(obj->value.gc->type == DUNA_FORWARD_TAG) {
+    /* already copied, just update pointer */
+    obj->value.gc = ((duna_Box*)obj->value.gc)->value.value.gc;
+    return;
+  }
+
+  to = S->to_space + S->size;
+  switch(obj->type) {
+  case DUNA_TYPE_CLOSURE:
+    size = ((duna_Closure*)obj->value.gc)->nr_free;
+    size = sizeof(duna_Closure) + (size == 0 ? 0 : size - 1) * sizeof(duna_Object);
+    memcpy(to, obj->value.gc, size);
+    S->size += size;
+    break;
+
+  case DUNA_TYPE_PAIR:
+    memcpy(to, obj->value.gc, sizeof(duna_Pair));
+    S->size += sizeof(duna_Pair);
+    break;
+
+  case DUNA_TYPE_CONTINUATION:
+    size = sizeof(duna_Continuation) +
+           (((duna_Continuation*)obj->value.gc)->size-1) * sizeof(duna_Object);
+    memcpy(to, obj->value.gc, size);
+    S->size += size;
+    break;
+
+  case DUNA_TYPE_BOX:
+    memcpy(to, obj->value.gc, sizeof(duna_Box));
+    S->size += sizeof(duna_Box);
+    break;
+  };
+
+  /* leave a forwarding pointer and update */
+  obj->value.gc->type = DUNA_FORWARD_TAG;
+  ((duna_Box*)obj->value.gc)->value.value.gc = to;
+  obj->value.gc = to;
+}
+
+static void collect_garbage(duna_Store* S)
+{
+  /*
+   * classic, simple 2-space copy collector
+   * using Cheney's algorithm
+   */
+  void *scan;
+  duna_Object *obj;
+
   fprintf(stderr, "Doing GC!\n");
+
+  if(!S->roots_cb) {
+    return;
+  }
+
+  /* copying roots */
+  S->size = 0;
+  while((obj = S->roots_cb(S->roots_cb_data))) {
+    if(!DUNA_IMMEDIATE_P(obj)) {
+      copy_object(S, obj);
+    }
+  }
+
+  /* now scan to-space */
+  scan = S->to_space;
+
+  /* exchange spaces */
+  scan = S->from_space;
+  S->from_space = S->to_space;
+  S->to_space = scan;
 }
 
 static int expand_store(duna_Store* S)
@@ -348,7 +445,7 @@ static void* alloc_from_store(duna_Store *S, uint32_t size)
 
   if(S->size + size > S->capacity) {
     /* not enough space, try to find some */
-    gc(S);
+    collect_garbage(S);
 
     while(S->size + size > S->capacity) {
       /* expand store until it fits */
@@ -388,6 +485,7 @@ static duna_Closure *alloc_closure(duna_Store *S, uint32_t nr_vars)
   ret = (duna_Closure*) alloc_from_store(S, size);
   if(ret) {
     ret->type = DUNA_TYPE_CLOSURE;
+    ret->nr_free = nr_vars;
   }
 
   return ret;
@@ -473,7 +571,7 @@ duna_State* duna_init(void)
   }
 
   /* store */
-  if(init_store(&D->store) == 0) {
+  if(init_store(&D->store, NULL, NULL) == 0) {
     return NULL;
   }
 
@@ -1175,6 +1273,11 @@ int duna_load_file(duna_State* D, const char *fname)
 int main(int argc, char *argv[])
 {
   duna_State* D;
+
+  if(argc != 2) {
+    fprintf(stderr, "%s: Need file to run.\n", argv[0]);
+    exit(13);
+  }
 
   D = duna_init();
   if(!duna_load_file(D, argv[1])) {

@@ -811,3 +811,111 @@
     (lambda ()
       (compile #f x))))
 
+;;;
+;;; new implementation using ASTs
+;;;
+
+(define (symbol-exp? e)
+  (or (symbol? e)
+      (null? e)
+      (and (pair? e)
+           (foldl* (lambda (a b)
+                     (and a b))
+                   (map symbol? e)))))
+
+(define (one-symbol-list? e)
+  (and (pair? e)
+       (symbol? (car e))
+       (null? (cdr e))))
+
+;; tests is an expression is a valid lambda expression
+(define (lambda-exp? e)
+  (and (pair? e)
+       (eq? (car e) 'lambda)
+       (> (length e) 2)
+       (symbol-exp? (cadr e))))
+
+;; transforms expressions into a syntax tree
+(define (meaning e tail?)
+  (cond
+   ((immediate? e)
+    (meaning-immediate e))
+   ((symbol? e)
+    (meaning-reference e))
+   ((pair? e)
+    (case (car e)
+      ((begin)
+       (if (> (length e) 1)
+           (meaning-sequence (cdr e) tail?)
+           (error "empty 'begin'" e)))
+      ((call/cc)
+       (if (= (length e) 2)
+           (meaning-call/cc (cadr e) tail?)
+           (error "empty 'call/cc'" e)))
+      ((if)
+       (case (length e)
+         ((3)
+          (meaning-alternative (cadr e) (caddr e) #f tail?))
+         ((4)
+          (meaning-alternative (cadr e) (caddr e) (cadddr e) tail?))
+         (else
+          (error "ill-formed 'if'" e))))
+      ((lambda)
+       (if (lambda-exp? e)
+           (meaning-lambda (cadr e) (cddr e))
+           (error "ill-formed 'lambda'" e)))
+      ((set!)
+       (if (and (= (length e) 3)
+                (symbol? (cadr e)))
+           (meaning-assignment (cadr e) (caddr e))
+           (error "ill-formed 'set!'" e)))
+      (else
+       (meaning-application (car e) (cdr e) tail?))))))
+
+(define (meaning-immediate e)
+  (vector 'immed e))
+
+(define (meaning-reference e)
+  (vector 'refer e))
+
+(define (meaning-sequence e+ tail?)
+  (let loop ((e+ e+)
+             (m+ '()))
+    (if (null? (cdr e+))
+        (let ((m (meaning (car e+) tail?)))
+          (vector 'sequence (reverse (cons m m+))))
+        (loop (cdr e+)
+              (cons (meaning (car e+) #f) m+)))))
+
+(define (meaning-call/cc e tail?)
+  (if (lambda-exp? e)
+      (if (one-symbol-list? (cadr e))
+          (vector 'call/cc (meaning e tail?))
+          (error "procedure must take one argument" e))
+      (error "expression is not a procedure" e)))
+
+(define (meaning-alternative test then else tail?)
+  (vector 'alternative
+          (meaning test #f)
+          (meaning then tail?)
+          (meaning else tail?)))
+
+(define (meaning-lambda n* e+)
+  (vector 'lambda
+          n*
+          (meaning-sequence e+ #f)))
+
+(define (meaning-assignment n e)
+  (vector 'assignment
+          n
+          (meaning e #f)))
+
+(define (meaning-application e e* tail?)
+  (vector (if tail?
+              'tail-call
+              'call)
+          (meaning e #f)
+          (map (lambda (e)
+                 (meaning e #f))
+               e*)))
+

@@ -209,6 +209,8 @@ typedef struct duna_GCObject_ duna_GCObject;
 /*
  * entry in the symbol table
  * symbols are not collected
+ * some hash functions:
+ * http://burtleburtle.net/bob/c/lookup3.c
  */
 typedef struct duna_Symbol_ duna_Symbol;
 

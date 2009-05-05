@@ -815,6 +815,153 @@
 ;;; new implementation using ASTs
 ;;;
 
+(define (compile2 e)
+  (let* ((t (transform-exp e))
+         (m (meaning t '() #t)))
+    m))
+
+;; transforms expressions into a syntax tree,
+;; calculates lexical addresses, collect free
+;; and assigned bindings
+;; this is the compiler first pass
+(define (meaning e r tail?)
+  (cond
+   ((immediate? e)
+    (meaning-immediate e))
+   ((symbol? e)
+    (meaning-reference e r))
+   ((pair? e)
+    (case (car e)
+      ((quote)
+       (if (= (length e) 2)
+           (meaning-quote (cadr e))))
+      ((begin)
+       (if (> (length e) 1)
+           (meaning-sequence (cdr e) r tail?)
+           (error "empty 'begin'" e)))
+      ((call/cc)
+       (if (= (length e) 2)
+           (meaning-call/cc (cadr e) r tail?)
+           (error "empty 'call/cc'" e)))
+      ((if)
+       (case (length e)
+         ((3)
+          (meaning-alternative (cadr e) (caddr e) #f r tail?))
+         ((4)
+          (meaning-alternative (cadr e) (caddr e) (cadddr e) r tail?))
+         (else
+          (error "ill-formed 'if'" e))))
+      ((lambda)
+       (if (lambda-exp? e)
+           (meaning-lambda (cadr e) (cddr e) r)
+           (error "ill-formed 'lambda'" e)))
+      ((set!)
+       (if (and (= (length e) 3)
+                (symbol? (cadr e)))
+           (meaning-assignment (cadr e) (caddr e) r)
+           (error "ill-formed 'set!'" e)))
+      (else
+       (meaning-application (car e) (cdr e) r tail?))))))
+
+;; updates lexical address to 
+
+(define (meaning-immediate e)
+  (vector 'immed e))
+
+(define (meaning-reference e r)
+  (vector 'refer e (lookup2 e r)))
+
+(define (meaning-quote e)
+  (if (immediate? e)
+      (vector 'immed e)
+      (vector 'undef)))
+
+(define (meaning-sequence e+ r tail?)
+  (let loop ((e+ e+)
+             (m+ '()))
+    (if (null? (cdr e+))
+        (let ((m (meaning (car e+) r tail?)))
+          (vector 'sequence (reverse (cons m m+))))
+        (loop (cdr e+)
+              (cons (meaning (car e+) r #f) m+)))))
+
+(define (meaning-call/cc e r tail?)
+  (if (lambda-exp? e)
+      (if (one-symbol-list? (cadr e))
+          (vector 'call/cc (meaning e r tail?))
+          (error "procedure must take one argument" e))
+      (error "expression is not a procedure" e)))
+
+(define (meaning-alternative test then else r tail?)
+  (vector 'alternative
+          (meaning test r #f)
+          (meaning then r tail?)
+          (if else
+              (meaning else r tail?)
+              (vector 'undef))))
+
+(define (meaning-lambda n* e+ r)
+  (let* ((r2 (cons n* r))
+         (m (meaning-sequence e+ r2 #t)))
+    (vector 'lambda
+            n*
+            (collect-free2 m 0)
+            (collect-sets2 m 0)
+            m)))
+
+(define (meaning-assignment n e r)
+  (let ((address (lookup2 n r))
+        (prim? (assq n *primitives*)))
+    (if (and prim?
+             (not address))
+        (error "assignment to primitive not allowed" n)
+        (vector 'assign
+                n
+                address
+                (meaning e r #f)))))
+
+(define (meaning-application e e* r tail?)
+  (let ((m  (meaning e r #f))
+        (m* (map (lambda (e)
+                   (meaning e r #f))
+                 e*)))
+    (let* ((prim (if (and (eq? (vector-ref m 0)
+                               'refer)
+                          (assq (vector-ref m 1)
+                                *primitives*))
+                     (list 'prim)
+                     '()))
+           (flags (if tail?
+                      (cons 'tail prim)
+                      prim)))
+      (vector 'apply
+              flags
+              m
+              m*))))
+
+(define (lookup2 n r)
+  (if (null? r)
+      #f
+      (let loop ((i 0)
+                 (j 0)
+                 (s (car r))
+                 (r (cdr r)))
+        (if (null? s)
+            (if (null? r)
+                #f
+                (loop 0 (+ j 1) (car r) (cdr r)))
+            (let ((v (car s)))
+              (if (eq? v n)
+                  (cons i j)
+                  (loop (+ i 1) j (cdr s) r)))))))
+
+;; tests is an expression is a valid lambda expression
+(define (lambda-exp? e)
+  (and (pair? e)
+       (eq? (car e) 'lambda)
+       (> (length e) 2)
+       (symbol-exp? (cadr e))))
+
 (define (symbol-exp? e)
   (or (symbol? e)
       (null? e)
@@ -828,94 +975,71 @@
        (symbol? (car e))
        (null? (cdr e))))
 
-;; tests is an expression is a valid lambda expression
-(define (lambda-exp? e)
-  (and (pair? e)
-       (eq? (car e) 'lambda)
-       (> (length e) 2)
-       (symbol-exp? (cadr e))))
+(define (collect-free2 m level)
+  (case (vector-ref m 0)
+    ((refer)
+     (set-if-test m > level))
+    ((sequence)
+     (foldl (lambda (a b)
+              (set-union a
+                         (collect-free2 b level)))
+            '()
+            (vector-ref m 1)))
+    ((call/cc)
+     (collect-free2 (vector-ref m 1) level))
+    ((alternative)
+     (set-union (collect-free2 (vector-ref m 1) level)
+                (set-union (collect-free2 (vector-ref m 2) level)
+                           (collect-free2 (vector-ref m 3) level))))
+    ((lambda)
+     (collect-free2 (vector-ref m 4) (+ level 1)))
+    ((assign)
+     (set-union (set-if-test m > level)
+                (collect-free2 (vector-ref m 3) level)))
+    ((apply)
+     (set-union (collect-free2 (vector-ref m 2) level)
+                (foldl (lambda (a b)
+                         (set-union a
+                                    (collect-free2 b level)))
+                       '()
+                       (vector-ref m 3))))
+    (else
+     '())))
 
-;; transforms expressions into a syntax tree
-(define (meaning e tail?)
-  (cond
-   ((immediate? e)
-    (meaning-immediate e))
-   ((symbol? e)
-    (meaning-reference e))
-   ((pair? e)
-    (case (car e)
-      ((begin)
-       (if (> (length e) 1)
-           (meaning-sequence (cdr e) tail?)
-           (error "empty 'begin'" e)))
-      ((call/cc)
-       (if (= (length e) 2)
-           (meaning-call/cc (cadr e) tail?)
-           (error "empty 'call/cc'" e)))
-      ((if)
-       (case (length e)
-         ((3)
-          (meaning-alternative (cadr e) (caddr e) #f tail?))
-         ((4)
-          (meaning-alternative (cadr e) (caddr e) (cadddr e) tail?))
-         (else
-          (error "ill-formed 'if'" e))))
-      ((lambda)
-       (if (lambda-exp? e)
-           (meaning-lambda (cadr e) (cddr e))
-           (error "ill-formed 'lambda'" e)))
-      ((set!)
-       (if (and (= (length e) 3)
-                (symbol? (cadr e)))
-           (meaning-assignment (cadr e) (caddr e))
-           (error "ill-formed 'set!'" e)))
-      (else
-       (meaning-application (car e) (cdr e) tail?))))))
+(define (collect-sets2 m level)
+  (case (vector-ref m 0)
+    ((sequence)
+     (foldl (lambda (a b)
+              (set-union a
+                         (collect-sets2 b level)))
+            '()
+            (vector-ref m 1)))
+    ((call/cc)
+     (collect-sets2 (vector-ref m 1) level))
+    ((alternative)
+     (set-union (collect-sets2 (vector-ref m 1) level)
+                (set-union (collect-sets2 (vector-ref m 2) level)
+                           (collect-sets2 (vector-ref m 3) level))))
+    ((lambda)
+     (collect-sets2 (vector-ref m 4) (+ level 1)))
+    ((assign)
+     (set-if-test m = level))
+    ((apply)
+     (set-union (collect-sets2 (vector-ref m 2) level)
+                (foldl (lambda (a b)
+                         (set-union a
+                                    (collect-sets2 b level)))
+                       '()
+                       (vector-ref m 3))))
+    (else
+     '())))
 
-(define (meaning-immediate e)
-  (vector 'immed e))
-
-(define (meaning-reference e)
-  (vector 'refer e))
-
-(define (meaning-sequence e+ tail?)
-  (let loop ((e+ e+)
-             (m+ '()))
-    (if (null? (cdr e+))
-        (let ((m (meaning (car e+) tail?)))
-          (vector 'sequence (reverse (cons m m+))))
-        (loop (cdr e+)
-              (cons (meaning (car e+) #f) m+)))))
-
-(define (meaning-call/cc e tail?)
-  (if (lambda-exp? e)
-      (if (one-symbol-list? (cadr e))
-          (vector 'call/cc (meaning e tail?))
-          (error "procedure must take one argument" e))
-      (error "expression is not a procedure" e)))
-
-(define (meaning-alternative test then else tail?)
-  (vector 'alternative
-          (meaning test #f)
-          (meaning then tail?)
-          (meaning else tail?)))
-
-(define (meaning-lambda n* e+)
-  (vector 'lambda
-          n*
-          (meaning-sequence e+ #f)))
-
-(define (meaning-assignment n e)
-  (vector 'assignment
-          n
-          (meaning e #f)))
-
-(define (meaning-application e e* tail?)
-  (vector (if tail?
-              'tail-call
-              'call)
-          (meaning e #f)
-          (map (lambda (e)
-                 (meaning e #f))
-               e*)))
-
+(define (set-if-test m test level)
+  (let ((var     (vector-ref m 1))
+        (address (vector-ref m 2)))
+    (if (pair? address)
+        (let ((frame (cdr address)))
+          (if (test frame level)
+              (list var)
+              '()))
+        '())))

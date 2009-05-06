@@ -902,11 +902,15 @@
 
 (define (meaning-lambda n* e+ r)
   (let* ((r2 (cons n* r))
-         (m (meaning-sequence e+ r2 #t)))
+         (m (meaning-sequence e+ r2 #t))
+         (free (collect-free2 m 0)))
     (vector 'lambda
             n*
-            (collect-free2 m 0)
+            free
             (collect-sets2 m 0)
+            (map (lambda (n)
+                    (meaning-reference n r))
+                 free)
             m)))
 
 (define (meaning-assignment n e r)
@@ -992,7 +996,7 @@
                 (set-union (collect-free2 (vector-ref m 2) level)
                            (collect-free2 (vector-ref m 3) level))))
     ((lambda)
-     (collect-free2 (vector-ref m 4) (+ level 1)))
+     (collect-free2 (vector-ref m 5) (+ level 1)))
     ((assign)
      (set-union (set-if-test m > level)
                 (collect-free2 (vector-ref m 3) level)))
@@ -1021,7 +1025,7 @@
                 (set-union (collect-sets2 (vector-ref m 2) level)
                            (collect-sets2 (vector-ref m 3) level))))
     ((lambda)
-     (collect-sets2 (vector-ref m 4) (+ level 1)))
+     (collect-sets2 (vector-ref m 5) (+ level 1)))
     ((assign)
      (set-if-test m = level))
     ((apply)

@@ -817,8 +817,9 @@
 
 (define (compile2 e)
   (let* ((t (transform-exp e))
-         (m (meaning t '() #t)))
-    m))
+         (m (meaning t '() #t))
+         (b (flag-boxes m)))
+    b))
 
 ;; transforms expressions into a syntax tree,
 ;; calculates lexical addresses, collect free
@@ -1052,38 +1053,21 @@
 ;; flags references to assigned variables as boxes
 (define (flag-boxes m)
 
-  (define (collect-all-assigned m)
-    (case (vector-ref m 0)
-      ((sequence)
-       (foldl (lambda (a b)
-                (set-union a
-                           (collect-all-assigned b)))
-              '()
-              (vector-ref m 1)))
-      ((call/cc)
-       (collect-all-assigned (vector-ref m 1)))
-      ((alternative)
-       (set-union (collect-all-assigned (vector-ref m 1))
-                  (set-union (collect-all-assigned (vector-ref m 2))
-                             (collect-all-assigned (vector-ref m 3)))))
-      ((lambda)
-       (collect-all-assigned (vector-ref m 4)))
-      ((assign)
-       (list (vector-ref m 2)))
-      ((apply)
-       (set-union (collect-all-assigned (vector-ref m 1))
-                  (foldl (lambda (a b)
-                           (set-union a
-                                      (collect-all-assigned b)))
-                         '()
-                         (vector-ref m 2))))
-      (else
-        '())))
-
-  (define (flag-boxes* m sets)
+  (define (flag-boxes* m sets level)
     (case (vector-ref m 0)
       ((refer)
-       '())
+       (let ((address (vector-ref m 2)))
+         (if address
+             (let ((var (vector-ref m 1))
+                   (frame (cdr address)))
+               (if (and (= frame level)
+                        (memq var sets))
+                   (vector 'refer
+                           var
+                           address
+                           (cons 'box (vector-ref m 3)))
+                   m))
+             m)))
       ((sequence)
        (vector 'sequence
                (map (lambda (m)
@@ -1108,7 +1092,8 @@
       ((assign)
        (vector 'assign
                 (vector-ref m 1)
-                (flag-boxes* (vector-ref m 2) sets level)))
+                (vector-ref m 2)
+                (flag-boxes* (vector-ref m 3) sets level)))
       ((apply)
        (vector 'apply
                (vector-ref m 1)
@@ -1119,5 +1104,38 @@
       (else
         m)))
 
-  (flag-boxes m '() 0))
- 
+  (case (vector-ref m 0)
+    ((sequence)
+     (vector 'sequence
+             (map flag-boxes
+                  (vector-ref m 1))))
+    ((call/cc)
+     (vector 'call/cc
+             (flag-boxes (vector-ref m 1))))
+    ((alternative)
+     (vector 'alternative
+             (flag-boxes (vector-ref m 1))
+             (flag-boxes (vector-ref m 2))
+             (flag-boxes (vector-ref m 3))))
+    ((lambda)
+     (let* ((sets (vector-ref m 2))
+            (boxed (flag-boxes* (vector-ref m 4) sets 0)))
+       (vector 'lambda
+               (vector-ref m 1)
+               sets
+               (vector-ref m 3)
+               (flag-boxes boxed))))
+    ((assign)
+     (vector 'assign
+             (vector-ref m 1)
+             (vector-ref m 2)
+             (flag-boxes (vector-ref m 3))))
+    ((apply)
+     (vector 'apply
+             (vector-ref m 1)
+             (flag-boxes (vector-ref m 2))
+             (map flag-boxes
+                  (vector-ref m 3))))
+    (else
+     m)))
+

@@ -32,7 +32,7 @@
     (if (null? set2)
 	set1
 	(let ((item (car set2)))
-	  (if (memq item set1)
+	  (if (member item set1)
 	      (loop set1 (cdr set2))
 	      (loop (cons item set1) (cdr set2)))))))
 
@@ -869,7 +869,9 @@
   (vector 'immed e))
 
 (define (meaning-reference e r)
-  (vector 'refer e (lookup2 e r)))
+  (vector 'refer e
+                 (lookup2 e r)
+                 '()))
 
 (define (meaning-quote e)
   (if (immediate? e)
@@ -906,7 +908,6 @@
          (free (collect-free2 m 0)))
     (vector 'lambda
             n*
-            free
             (collect-sets2 m 0)
             (map (lambda (n)
                     (meaning-reference n r))
@@ -996,7 +997,7 @@
                 (set-union (collect-free2 (vector-ref m 2) level)
                            (collect-free2 (vector-ref m 3) level))))
     ((lambda)
-     (collect-free2 (vector-ref m 5) (+ level 1)))
+     (collect-free2 (vector-ref m 4) (+ level 1)))
     ((assign)
      (set-union (set-if-test m > level)
                 (collect-free2 (vector-ref m 3) level)))
@@ -1025,7 +1026,7 @@
                 (set-union (collect-sets2 (vector-ref m 2) level)
                            (collect-sets2 (vector-ref m 3) level))))
     ((lambda)
-     (collect-sets2 (vector-ref m 5) (+ level 1)))
+     (collect-sets2 (vector-ref m 4) (+ level 1)))
     ((assign)
      (set-if-test m = level))
     ((apply)
@@ -1047,3 +1048,76 @@
               (list var)
               '()))
         '())))
+
+;; flags references to assigned variables as boxes
+(define (flag-boxes m)
+
+  (define (collect-all-assigned m)
+    (case (vector-ref m 0)
+      ((sequence)
+       (foldl (lambda (a b)
+                (set-union a
+                           (collect-all-assigned b)))
+              '()
+              (vector-ref m 1)))
+      ((call/cc)
+       (collect-all-assigned (vector-ref m 1)))
+      ((alternative)
+       (set-union (collect-all-assigned (vector-ref m 1))
+                  (set-union (collect-all-assigned (vector-ref m 2))
+                             (collect-all-assigned (vector-ref m 3)))))
+      ((lambda)
+       (collect-all-assigned (vector-ref m 4)))
+      ((assign)
+       (list (vector-ref m 2)))
+      ((apply)
+       (set-union (collect-all-assigned (vector-ref m 1))
+                  (foldl (lambda (a b)
+                           (set-union a
+                                      (collect-all-assigned b)))
+                         '()
+                         (vector-ref m 2))))
+      (else
+        '())))
+
+  (define (flag-boxes* m sets)
+    (case (vector-ref m 0)
+      ((refer)
+       '())
+      ((sequence)
+       (vector 'sequence
+               (map (lambda (m)
+                      (flag-boxes* m sets level))
+                    (vector-ref m 1))))
+      ((call/cc)
+       (vector 'call/cc
+               (flag-boxes* (vector-ref m 1) sets level)))
+      ((alternative)
+       (vector 'alternative
+               (flag-boxes* (vector-ref m 1) sets level)
+               (flag-boxes* (vector-ref m 2) sets level)
+               (flag-boxes* (vector-ref m 3) sets level)))
+      ((lambda)
+       (vector 'lambda
+               (vector-ref m 1)
+               (vector-ref m 2)
+               (map (lambda (m)
+                      (flag-boxes* m sets level))
+                    (vector-ref m 3))
+               (flag-boxes* (vector-ref m 4) sets (+ level 1))))
+      ((assign)
+       (vector 'assign
+                (vector-ref m 1)
+                (flag-boxes* (vector-ref m 2) sets level)))
+      ((apply)
+       (vector 'apply
+               (vector-ref m 1)
+               (flag-boxes* (vector-ref m 2) sets level)
+               (map (lambda (m)
+                      (flag-boxes* m sets level))
+                    (vector-ref m 3))))
+      (else
+        m)))
+
+  (flag-boxes m '() 0))
+ 

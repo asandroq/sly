@@ -818,8 +818,9 @@
 (define (compile2 e)
   (let* ((t (transform-exp e))
          (m (meaning t '() #t))
-         (b (flag-boxes m)))
-    b))
+         (b (flag-boxes m))
+         (u (update-lexical-addresses b)))
+    u))
 
 ;; transforms expressions into a syntax tree,
 ;; calculates lexical addresses, collect free
@@ -1140,4 +1141,100 @@
                   (vector-ref m 3))))
     (else
      m)))
+
+;; updates lexical addresses to remove multi-frame references
+(define (update-lexical-addresses m)
+  
+  (define (update-for-lambda m bound free)
+
+    (define (new-address)
+      (let ((var (vector-ref m 1))
+            (address (vector-ref m 2)))
+        (if address
+            (let ((frame (cdr address)))
+              (if (zero? frame)
+                  (list 'bound (index-of var bound))
+                  (list 'free (index-of var free))))
+            #f)))
+
+    (case (vector-ref m 0)
+      ((refer)
+       (vector 'refer
+               (vector-ref m 1)
+               (new-address)
+               (vector-ref m 3)))
+      ((sequence)
+       (vector 'sequence
+               (map (lambda (m)
+                      (update-for-lambda m bound free))
+                    (vector-ref m 1))))
+      ((call/cc)
+       (vector 'call/cc
+               (update-for-lambda (vector-ref m 1) bound free)))
+      ((alternative)
+       (vector 'alternative
+               (update-for-lambda (vector-ref m 1) bound free)
+               (update-for-lambda (vector-ref m 2) bound free)
+               (update-for-lambda (vector-ref m 3) bound free)))
+      ((lambda)
+       (vector 'lambda
+               (vector-ref m 1)
+               (vector-ref m 2)
+               (map (lambda (m)
+                      (update-for-lambda m bound free))
+                    (vector-ref m 3))
+               (vector-ref m 4)))
+      ((assign)
+       (vector 'assign
+               (vector-ref m 1)
+               (new-address)
+               (update-for-lambda (vector-ref m 3) bound free)))
+      ((apply)
+       (vector 'apply
+               (vector-ref m 1)
+               (update-for-lambda (vector-ref m 2) bound free)
+               (map (lambda (m)
+                      (update-for-lambda m bound free))
+                    (vector-ref m 3))))
+      (else
+       m)))
+
+  (case (vector-ref m 0)
+    ((sequence)
+     (vector 'sequence
+             (map update-lexical-addresses (vector-ref m 1))))
+    ((call/cc)
+     (vector 'call/cc
+             (update-lexical-addresses (vector-ref m 1))))
+    ((alternative)
+     (vector 'alternative
+             (update-lexical-addresses (vector-ref m 1))
+             (update-lexical-addresses (vector-ref m 2))
+             (update-lexical-addresses (vector-ref m 3))))
+    ((lambda)
+     (let ((bound (vector-ref m 1))
+           (free (map (lambda (m)
+                        (vector-ref m 1))
+                      (vector-ref m 3))))
+       (let ((updated (update-for-lambda (vector-ref m 4)
+                                         bound
+                                         free)))
+         (vector 'lambda
+                 bound
+                 (vector-ref m 2)
+                 (vector-ref m 3)
+                 (update-lexical-addresses updated)))))
+    ((assign)
+     (vector 'assign
+             (vector-ref m 1)
+             (vector-ref m 2)
+             (update-lexical-addresses (vector-ref m 3))))
+    ((apply)
+     (vector 'apply
+             (vector-ref m 1)
+             (update-lexical-addresses (vector-ref m 2))
+             (map update-lexical-addresses (vector-ref m 3))))
+    (else
+     m)))
+
 

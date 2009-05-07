@@ -847,7 +847,7 @@
       ((if)
        (case (length e)
          ((3)
-          (meaning-alternative (cadr e) (caddr e) #f r tail?))
+          (meaning-alternative (cadr e) (caddr e) *undef* r tail?))
          ((4)
           (meaning-alternative (cadr e) (caddr e) (cadddr e) r tail?))
          (else
@@ -899,9 +899,9 @@
   (vector 'alternative
           (meaning test r #f)
           (meaning then r tail?)
-          (if else
-              (meaning else r tail?)
-              (vector 'undef))))
+          (if (eq? else *undef*)
+              (vector 'undef)
+              (meaning else r tail?))))
 
 (define (meaning-lambda n* e+ r)
   (let* ((r2 (cons n* r))
@@ -944,6 +944,8 @@
               flags
               m
               m*))))
+
+(define *undef* (list 'undef))
 
 (define (lookup2 n r)
   (if (null? r)

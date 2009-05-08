@@ -26,6 +26,7 @@
 	 (x a (cdr y)))
 	(else
 	 (add1 c)
+         (- c b)
 	 (and c (x (- d a) b)))))))
 
 (define test2

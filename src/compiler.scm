@@ -192,10 +192,11 @@
 	   (map transform-exp exp))))
       exp))
 
+;;
 ;; transforms expressions into a syntax tree,
 ;; calculates lexical addresses, collect free
 ;; and assigned bindings
-;; this is the compiler first pass
+;;
 (define (meaning e r tail?)
   (cond
    ((immediate? e)
@@ -251,13 +252,11 @@
       (vector 'undef)))
 
 (define (meaning-sequence e+ r tail?)
-  (let loop ((e+ e+)
-             (m+ '()))
-    (if (null? (cdr e+))
-        (let ((m (meaning (car e+) r tail?)))
-          (vector 'sequence (reverse (cons m m+))))
-        (loop (cdr e+)
-              (cons (meaning (car e+) r #f) m+)))))
+  (if (null? (cdr e+))
+      (meaning (car e+) r tail?)
+      (vector 'sequence
+              (meaning (car e+) r #f)
+              (meaning-sequence (cdr e+) r tail?))))
 
 (define (meaning-call/cc e r tail?)
   (if (lambda-exp? e)
@@ -364,11 +363,8 @@
     ((refer)
      (set-if-test m > level))
     ((sequence)
-     (foldl (lambda (a b)
-              (set-union a
-                         (collect-free b level)))
-            '()
-            (vector-ref m 1)))
+     (set-union (collect-free (vector-ref m 1) level)
+                (collect-free (vector-ref m 2) level)))
     ((call/cc)
      (collect-free (vector-ref m 1) level))
     ((alternative)
@@ -393,11 +389,8 @@
 (define (collect-sets m level)
   (case (vector-ref m 0)
     ((sequence)
-     (foldl (lambda (a b)
-              (set-union a
-                         (collect-sets b level)))
-            '()
-            (vector-ref m 1)))
+     (set-union (collect-sets (vector-ref m 1) level)
+                (collect-sets (vector-ref m 2) level)))
     ((call/cc)
      (collect-sets (vector-ref m 1) level))
     ((alternative)
@@ -448,9 +441,8 @@
              m)))
       ((sequence)
        (vector 'sequence
-               (map (lambda (m)
-                      (flag-boxes* m sets level))
-                    (vector-ref m 1))))
+               (flag-boxes* (vector-ref m 1) sets level)
+               (flag-boxes* (vector-ref m 2) sets level)))
       ((call/cc)
        (vector 'call/cc
                (flag-boxes* (vector-ref m 1) sets level)
@@ -486,8 +478,8 @@
   (case (vector-ref m 0)
     ((sequence)
      (vector 'sequence
-             (map flag-boxes
-                  (vector-ref m 1))))
+             (flag-boxes (vector-ref m 1))
+             (flag-boxes (vector-ref m 2))))
     ((call/cc)
      (vector 'call/cc
              (flag-boxes (vector-ref m 1))
@@ -542,9 +534,8 @@
                (vector-ref m 3)))
       ((sequence)
        (vector 'sequence
-               (map (lambda (m)
-                      (update-for-lambda m bound free))
-                    (vector-ref m 1))))
+               (update-for-lambda (vector-ref m 1) bound free)
+               (update-for-lambda (vector-ref m 2) bound free)))
       ((call/cc)
        (vector 'call/cc
                (update-for-lambda (vector-ref m 1) bound free)
@@ -580,7 +571,8 @@
   (case (vector-ref m 0)
     ((sequence)
      (vector 'sequence
-             (map update-lexical-addresses (vector-ref m 1))))
+             (update-lexical-addresses (vector-ref m 1))
+             (update-lexical-addresses (vector-ref m 2))))
     ((call/cc)
      (vector 'call/cc
              (update-lexical-addresses (vector-ref m 1))
@@ -674,9 +666,8 @@
        (instr cs 'OPEN-BOX)))
 
 (define (generate-sequence cs m)
-  (map (lambda (m)
-         (generate-code cs m))
-       (vector-ref m 1)))
+  (generate-code cs (vector-ref m 1))
+  (generate-code cs (vector-ref m 2)))
 
 (define (generate-call/cc cs m)
   

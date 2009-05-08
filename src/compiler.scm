@@ -916,8 +916,6 @@
               (vector 'undef)
               (meaning else r tail?))))
 
-;; both 'reverses' here are due to arguments being
-;; pushed left-to-right on stack
 (define (meaning-lambda n* e+ r)
   (let* ((n2 (reverse n*))
          (r2 (cons n2 r))
@@ -928,7 +926,7 @@
             (collect-sets2 m 0)
             (map (lambda (n)
                     (meaning-reference n r))
-                 (reverse free))
+                 free)
             m)))
 
 (define (meaning-assignment n e r)
@@ -1377,7 +1375,7 @@
   (let ((bound (vector-ref m 1))
         (sets  (vector-ref m 2))
         (free  (vector-ref m 3)))
-    (let loop ((f free))
+    (let loop ((f (reverse free)))
       (if (null? f)
         (let ((len (length free)))
           (instr1 cs 'MAKE-CLOSURE len)

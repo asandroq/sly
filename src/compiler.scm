@@ -815,12 +815,20 @@
 ;;; new implementation using ASTs
 ;;;
 
-(define (compile2 e)
+(define (compile-to-file2 file e)
+  (let ((cs (make-compiler-state)))
+    (with-output-to-file file
+      (lambda ()
+        (compile2 cs e)))))
+
+(define (compile2 cs e)
   (let* ((t (transform-exp e))
          (m (meaning t '() #t))
          (b (flag-boxes m))
          (u (update-lexical-addresses b)))
-    u))
+    (generate-code cs u)
+    (instr cs 'RETURN)
+    (write-code-vector cs)))
 
 ;; transforms expressions into a syntax tree,
 ;; calculates lexical addresses, collect free
@@ -892,7 +900,11 @@
 (define (meaning-call/cc e r tail?)
   (if (lambda-exp? e)
       (if (one-symbol-list? (cadr e))
-          (vector 'call/cc (meaning e r tail?))
+          (vector 'call/cc
+                  (meaning e r tail?)
+                  (if tail?
+                      (list 'tail)
+                      '()))
           (error "procedure must take one argument" e))
       (error "expression is not a procedure" e)))
 
@@ -904,16 +916,19 @@
               (vector 'undef)
               (meaning else r tail?))))
 
+;; both 'reverses' here are due to arguments being
+;; pushed left-to-right on stack
 (define (meaning-lambda n* e+ r)
-  (let* ((r2 (cons n* r))
+  (let* ((n2 (reverse n*))
+         (r2 (cons n2 r))
          (m (meaning-sequence e+ r2 #t))
          (free (collect-free2 m 0)))
     (vector 'lambda
-            n*
+            n2
             (collect-sets2 m 0)
             (map (lambda (n)
                     (meaning-reference n r))
-                 free)
+                 (reverse free))
             m)))
 
 (define (meaning-assignment n e r)
@@ -1078,7 +1093,8 @@
                     (vector-ref m 1))))
       ((call/cc)
        (vector 'call/cc
-               (flag-boxes* (vector-ref m 1) sets level)))
+               (flag-boxes* (vector-ref m 1) sets level)
+               (vector-ref m 2)))
       ((alternative)
        (vector 'alternative
                (flag-boxes* (vector-ref m 1) sets level)
@@ -1114,7 +1130,8 @@
                   (vector-ref m 1))))
     ((call/cc)
      (vector 'call/cc
-             (flag-boxes (vector-ref m 1))))
+             (flag-boxes (vector-ref m 1))
+             (vector-ref m 2)))
     ((alternative)
      (vector 'alternative
              (flag-boxes (vector-ref m 1))
@@ -1153,8 +1170,8 @@
         (if address
             (let ((frame (cdr address)))
               (if (zero? frame)
-                  (list 'bound (index-of var bound))
-                  (list 'free (index-of var free))))
+                  (cons 'bound (index-of var bound))
+                  (cons 'free (index-of var free))))
             #f)))
 
     (case (vector-ref m 0)
@@ -1170,7 +1187,8 @@
                     (vector-ref m 1))))
       ((call/cc)
        (vector 'call/cc
-               (update-for-lambda (vector-ref m 1) bound free)))
+               (update-for-lambda (vector-ref m 1) bound free)
+               (vector-ref m 2)))
       ((alternative)
        (vector 'alternative
                (update-for-lambda (vector-ref m 1) bound free)
@@ -1205,7 +1223,8 @@
              (map update-lexical-addresses (vector-ref m 1))))
     ((call/cc)
      (vector 'call/cc
-             (update-lexical-addresses (vector-ref m 1))))
+             (update-lexical-addresses (vector-ref m 1))
+             (vector-ref m 2)))
     ((alternative)
      (vector 'alternative
              (update-lexical-addresses (vector-ref m 1))
@@ -1237,4 +1256,205 @@
     (else
      m)))
 
+;; this pass generates the code for the virtual machine
+(define (generate-code cs m)
+  (case (vector-ref m 0)
+    ((undef)
+     (generate-undef cs))
+    ((immed)
+     (generate-immediate cs m))
+    ((refer)
+     (generate-reference cs m #t))
+    ((sequence)
+     (generate-sequence cs m))
+    ((call/cc)
+     (generate-call/cc cs m))
+    ((alternative)
+     (generate-alternative cs m))
+    ((lambda)
+     (generate-lambda cs m))
+    ((assign)
+     (generate-assignment cs m))
+    ((apply)
+     (generate-apply cs m))
+    (else
+     (error "unknown AST node" m))))
+
+(define (generate-undef cs)
+  (instr cs 'LOAD-UNDEF))
+
+(define (generate-immediate cs m)
+  (emit-immediate cs (vector-ref m 1)))
+
+(define (generate-reference cs m unbox?)
+  (let ((address (vector-ref m 2)))
+    (if address
+        (let ((kind (car address))
+              (pos  (cdr address)))
+          (case kind
+            ((bound)
+             (case pos
+               ((0)
+                (instr cs 'LOAD0))
+               ((1)
+                (instr cs 'LOAD1))
+               ((2)
+                (instr cs 'LOAD2))
+               ((3)
+                (instr cs 'LOAD3))
+               (else
+                (instr1 cs 'LOAD pos))))
+            ((free)
+             (instr1 cs 'LOAD-FREE pos))
+            (else
+             (error "unknown binding type" m))))
+        (error "binding without address" m)))
+  (and unbox?
+       (memq 'box (vector-ref m 3))
+       (instr cs 'OPEN-BOX)))
+
+(define (generate-sequence cs m)
+  (map (lambda (m)
+         (generate-code cs m))
+       (vector-ref m 1)))
+
+(define (generate-call/cc cs m)
+  
+  ;; creates a closure that will restore a saved
+  ;; continuation if called - the continuation
+  ;; is stored in the closure as a free variable
+  (define (generate-continuation-closure cs)
+    (instr1 cs 'MAKE-CLOSURE 1)
+    ;; jump over closure code
+    (instr1 cs 'JMP 5)
+    ;; value given to the continuation
+    (instr cs 'LOAD0)
+    (instr cs 'PUSH)
+    (instr1 cs 'LOAD-FREE 0)
+    (instr cs 'REST-CONT)
+    (instr cs 'RETURN))
+
+  (let ((i (code-size cs))
+        (tail? (memq 'tail (vector-ref m 2))))
+    ;; this is the return address, will be back-patched later
+    (or tail? (instr1 cs 'FRAME 0))
+    (instr cs 'LOAD-ZERO)
+    (instr cs 'PUSH)
+    (instr cs 'SAVE-CONT)
+    (instr cs 'PUSH)
+    (generate-continuation-closure cs)
+    (instr cs 'PUSH)
+    ;; calling closure given to call/cc with
+    ;; continuation-restoring closure as sole argument
+    (instr cs 'LOAD-ONE)
+    (instr cs 'PUSH)
+    (generate-lambda cs (vector-ref m 1))
+    (instr cs (if tail? 'TAIL-CALL 'CALL))
+    ;; back-patching return address
+    (or tail? (patch-instr! cs i (code-size cs)))))
+
+(define (generate-alternative cs m)
+  (let ((test (vector-ref m 1))
+        (then (vector-ref m 2))
+        (else (vector-ref m 3)))
+    (generate-code cs test)
+    (let ((i (code-size cs)))
+      ;; this will be back-patched later
+      (instr1 cs 'JMP-IF 0)
+      (generate-code cs else)
+      (let ((j (code-size cs)))
+        ;; this will be back-patched later
+        (instr1 cs 'JMP 0)
+        (let ((k (code-size cs)))
+          ;; back-patching if jump
+          (patch-instr! cs i (- k i 1))
+          (generate-code cs then)
+          (let ((m (code-size cs)))
+            ;; back-patching else jmp
+            (patch-instr! cs j (- m j 1))))))))
+
+(define (generate-lambda cs m)
+  (let ((bound (vector-ref m 1))
+        (sets  (vector-ref m 2))
+        (free  (vector-ref m 3)))
+    (let loop ((f free))
+      (if (null? f)
+        (let ((len (length free)))
+          (instr1 cs 'MAKE-CLOSURE len)
+          (let ((i (code-size cs)))
+            ;; this will be back-patched later
+            (instr1 cs 'JMP 0)
+            (make-boxes cs bound sets)
+            (generate-code cs (vector-ref m 4))
+            (instr cs 'RETURN)
+            (let ((j (code-size cs)))
+              ;; back-patching jump over closure code
+              (patch-instr! cs i (- j i 1)))))
+        (let ((ref (car f)))
+          (generate-reference cs ref #f)
+          (instr cs 'PUSH)
+          (loop (cdr f)))))))
+
+(define (generate-assignment cs m)
+  (let ((address (vector-ref m 2)))
+    (if address
+        (let ((kind (car address))
+              (pos  (cdr address)))
+          (generate-code cs (vector-ref m 3))
+          (case kind
+            ((bound)
+             (instr1 cs 'ASSIGN pos))
+            ((free)
+             (instr1 cs 'ASSIGN-FREE pos))
+            (else
+             (error "unknown binding type" m))))
+        (error "binding without address" m))))
+
+(define (generate-apply cs m)
+  (if (memq 'prim (vector-ref m 1))
+      (generate-primitive-apply cs m)
+      (generate-common-apply cs m)))
+
+(define (generate-primitive-apply cs m)
+  (let* ((ref (vector-ref m 2))
+         (args (vector-ref m 3))
+         (prim (vector-ref ref 1))
+         (prim-rec (assv prim *primitives*)))
+    (if prim-rec
+        (let ((code (cadr prim-rec))
+              (arity (caddr prim-rec)))
+          (cond
+           ((= arity 1)
+            (generate-code cs (car args))
+            (instr cs code))
+           ((= arity 2)
+            (generate-code cs (cadr args))
+            (instr cs 'PUSH)
+            (generate-code cs (car args))
+            (instr cs code))
+           (else
+            (error "Primitive with unknown arity"))))
+        (error "Unknown primitive"))))
+
+(define (generate-common-apply cs m)
+  (let ((i (code-size cs))
+        (args (vector-ref m 3))
+        (tail? (memq 'tail (vector-ref m 1))))
+    ;; this is the return address, will be back-patched later
+    (or tail? (instr1 cs 'FRAME 0))
+    (let ((len (length args)))
+      (let loop ((args args))
+        (if (null? args)
+            (begin
+              (emit-immediate cs len)
+	      (instr cs 'PUSH)
+              (generate-code cs (vector-ref m 2))
+              (instr cs (if tail? 'TAIL-CALL 'CALL))
+              ;; back-patching return address
+	      ;; this not a position-independent value
+              (or tail? (patch-instr! cs i (code-size cs))))
+            (let ((arg (car args)))
+              (generate-code cs arg)
+              (instr cs 'PUSH)
+              (loop (cdr args))))))))
 

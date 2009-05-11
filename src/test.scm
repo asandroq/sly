@@ -36,9 +36,14 @@
 	 (loop (cdr a)))))
 
 (define test3
-  '(let ((a 1)
-	 (b 2))
-     (+ a b)))
+  '((define blah 1)
+    (define (fact n)
+      (define (fact-iter n a)
+        (if (= n blah)
+            a
+            (fact-iter (- n 1) (* a n))))
+      (fact-iter n 1))
+    (fact 10)))
 
 (compile-to-file "test.fasl" test1)
 

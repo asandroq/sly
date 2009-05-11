@@ -28,7 +28,7 @@
         (compile cs e)))))
 
 (define (compile cs e)
-  (let* ((t (transform-exp e))
+  (let* ((t (simplify e #t))
          (m (meaning t '() #t))
          (b (flag-boxes m))
          (u (update-lexical-addresses b)))
@@ -40,63 +40,89 @@
 ;; Preprocessing
 ;;
 
+;; Transforms derived syntax into primitive syntax
+(define (simplify exp top?)
+  (if (pair? exp)
+      (let ((op (car exp)))
+	(case op
+	  ((and)
+	   (simplify-and exp))
+	  ((or)
+	   (simplify-or exp))
+	  ((cond)
+	   (simplify-cond exp))
+	  ((let)
+	   (if (symbol? (cadr exp))
+	       (simplify-named-let exp)
+	       (simplify-let exp)))
+	  ((let*)
+	   (simplify-let* exp))
+	  ((letrec)
+	   (simplify-letrec exp))
+	  (else
+	   (map (lambda (e)
+                  (simplify e #f))
+                exp))))
+      exp))
+
 ;; Transform 'and' into series of 'ifs'
-(define (transform-and exp)
+(define (simplify-and exp)
   (let ((exps (cdr exp)))
     (if (null? exps)
 	'#t
-	(let ((test (car exps))
+	(let ((test (simplify (car exps) #f))
 	      (rest (cdr exps)))
 	  (if (null? rest)
 	      (let ((var (gensym)))
-		(transform-exp
+		(simplify
 		 (list 'let (list (list var test))
-		       (list 'if var var '#f))))
-	      (list 'if test (transform-exp (cons 'and rest)) '#f))))))
+		       (list 'if var var '#f))
+                 #f))
+	      (list 'if test (simplify (cons 'and rest) #f) '#f))))))
 
-(define (transform-or exp)
+(define (simplify-or exp)
   (let ((exps (cdr exp)))
     (if (null? exps)
 	'#f
-	(let ((test (car exps))
+	(let ((test (simplify (car exps) #f))
 	      (rest (cdr exps)))
 	  (if (null? rest)
 	      test
 	      (let ((var (gensym)))
 		(list 'let (list (list var test))
-		      (list 'if var var (transform-exp (cons 'or rest))))))))))
+		      (list 'if var var (simplify (cons 'or rest))))))))))
 
 ;; Transform 'cond' into nested 'ifs'
-(define (transform-cond exp)
+(define (simplify-cond exp)
   (let collect ((code '())
 		(clauses (reverse (cdr exp)))
 		(last? #t))
     (if (null? clauses)
 	(if (null? code)
-	    (error "Empty COND")
+	    (error "Empty 'cond'" exp)
 	    code)
 	(let ((clause (car clauses)))
 	  (if (pair? clause)
-	      (let ((test (transform-exp (car clause)))
-		    (body (transform-exp (cdr clause))))
+	      (let ((test (simplify (car clause) #f))
+		    (body (simplify (cdr clause) #f)))
 		(if (eqv? test 'else)
 		    (if last?
 			(collect (cons 'begin body)
 				 (cdr clauses)
 				 #f)
-			(error "ELSE must be last clause in COND"))
+			(error "'else' must be last clause in 'cond'" exp))
 		    (collect (list 'if
 				   test
 				   (cons 'begin body)
 				   code)
 			     (cdr clauses)
 			     #f)))
-	      (error "Ill-formed COND clause"))))))
+	      (error "Ill-formed 'cond' clause" clause))))))
 
 ;; Transform 'let' into immediate lambda application
-(define (transform-let exp)
+(define (simplify-let exp)
   (let ((bindings (cadr exp))
-	(body (transform-exp (cddr exp))))
+	(body (simplify (cddr exp) #f)))
     (let loop ((vars '())
 	       (args '())
 	       (bindings bindings))
@@ -104,50 +130,52 @@
 	  (cons (cons 'lambda (cons vars body)) args)
 	  (let ((binding (car bindings)))
 	    (let ((var (car binding))
-		  (arg (transform-exp (cadr binding))))
+		  (arg (simplify (cadr binding) #f)))
 	      (if (symbol? var)
 		  (loop (cons var vars)
 			(cons arg args)
 			(cdr bindings))
-		  (error "Ill-formed LET"))))))))
+		  (error "Ill-formed 'let'" exp))))))))
 
 ;; Transform let* into cascade of 'lets'
-(define (transform-let* exp)
+(define (simplify-let* exp)
   (let ((bindings (cadr exp))
 	(body (cddr exp)))
     (if (null? bindings)
-	(transform-exp (cons 'begin body))
+	(simplify (cons 'begin body) #f)
 	(let ((first (car bindings))
 	      (rest (cdr bindings)))
 	  (if (null? rest)
-	      (transform-exp (cons 'let
-				   (cons bindings body)))
-	      (transform-exp (list 'let
-				   (list first)
-				   (cons 'let* (cons rest body)))))))))
+	      (simplify (cons 'let
+                              (cons bindings body))
+                        #f)
+	      (simplify (list 'let
+                              (list first)
+                              (cons 'let* (cons rest body)))
+                        #f))))))
 
 ;; Transform 'letrec' into 'lambda' plus assignments
-(define (transform-letrec exp)
+(define (simplify-letrec exp)
   (let ((bindings (cadr exp))
 	(body (cddr exp)))
     (if (null? bindings)
 	(cons 'begin body)
 	(let loop ((vars '())
 		   (mocks '())
-		   (body (transform-exp body))
+		   (body (simplify body #f))
 		   (bindings bindings))
 	  (if (null? bindings)
 	      (cons (cons 'lambda (cons vars body)) mocks)
 	      (let ((binding (car bindings)))
 		(let ((var (car binding))
-		      (exp (transform-exp (cadr binding))))
+		      (exp (simplify (cadr binding) #f)))
 		  (loop (cons var vars)
 			(cons '#f mocks)
 			(cons (list 'set! var exp) body)
 			(cdr bindings)))))))))
 
 ;; Transform named 'let' into 'letrec'
-(define (transform-named-let exp)
+(define (simplify-named-let exp)
   (let ((name (cadr exp))
 	(bindings (caddr exp))
 	(body (cdddr exp)))
@@ -155,11 +183,12 @@
 	       (exps '())
 	       (bindings bindings))
       (if (null? bindings)
-	  (transform-exp
+	  (simplify
 	   (list 'letrec (list (list name
 				     (cons 'lambda
 					   (cons vars body))))
-		 (cons name exps)))
+		 (cons name exps))
+           #f)
 	  (let ((binding (car bindings)))
 	    (let ((var (car binding))
 		  (exp (cadr binding)))
@@ -167,30 +196,7 @@
 		  (loop (cons var vars)
 			(cons exp exps)
 			(cdr bindings))
-		  (error "Ill-formed named LET"))))))))
-
-;; Transforms derived syntax into primitive syntax
-(define (transform-exp exp)
-  (if (pair? exp)
-      (let ((op (car exp)))
-	(case op
-	  ((and)
-	   (transform-and exp))
-	  ((or)
-	   (transform-or exp))
-	  ((cond)
-	   (transform-cond exp))
-	  ((let)
-	   (if (symbol? (cadr exp))
-	       (transform-named-let exp)
-	       (transform-let exp)))
-	  ((let*)
-	   (transform-let* exp))
-	  ((letrec)
-	   (transform-letrec exp))
-	  (else
-	   (map transform-exp exp))))
-      exp))
+		  (error "Ill-formed 'named let'" exp))))))))
 
 ;;
 ;; transforms expressions into a syntax tree,

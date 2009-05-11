@@ -51,6 +51,10 @@
 	   (simplify-or exp))
 	  ((cond)
 	   (simplify-cond exp))
+          ((define)
+           (simplify-define exp))
+          ((lambda)
+           (simplify-lambda exp))
 	  ((let)
 	   (if (symbol? (cadr exp))
 	       (simplify-named-let exp)
@@ -118,6 +122,38 @@
 			     (cdr clauses)
 			     #f)))
 	      (error "Ill-formed 'cond' clause" clause))))))
+
+(define (simplify-define exp)
+  (if (> (length exp) 2)
+      (let ((definee (cadr exp))
+            (body (cddr exp)))
+        (cond
+         ((symbol? definee)
+          (cons 'define
+                (cons definee
+                      (simplify body #f))))
+         ((pair? definee)
+          (if (and (not (null? definee))
+                   (all? symbol? definee))
+              (let ((name (car definee))
+                    (args (cdr definee)))
+                (list 'define
+                      name
+                      (simplify
+                       (cons 'lambda
+                             (cons args
+                                   body))
+                             #f)))
+              (error "ill-formed 'define'" exp)))
+         (else
+          (error "ill-formed 'define'" exp))))
+      (error "ill-formed 'define'" exp)))
+
+;; transforms internal defines
+(define (simplify-lambda exp)
+  (cons 'lambda
+        (cons (cadr exp)
+              (simplify (cddr exp) #f))))
 
 ;; Transform 'let' into immediate lambda application
 (define (simplify-let exp)

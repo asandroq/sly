@@ -278,12 +278,11 @@
               (meaning else r tail?))))
 
 (define (meaning-lambda n* e+ r)
-  (let* ((n2 (reverse n*))
-         (r2 (cons n2 r))
+  (let* ((r2 (cons n* r))
          (m (meaning-sequence e+ r2 #t))
          (free (collect-free m 0)))
     (vector 'lambda
-            n2
+            n*
             (collect-sets m 0)
             (map (lambda (n)
                     (meaning-reference n r))
@@ -303,9 +302,7 @@
 
 (define (meaning-application e e* r tail?)
   (let ((m  (meaning e r #f))
-        (m* (map (lambda (e)
-                   (meaning e r #f))
-                 e*)))
+        (m* (meaning-args e* r)))
     (let* ((prim (if (and (eq? (vector-ref m 0)
                                'refer)
                           (assq (vector-ref m 1)
@@ -319,6 +316,13 @@
               flags
               m
               m*))))
+
+(define (meaning-args e* r)
+  (if (null? e*)
+      (vector 'arg-null)
+      (vector 'arg-list
+              (meaning (car e*) r #f)
+              (meaning-args (cdr e*) r))))
 
 (define *undef* (list 'undef))
 
@@ -349,9 +353,7 @@
   (or (symbol? e)
       (null? e)
       (and (pair? e)
-           (foldl* (lambda (a b)
-                     (and a b))
-                   (map symbol? e)))))
+           (all? symbol? e))))
 
 (define (one-symbol-list? e)
   (and (pair? e)
@@ -378,11 +380,10 @@
                 (collect-free (vector-ref m 3) level)))
     ((apply)
      (set-union (collect-free (vector-ref m 2) level)
-                (foldl (lambda (a b)
-                         (set-union a
-                                    (collect-free b level)))
-                       '()
-                       (vector-ref m 3))))
+                (collect-free (vector-ref m 3) level)))
+    ((arg-list)
+     (set-union (collect-free (vector-ref m 1) level)
+                (collect-free (vector-ref m 2) level)))
     (else
      '())))
 
@@ -403,11 +404,10 @@
      (set-if-test m = level))
     ((apply)
      (set-union (collect-sets (vector-ref m 2) level)
-                (foldl (lambda (a b)
-                         (set-union a
-                                    (collect-sets b level)))
-                       '()
-                       (vector-ref m 3))))
+                (collect-sets (vector-ref m 3) level)))
+    ((arg-list)
+     (set-union (collect-sets (vector-ref m 1) level)
+                (collect-sets (vector-ref m 2) level)))
     (else
      '())))
 
@@ -469,9 +469,11 @@
        (vector 'apply
                (vector-ref m 1)
                (flag-boxes* (vector-ref m 2) sets level)
-               (map (lambda (m)
-                      (flag-boxes* m sets level))
-                    (vector-ref m 3))))
+               (flag-boxes* (vector-ref m 3) sets level)))
+      ((arg-list)
+       (vector 'arg-list
+               (flag-boxes* (vector-ref m 1) sets level)
+               (flag-boxes* (vector-ref m 2) sets level)))
       (else
         m)))
 
@@ -506,8 +508,11 @@
      (vector 'apply
              (vector-ref m 1)
              (flag-boxes (vector-ref m 2))
-             (map flag-boxes
-                  (vector-ref m 3))))
+             (flag-boxes (vector-ref m 3))))
+    ((arg-list)
+     (vector 'arg-list
+             (flag-boxes (vector-ref m 1))
+             (flag-boxes (vector-ref m 2))))
     (else
      m)))
 
@@ -562,9 +567,11 @@
        (vector 'apply
                (vector-ref m 1)
                (update-for-lambda (vector-ref m 2) bound free)
-               (map (lambda (m)
-                      (update-for-lambda m bound free))
-                    (vector-ref m 3))))
+               (update-for-lambda (vector-ref m 3) bound free)))
+      ((arg-list)
+       (vector 'arg-list
+               (update-for-lambda (vector-ref m 1) bound free)
+               (update-for-lambda (vector-ref m 2) bound free)))
       (else
        m)))
 
@@ -604,7 +611,11 @@
      (vector 'apply
              (vector-ref m 1)
              (update-lexical-addresses (vector-ref m 2))
-             (map update-lexical-addresses (vector-ref m 3))))
+             (update-lexical-addresses (vector-ref m 3))))
+    ((arg-list)
+     (vector 'arg-list
+             (update-lexical-addresses (vector-ref m 1))
+             (update-lexical-addresses (vector-ref m 2))))
     (else
      m)))
 
@@ -776,12 +787,12 @@
               (arity (caddr prim-rec)))
           (cond
            ((= arity 1)
-            (generate-code cs (car args))
+            (generate-code cs (vector-ref args 1))
             (instr cs code))
            ((= arity 2)
-            (generate-code cs (cadr args))
+            (generate-code cs (vector-ref (vector-ref args 2) 1))
             (instr cs 'PUSH)
-            (generate-code cs (car args))
+            (generate-code cs (vector-ref args 1))
             (instr cs code))
            (else
             (error "Primitive with unknown arity"))))
@@ -789,25 +800,26 @@
 
 (define (generate-common-apply cs m)
   (let ((i (code-size cs))
-        (args (vector-ref m 3))
         (tail? (memq 'tail (vector-ref m 1))))
     ;; this is the return address, will be back-patched later
     (or tail? (instr1 cs 'FRAME 0))
-    (let ((len (length args)))
-      (let loop ((args args))
-        (if (null? args)
-            (begin
-              (emit-immediate cs len)
-	      (instr cs 'PUSH)
-              (generate-code cs (vector-ref m 2))
-              (instr cs (if tail? 'TAIL-CALL 'CALL))
-              ;; back-patching return address
-	      ;; this not a position-independent value
-              (or tail? (patch-instr! cs i (code-size cs))))
-            (let ((arg (car args)))
-              (generate-code cs arg)
-              (instr cs 'PUSH)
-              (loop (cdr args))))))))
+    (let ((len (generate-push-arguments cs (vector-ref m 3))))
+      (emit-immediate cs len)
+      (instr cs 'PUSH)
+      (generate-code cs (vector-ref m 2))
+      (instr cs (if tail? 'TAIL-CALL 'CALL))
+      ;; back-patching return address
+      ;; this not a position-independent value
+      (or tail? (patch-instr! cs i (code-size cs))))))
+
+(define (generate-push-arguments cs m)
+  (let ((kind (vector-ref m 0)))
+    (if (eq? kind 'arg-null)
+        0
+        (let ((len (generate-push-arguments cs (vector-ref m 2))))
+          (generate-code cs (vector-ref m 1))
+          (instr cs 'PUSH)
+          (+ len 1)))))
 
 ;; Create instructions to box arguments to closure
 ;; that are assigned somewhere in the code
@@ -1020,17 +1032,9 @@
               i
               (loop (+ i 1) (cdr list)))))))
 
-;; left folds
+(define (all? pred coll)
+  (if (null? coll)
+      #t
+      (and (pred (car coll))
+           (all? pred (cdr coll)))))
 
-(define (foldl f s l)
-  (let loop ((s s)
-	     (l l))
-    (if (null? l)
-	s
-	(loop (f s (car l)) (cdr l)))))
-
-(define (foldl* f l)
-  (if (null? l)
-      #f
-      (let ((s (car l)))
-	(foldl f s (cdr l)))))

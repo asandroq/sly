@@ -49,6 +49,8 @@
 	   (simplify-and exp))
 	  ((or)
 	   (simplify-or exp))
+          ((begin)
+           (simplify-begin exp))
 	  ((cond)
 	   (simplify-cond exp))
           ((define)
@@ -96,6 +98,11 @@
 		(list 'let (list (list var test))
 		      (list 'if var var (simplify (cons 'or rest))))))))))
 
+(define (simplify-begin exp)
+  (if (not (null? (cdr exp)))
+      (simplify-sequence (cdr exp))
+      (error "empty 'begin'" exp)))
+
 ;; Transform 'cond' into nested 'ifs'
 (define (simplify-cond exp)
   (let collect ((code '())
@@ -108,16 +115,16 @@
 	(let ((clause (car clauses)))
 	  (if (pair? clause)
 	      (let ((test (simplify (car clause) #f))
-		    (body (simplify (cdr clause) #f)))
+		    (body (simplify-sequence (cdr clause))))
 		(if (eqv? test 'else)
 		    (if last?
-			(collect (cons 'begin body)
+			(collect body
 				 (cdr clauses)
 				 #f)
 			(error "'else' must be last clause in 'cond'" exp))
 		    (collect (list 'if
 				   test
-				   (cons 'begin body)
+                                   body
 				   code)
 			     (cdr clauses)
 			     #f)))
@@ -149,21 +156,26 @@
           (error "ill-formed 'define'" exp))))
       (error "ill-formed 'define'" exp)))
 
-;; transforms internal defines
 (define (simplify-lambda exp)
-  (cons 'lambda
-        (cons (cadr exp)
-              (simplify (cddr exp) #f))))
+  (if (> (length exp) 2)
+      (let ((args (cadr exp))
+            (body (cddr exp)))
+        (if (symbol-exp? args)
+            (cons 'lambda
+                  (list args
+                        (simplify-sequence body)))
+            (error "ill-formed 'lambda'" exp)))
+      (error "ill-formed 'lambda'" exp)))
 
 ;; Transform 'let' into immediate lambda application
 (define (simplify-let exp)
   (let ((bindings (cadr exp))
-	(body (simplify (cddr exp) #f)))
+	(body (cddr exp)))
     (let loop ((vars '())
 	       (args '())
 	       (bindings bindings))
       (if (null? bindings)
-	  (cons (cons 'lambda (cons vars body)) args)
+	  (cons (simplify-lambda (cons 'lambda (cons vars body))) args)
 	  (let ((binding (car bindings)))
 	    (let ((var (car binding))
 		  (arg (simplify (cadr binding) #f)))
@@ -234,6 +246,11 @@
 			(cdr bindings))
 		  (error "Ill-formed 'named let'" exp))))))))
 
+(define (simplify-sequence exps)
+  (if (null? (cdr exps))
+      (simplify (car exps) #f)
+      (cons 'begin (simplify exps #f))))
+
 ;;
 ;; transforms expressions into a syntax tree,
 ;; calculates lexical addresses, collect free
@@ -268,7 +285,7 @@
           (error "ill-formed 'if'" e))))
       ((lambda)
        (if (lambda-exp? e)
-           (meaning-lambda (cadr e) (cddr e) r)
+           (meaning-lambda (cadr e) (caddr e) r)
            (error "ill-formed 'lambda'" e)))
       ((set!)
        (if (and (= (length e) 3)
@@ -319,9 +336,9 @@
               (vector 'undef)
               (meaning else r tail?))))
 
-(define (meaning-lambda n* e+ r)
+(define (meaning-lambda n* e r)
   (let* ((r2 (cons n* r))
-         (m (meaning-sequence e+ r2 #t))
+         (m (meaning e r2 #t))
          (free (collect-free m 0)))
     (vector 'lambda
             n*

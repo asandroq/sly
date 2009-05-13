@@ -21,20 +21,34 @@
 ;;; THE SOFTWARE.
 ;;;
 
-(define (compile-to-file file e)
+;; already seen globals
+(define *defined-globals* '())
+
+(define (compile-to-file file e+)
   (let ((cs (make-compiler-state)))
     (with-output-to-file file
       (lambda ()
-        (compile cs e)))))
+        (compile-toplevel e+)))))
 
-(define (compile cs e)
-  (let* ((t (simplify e))
-         (m (meaning t '() #t))
-         (b (flag-boxes m))
-         (u (update-lexical-addresses b)))
-    (generate-code cs u)
+;; generates code for module,
+;; a list of toplevel expressions
+(define (compile-toplevel e+)
+  (let* ((t+ (map simplify e+))
+         (def-exps (filter define-exp? t+))
+         (defs (map cadr def-exps))
+         (cs (make-compiler-state)))
+    (set! *defined-globals*
+          (append defs *defined-globals*))
+    (for-each (lambda (t) (compile cs t)) t+)
     (instr cs 'RETURN)
     (write-code-vector cs)))
+
+;; compiles a single toplevel expression
+(define (compile cs e)
+  (let* ((m (meaning e '() #t))
+         (b (flag-boxes m))
+         (u (update-lexical-addresses b)))
+    (generate-code cs u)))
 
 ;;
 ;; Preprocessing
@@ -241,13 +255,9 @@
 
 (define (simplify-sequence exps)
 
-  (define (def? e)
-    (and (pair? e)
-         (eq? (car e) 'define)))
-
   (define (rest defs body)
     (cond
-     ((any? def? body)
+     ((any? define-exp? body)
       (error "internal defines must come first" exps))
      ((null? defs)
       (if (null? (cdr body))
@@ -266,9 +276,13 @@
     (if (null? es)
         (error "empty sequence" exps)
         (let ((e (car es)))
-          (if (def? e)
+          (if (define-exp? e)
               (loop (cons e defs) (cdr es))
               (rest (map simplify-define (reverse defs)) es))))))
+
+(define (define-exp? e)
+  (and (pair? e)
+       (eq? (car e) 'define)))
 
 ;;
 ;; transforms expressions into a syntax tree,
@@ -294,6 +308,8 @@
        (if (= (length e) 2)
            (meaning-call/cc (cadr e) r tail?)
            (error "empty 'call/cc'" e)))
+      ((define)
+       (meaning-define (cadr e) (caddr e)))
       ((if)
        (case (length e)
          ((3)
@@ -346,6 +362,12 @@
                       '()))
           (error "procedure must take one argument" e))
       (error "expression is not a procedure" e)))
+
+(define (meaning-define n e)
+  (vector 'assign
+          n
+          #f
+          (meaning e '() #f)))
 
 (define (meaning-alternative test then else r tail?)
   (vector 'alternative
@@ -403,6 +425,12 @@
               (meaning-args (cdr e*) r))))
 
 (define *undef* (list 'undef))
+
+(define (immediate? x)
+  (or (char? x)
+      (boolean? x)
+      (integer? x)
+      (null? x)))
 
 (define (lookup n r)
   (if (null? r)
@@ -710,6 +738,8 @@
      (generate-sequence cs m))
     ((call/cc)
      (generate-call/cc cs m))
+    ((define)
+     (generate-define cs m))
     ((alternative)
      (generate-alternative cs m))
     ((lambda)
@@ -748,11 +778,15 @@
             ((free)
              (instr1 cs 'LOAD-FREE pos))
             (else
-             (error "unknown binding type" m))))
-        (error "binding without address" m)))
-  (and unbox?
-       (memq 'box (vector-ref m 3))
-       (instr cs 'OPEN-BOX)))
+             (error "unknown binding type" m)))
+          (and unbox?
+               (memq 'box (vector-ref m 3))
+               (instr cs 'OPEN-BOX)))
+        (let* ((var (vector-ref m 1))
+               (index (install-global! cs var)))
+          (if (memq var *defined-globals*)
+              (instr1 cs 'GLOBAL-REF index)
+              (instr1 cs 'CHECKED-GLOBAL-REF index))))))
 
 (define (generate-sequence cs m)
   (generate-code cs (vector-ref m 1))
@@ -836,11 +870,11 @@
           (loop (cdr f)))))))
 
 (define (generate-assignment cs m)
+  (generate-code cs (vector-ref m 3))
   (let ((address (vector-ref m 2)))
     (if address
         (let ((kind (car address))
               (pos  (cdr address)))
-          (generate-code cs (vector-ref m 3))
           (case kind
             ((bound)
              (instr1 cs 'ASSIGN pos))
@@ -848,7 +882,11 @@
              (instr1 cs 'ASSIGN-FREE pos))
             (else
              (error "unknown binding type" m))))
-        (error "binding without address" m))))
+        (let* ((var (vector-ref m 1))
+               (index (install-global! cs var)))
+          (if (memq var *defined-globals*)
+              (instr1 cs 'GLOBAL-SET index)
+              (instr1 cs 'CHECKED-GLOBAL-SET index))))))
 
 (define (generate-apply cs m)
   (if (memq 'prim (vector-ref m 1))
@@ -914,69 +952,94 @@
 ;; bytecode instructions
 (define *opcodes*
   ;; basic VM instructions
-  '((LOAD-NIL       . 1)
-    (LOAD-FALSE     . 2)
-    (LOAD-TRUE      . 3)
-    (LOAD-ZERO      . 4)
-    (LOAD-ONE       . 5)
-    (LOAD-FIXNUM    . 6)
-    (LOAD-CHAR      . 7)
-    (PUSH           . 8)
-    (LOAD0          . 9)
-    (LOAD1          . 10)
-    (LOAD2          . 11)
-    (LOAD3          . 12)
-    (LOAD           . 13)
-    (MAKE-CLOSURE   . 14)
-    (CALL           . 15)
-    (RETURN         . 16)
-    (JMP-IF         . 17)
-    (JMP            . 18)
-    (LOAD-FREE      . 19)
-    (SAVE-CONT      . 20)
-    (REST-CONT      . 21)
-    (ASSIGN         . 22)
-    (ASSIGN-FREE    . 23)
-    (BOX            . 24)
-    (OPEN-BOX       . 25)
-    (FRAME          . 26)
-    (TAIL-CALL      . 27)
-    (HALT           . 28)
-    (LOAD-LOCAL     . 29)
-    (INSERT-BOX     . 30)
-    (ASSIGN-LOCAL   . 31)
-    (POP            . 32)
+  '((LOAD-NIL           . 1)
+    (LOAD-FALSE         . 2)
+    (LOAD-TRUE          . 3)
+    (LOAD-ZERO          . 4)
+    (LOAD-ONE           . 5)
+    (LOAD-FIXNUM        . 6)
+    (LOAD-CHAR          . 7)
+    (PUSH               . 8)
+    (LOAD0              . 9)
+    (LOAD1              . 10)
+    (LOAD2              . 11)
+    (LOAD3              . 12)
+    (LOAD               . 13)
+    (MAKE-CLOSURE       . 14)
+    (CALL               . 15)
+    (RETURN             . 16)
+    (JMP-IF             . 17)
+    (JMP                . 18)
+    (LOAD-FREE          . 19)
+    (SAVE-CONT          . 20)
+    (REST-CONT          . 21)
+    (ASSIGN             . 22)
+    (ASSIGN-FREE        . 23)
+    (BOX                . 24)
+    (OPEN-BOX           . 25)
+    (FRAME              . 26)
+    (TAIL-CALL          . 27)
+    (HALT               . 28)
+    (LOAD-LOCAL         . 29)
+    (INSERT-BOX         . 30)
+    (ASSIGN-LOCAL       . 31)
+    (POP                . 32)
+    (GLOBAL-REF         . 33)
+    (CHECKED-GLOBAL-REF . 34)
+    (GLOBAL-SET         . 35)
+    (CHECKED-GLOBAL-SET . 36)
 
     ;; type predicates
-    (NULL-P         . 81)
-    (BOOL-P         . 82)
-    (CHAR-P         . 83)
-    (FIXNUM-P       . 84)
+    (NULL-P             . 81)
+    (BOOL-P             . 82)
+    (CHAR-P             . 83)
+    (FIXNUM-P           . 84)
 
     ;; primitives optimised as instructions
-    (INC            . 101)
-    (DEC            . 102)
-    (FIXNUM-TO-CHAR . 103)
-    (CHAR-TO-FIXNUM . 104)
-    (ZERO-P         . 105)
-    (NOT            . 106)
-    (PLUS           . 107)
-    (MINUS          . 108)
-    (MULT           . 109)
-    (CONS           . 110)
-    (CAR            . 111)
-    (CDR            . 112)))
+    (INC                . 101)
+    (DEC                . 102)
+    (FIXNUM-TO-CHAR     . 103)
+    (CHAR-TO-FIXNUM     . 104)
+    (ZERO-P             . 105)
+    (NOT                . 106)
+    (PLUS               . 107)
+    (MINUS              . 108)
+    (MULT               . 109)
+    (CONS               . 110)
+    (CAR                . 111)
+    (CDR                . 112)))
 
 (define (make-compiler-state)
   (vector
+   '()                        ;; globals
+   '()                        ;; constants
    0                          ;; Index of next instruction
    (make-vector 32 0)))       ;; code vector
 
 (define (code-capacity cs)
-  (vector-length (vector-ref cs 1)))
+  (vector-length (vector-ref cs 3)))
 
 (define (code-size cs)
-  (vector-ref cs 0))
+  (vector-ref cs 2))
+
+(define (instr cs op)
+  (add-to-code! cs (vector op #f)))
+
+(define (instr1 cs op arg)
+  (add-to-code! cs (vector op arg)))
+
+;; used by code that need to patch previously emitted
+;; instructions
+(define (patch-instr! cs i arg)
+  (vector-set! (vector-ref (vector-ref cs 3) i) 1 arg))
+
+(define (install-global! cs var)
+  (let* ((globals (vector-ref cs 0))
+         (index (index-of var globals)))
+    (or index
+        (let ((new-index (length globals)))
+          (vector-set! cs 0 (append globals (list var)))
+          new-index))))
 
 (define (write-fixnum x)
   (let* ((b4 (quotient  x  16777216))
@@ -996,7 +1059,7 @@
 
 (define (write-code-vector cs)
   (display "#( ")
-  (let ((code (vector-ref cs 1))
+  (let ((code (vector-ref cs 3))
 	(code-size (code-size cs)))
     (let loop ((i 0))
       (if (= i code-size)
@@ -1010,39 +1073,22 @@
 	    (loop (+ i 1)))))))
 
 (define (extend-code-vector! cs)
-  (let* ((len (vector-length (vector-ref cs 1)))
+  (let* ((len (vector-length (vector-ref cs 3)))
          (new-len (round (/ (* 3 len) 2)))
          (new-vec (make-vector new-len 0)))
     (let loop ((i 0))
       (if (= i len)
-          (vector-set! cs 1 new-vec)
+          (vector-set! cs 3 new-vec)
           (begin
-            (vector-set! new-vec i (vector-ref (vector-ref cs 1) i))
+            (vector-set! new-vec i (vector-ref (vector-ref cs 3) i))
             (loop (+ i 1)))))))
 
 (define (add-to-code! cs instr)
   (let ((i (code-size cs)))
     (and (= i (code-capacity cs))
          (extend-code-vector! cs))
-    (vector-set! cs 0 (+ i 1))
-    (vector-set! (vector-ref cs 1) i instr)))
-
-(define (instr cs op)
-  (add-to-code! cs (vector op #f)))
-
-(define (instr1 cs op arg)
-  (add-to-code! cs (vector op arg)))
-
-;; used by code that need to patch previously emitted
-;; instructions
-(define (patch-instr! cs i arg)
-  (vector-set! (vector-ref (vector-ref cs 1) i) 1 arg))
-
-(define (immediate? x)
-  (or (char? x)
-      (boolean? x)
-      (integer? x)
-      (null? x)))
+    (vector-set! cs 2 (+ i 1))
+    (vector-set! (vector-ref cs 3) i instr)))
 
 ;; emit code for immediate values
 (define (emit-immediate cs x)
@@ -1121,4 +1167,14 @@
       #f
       (or (pred (car coll))
           (any? pred (cdr coll)))))
+
+(define (filter pred coll)
+  (let loop ((ret '())
+             (coll coll))
+    (if (null? coll)
+        (reverse ret)
+        (let ((a (car coll)))
+          (if (pred a)
+              (loop (cons a ret) (cdr coll))
+              (loop ret (cdr coll)))))))
 

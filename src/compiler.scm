@@ -28,7 +28,7 @@
         (compile cs e)))))
 
 (define (compile cs e)
-  (let* ((t (simplify e #t))
+  (let* ((t (simplify e))
          (m (meaning t '() #t))
          (b (flag-boxes m))
          (u (update-lexical-addresses b)))
@@ -41,7 +41,7 @@
 ;;
 
 ;; Transforms derived syntax into primitive syntax
-(define (simplify exp top?)
+(define (simplify exp)
   (if (pair? exp)
       (let ((op (car exp)))
 	(case op
@@ -66,9 +66,7 @@
 	  ((letrec)
 	   (simplify-letrec exp))
 	  (else
-	   (map (lambda (e)
-                  (simplify e #f))
-                exp))))
+	   (map simplify exp))))
       exp))
 
 ;; Transform 'and' into series of 'ifs'
@@ -76,21 +74,20 @@
   (let ((exps (cdr exp)))
     (if (null? exps)
 	'#t
-	(let ((test (simplify (car exps) #f))
+	(let ((test (simplify (car exps)))
 	      (rest (cdr exps)))
 	  (if (null? rest)
 	      (let ((var (gensym)))
 		(simplify
 		 (list 'let (list (list var test))
-		       (list 'if var var '#f))
-                 #f))
-	      (list 'if test (simplify (cons 'and rest) #f) '#f))))))
+		       (list 'if var var '#f))))
+	      (list 'if test (simplify (cons 'and rest)) '#f))))))
 
 (define (simplify-or exp)
   (let ((exps (cdr exp)))
     (if (null? exps)
 	'#f
-	(let ((test (simplify (car exps) #f))
+	(let ((test (simplify (car exps)))
 	      (rest (cdr exps)))
 	  (if (null? rest)
 	      test
@@ -114,7 +111,7 @@
 	    code)
 	(let ((clause (car clauses)))
 	  (if (pair? clause)
-	      (let ((test (simplify (car clause) #f))
+	      (let ((test (simplify (car clause)))
 		    (body (simplify-sequence (cdr clause))))
 		(if (eqv? test 'else)
 		    (if last?
@@ -138,7 +135,7 @@
          ((symbol? definee)
           (cons 'define
                 (cons definee
-                      (simplify body #f))))
+                      (simplify body))))
          ((pair? definee)
           (if (and (not (null? definee))
                    (all? symbol? definee))
@@ -149,8 +146,7 @@
                       (simplify
                        (cons 'lambda
                              (cons args
-                                   body))
-                             #f)))
+                                   body)))))
               (error "ill-formed 'define'" exp)))
          (else
           (error "ill-formed 'define'" exp))))
@@ -178,7 +174,7 @@
 	  (cons (simplify-lambda (cons 'lambda (cons vars body))) args)
 	  (let ((binding (car bindings)))
 	    (let ((var (car binding))
-		  (arg (simplify (cadr binding) #f)))
+		  (arg (simplify (cadr binding))))
 	      (if (symbol? var)
 		  (loop (cons var vars)
 			(cons arg args)
@@ -195,12 +191,10 @@
 	      (rest (cdr bindings)))
 	  (if (null? rest)
 	      (simplify (cons 'let
-                              (cons bindings body))
-                        #f)
+                              (cons bindings body)))
 	      (simplify (list 'let
                               (list first)
-                              (cons 'let* (cons rest body)))
-                        #f))))))
+                              (cons 'let* (cons rest body)))))))))
 
 ;; Transform 'letrec' into 'lambda' plus assignments
 (define (simplify-letrec exp)
@@ -210,13 +204,12 @@
 	(cons 'begin body)
 	(let loop ((vars '())
 		   (mocks '())
-		   (body (simplify body #f))
 		   (bindings bindings))
 	  (if (null? bindings)
-	      (cons (cons 'lambda (cons vars body)) mocks)
+	      (cons (simplify (cons 'lambda (cons vars body))) mocks)
 	      (let ((binding (car bindings)))
 		(let ((var (car binding))
-		      (exp (simplify (cadr binding) #f)))
+		      (exp (simplify (cadr binding))))
 		  (loop (cons var vars)
 			(cons '#f mocks)
 			(cons (list 'set! var exp) body)
@@ -235,8 +228,7 @@
 	   (list 'letrec (list (list name
 				     (cons 'lambda
 					   (cons vars body))))
-		 (cons name exps))
-           #f)
+		 (cons name exps)))
 	  (let ((binding (car bindings)))
 	    (let ((var (car binding))
 		  (exp (cadr binding)))
@@ -248,8 +240,8 @@
 
 (define (simplify-sequence exps)
   (if (null? (cdr exps))
-      (simplify (car exps) #f)
-      (cons 'begin (simplify exps #f))))
+      (simplify (car exps))
+      (cons 'begin (simplify exps))))
 
 ;;
 ;; transforms expressions into a syntax tree,

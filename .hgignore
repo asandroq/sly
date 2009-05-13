@@ -1,0 +1,5 @@
+syntax: regexp
+
+^src/duna$
+^src/.+\.o$
+^src/.+\.fasl$

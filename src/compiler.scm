@@ -204,6 +204,7 @@
 	(cons 'begin body)
 	(let loop ((vars '())
 		   (mocks '())
+                   (body body)
 		   (bindings bindings))
 	  (if (null? bindings)
 	      (cons (simplify (cons 'lambda (cons vars body))) mocks)
@@ -239,9 +240,35 @@
 		  (error "Ill-formed 'named let'" exp))))))))
 
 (define (simplify-sequence exps)
-  (if (null? (cdr exps))
-      (simplify (car exps))
-      (cons 'begin (simplify exps))))
+
+  (define (def? e)
+    (and (pair? e)
+         (eq? (car e) 'define)))
+
+  (define (rest defs body)
+    (cond
+     ((any? def? body)
+      (error "internal defines must come first" exps))
+     ((null? defs)
+      (if (null? (cdr body))
+          (simplify (car body))
+          (cons 'begin (simplify body))))
+     (else
+      (let ((vars (map cadr defs))
+            (exps (map caddr defs)))
+        (simplify (cons 'letrec
+                        (cons (map list vars exps)
+                              body)))))))
+
+  ;; gather internal defines
+  (let loop ((defs '())
+             (es exps))
+    (if (null? es)
+        (error "empty sequence" exps)
+        (let ((e (car es)))
+          (if (def? e)
+              (loop (cons e defs) (cdr es))
+              (rest (map simplify-define (reverse defs)) es))))))
 
 ;;
 ;; transforms expressions into a syntax tree,
@@ -1088,4 +1115,10 @@
       #t
       (and (pred (car coll))
            (all? pred (cdr coll)))))
+
+(define (any? pred coll)
+  (if (null? coll)
+      #f
+      (or (pred (car coll))
+          (any? pred (cdr coll)))))
 

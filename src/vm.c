@@ -1082,10 +1082,30 @@ int duna_vm_run(duna_State* D)
       D->sp -= dw1;
       break;
 
-    case DUNA_OP_CALL:
+    case DUNA_OP_TAIL_CALL:
       /*
-       * setting frame pointer
+       * the arguments to the callee must be shifted down
+       * removing the arguments of the caller
        */
+      /* number of arguments newly pushed */
+      dw1 = (D->stack[D->sp-1]).value.fixnum;
+
+      /* number of arguments of old procedure */
+      dw2 = (D->stack[D->fp]).value.fixnum;
+
+      /* where to copy the new values */
+      i = D->fp - dw2;
+
+      /* where the values will be copied from */
+      j = D->sp - dw1 - 1;
+
+      D->sp = i + dw1 + 1;
+      memcpy(D->stack+i, D->stack+j, (dw1+1) * sizeof(duna_Object));
+
+      /* fall through */
+
+    case DUNA_OP_CALL:
+      /* frame pointer */
       D->fp = D->sp - 1;
 
       /* setting current procedure */
@@ -1187,37 +1207,6 @@ int duna_vm_run(duna_State* D)
       /* pushing frame pointer */
       (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
       (D->stack[D->sp++]).value.fixnum = D->fp;
-      break;
-
-    case DUNA_OP_TAIL_CALL:
-      /*
-       * the arguments to the callee must be shifted down
-       * removing the arguments of the caller
-       */
-      /* number of arguments newly pushed */
-      dw1 = (D->stack[D->sp-1]).value.fixnum;
-
-      /* number of arguments of old procedure */
-      dw2 = (D->stack[D->fp]).value.fixnum;
-
-      /* where to copy the new values */
-      i = D->fp - dw2;
-
-      /* where the values will be copied from */
-      j = D->sp - dw1 - 1;
-      memcpy(D->stack+i, D->stack+j, (dw1+1) * sizeof(duna_Object));
-
-      /*
-       * setting stack and frame pointer
-       */
-      D->sp = i + dw1 + 1;
-      D->fp = D->sp - 1;
-      
-      /* setting current procedure */
-      D->proc = D->accum;
-      
-      /* jumping to closure body */
-      D->pc = ((duna_Closure*)D->proc.value.gc)->entry_point;
       break;
 
     case DUNA_OP_HALT:
@@ -1326,8 +1315,9 @@ static int get_fixnum(FILE* f, uint32_t *num)
 
 static int load_code_from_file(duna_State* D, const char* fname)
 {
+  int ret;
   FILE *f;
-  uint32_t pc;
+  uint32_t i, j, dw1, dw2, dw3, pc;
 
   /* opening input file */
   f = fopen(fname, "r");
@@ -1343,10 +1333,41 @@ static int load_code_from_file(duna_State* D, const char* fname)
 
   pc = D->code_size;
 
+  /* reading number of globals */
+  ret = get_fixnum(f, &dw1);
+  if(ret < 0) {
+    fclose(f);
+    return -1;
+  }
+
+  /* reading globals */
+  for(i = 0; i < dw1; i++) {
+    /* string size */
+    ret = get_fixnum(f, &dw2);
+    if(ret < 0) {
+      fclose(f);
+      return -1;
+    }
+
+    for(j = 0; j < dw2; j++) {
+      ret = get_fixnum(f, &dw3);
+      if(ret < 0) {
+	fclose(f);
+	return -1;
+      }
+    }
+  }
+
+  /* reading code size */
+  ret = get_fixnum(f, &dw1);
+  if(ret < 0) {
+    fclose(f);
+    return -1;
+  }
+
   /* reading actual code */
   while(1) {
-    int ret;
-    uint32_t instr, dw1;
+    uint32_t instr;
 
     ret = get_next(f, &instr);
     if(ret == -1) {

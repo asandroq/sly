@@ -1041,6 +1041,40 @@
           (vector-set! cs 0 (append globals (list var)))
           new-index))))
 
+(define (write-code-vector cs)
+
+  (define (write-global g)
+    (let* ((str (symbol->string g))
+           (len (string-length str)))
+      (write-fixnum len)
+      (let loop ((i 0))
+        (if (< i len)
+            (begin
+              (write-fixnum (char->integer (string-ref str i)))
+              (loop (+ i 1)))))))
+
+  (display "#( ")
+  (let ((globals (vector-ref cs 0))
+        (code (vector-ref cs 3))
+	(code-size (code-size cs)))
+    
+    ;; globals
+    (write-fixnum (length globals))
+    (for-each write-global globals)
+
+    ;; code
+    (write-fixnum code-size)
+    (let loop ((i 0))
+      (if (= i code-size)
+	  (display ")")
+	  (let ((instr (vector-ref code i)))
+	    (let ((op   (vector-ref instr 0))
+		  (arg1 (vector-ref instr 1)))
+	      (display (cdr (assv op *opcodes*)))
+	      (display " ")
+	      (and arg1 (write-fixnum arg1)))
+	    (loop (+ i 1)))))))
+
 (define (write-fixnum x)
   (let* ((b4 (quotient  x  16777216))
          (x4 (remainder x  16777216))
@@ -1056,21 +1090,6 @@
     (display " ")
     (display b4)
     (display " ")))
-
-(define (write-code-vector cs)
-  (display "#( ")
-  (let ((code (vector-ref cs 3))
-	(code-size (code-size cs)))
-    (let loop ((i 0))
-      (if (= i code-size)
-	  (display ")")
-	  (let ((instr (vector-ref code i)))
-	    (let ((op   (vector-ref instr 0))
-		  (arg1 (vector-ref instr 1)))
-	      (display (cdr (assv op *opcodes*)))
-	      (display " ")
-	      (if arg1 (write-fixnum arg1)))
-	    (loop (+ i 1)))))))
 
 (define (extend-code-vector! cs)
   (let* ((len (vector-length (vector-ref cs 3)))

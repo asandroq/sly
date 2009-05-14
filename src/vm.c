@@ -589,7 +589,7 @@ static duna_Continuation *alloc_continuation(duna_Store *S, uint32_t stack_size)
  * the virtual machine
  */
 
-/* an entry in a environment */
+/* an entry in an environment */
 struct duna_Env_Item_ {
   /* entry in the symbol table */
   duna_Symbol *symbol;
@@ -626,6 +626,12 @@ struct duna_State_ {
   /* the program counter */
   uint32_t pc;
 
+  /* accumulator register */
+  duna_Object accum;
+
+  /* the current procedure */
+  duna_Object proc;
+
   /* the bytecode to be interpreted */
   uint32_t *code;
 
@@ -635,11 +641,8 @@ struct duna_State_ {
   /* global environment */
   duna_Env_Item *global_env;
 
-  /* accumulator register */
-  duna_Object accum;
-
-  /* the current procedure */
-  duna_Object proc;
+  /* symbol table */
+  duna_Symbol *symbol_table;
 
   /* VM memory */
   duna_Store store;
@@ -755,6 +758,8 @@ duna_State* duna_init(void)
   D->sp = 4;
   D->fp = 3;
 
+  D->symbol_table = NULL;
+
   /* globals */
   D->global_env = NULL;
   D->global_env_size = 0;
@@ -772,14 +777,48 @@ void duna_close(duna_State* D)
 {
   if(D) {
     finish_store(&D->store);
+
     if(D->code) {
       free(D->code);
     }
+
     if(D->stack) {
       free(D->stack);
     }
+
+    if(D->symbol_table) {
+      duna_Symbol *sym;
+      for(sym = D->symbol_table; sym != NULL;) {
+	duna_Symbol *tmp = sym->next;
+	free(sym->str);
+	free(sym);
+	sym = tmp;
+      }
+    }
+
     free(D);
   }
+}
+
+static duna_Symbol* duna_add_symbol(duna_State* D, uint8_t *str)
+{
+  duna_Symbol *tmp;
+
+  /* is the symbol already there? */
+  for(tmp = D->symbol_table; tmp != NULL; tmp = tmp->next) {
+    if(strcmp(str, tmp->str) == 0) {
+      free(str);
+      return tmp;
+    }
+  }
+
+  /* adding new symbol */
+  tmp = (duna_Symbol*)malloc(sizeof(duna_Symbol));
+  tmp->str = str;
+  tmp->next = D->symbol_table;
+  D->symbol_table = tmp;
+
+  return tmp;
 }
 
 /*
@@ -1342,6 +1381,7 @@ static int load_code_from_file(duna_State* D, const char* fname)
 
   /* reading globals */
   for(i = 0; i < dw1; i++) {
+
     /* string size */
     ret = get_fixnum(f, &dw2);
     if(ret < 0) {

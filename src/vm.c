@@ -109,6 +109,9 @@ typedef unsigned int  uint32_t;
 #define DUNA_OP_CONS                  110
 #define DUNA_OP_CAR                   111
 #define DUNA_OP_CDR                   112
+#define DUNA_OP_NUM_EQ                113
+#define DUNA_OP_EQ                    114
+#define DUNA_OP_EQV                   115
 
 /*
  * data types tags
@@ -208,6 +211,9 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_CONS,              "CONS"},
   {DUNA_OP_CAR,               "CAR"},
   {DUNA_OP_CDR,               "CDR"},
+  {DUNA_OP_NUM_EQ,            "NUM-EQ"},
+  {DUNA_OP_EQ,                "EQ?"},
+  {DUNA_OP_EQV,               "EQV?"},
   {0, NULL}
 };
 
@@ -393,7 +399,7 @@ static uint32_t sizeof_gcobj(duna_GCObject* obj)
     break;
   default:
     size = 0;
-  };
+  }
 
   return size;
 }
@@ -478,7 +484,7 @@ static void collect_garbage(duna_Store* S)
     case DUNA_TYPE_BOX:
       copy_object(S, &((duna_Box*)gcobj)->value);
       break;
-    };
+    }
 
     scan += size;
   }
@@ -629,9 +635,6 @@ struct duna_State_ {
   /* the size of the bytecode vector used */
   uint32_t code_size;
 
-  /* the total capacity of the bytecode vector */
-  uint32_t code_capacity;
-
   /* stack allocated size */
   uint32_t stack_size;
 
@@ -743,10 +746,8 @@ duna_State* duna_init(void)
 
   /* code */
   D->code_size = 0;
-  D->code = (uint32_t*)malloc(sizeof(uint32_t) * 8192);
-  if(D->code) {
-    D->code_capacity = 8192;
-  } else {
+  D->code = (uint32_t*)malloc(sizeof(uint32_t));
+  if(D->code == NULL) {
     free(D);
     return NULL;
   }
@@ -767,8 +768,7 @@ duna_State* duna_init(void)
   /* initial frame on stack with address of halt instruction */
   (D->stack[0]).type = DUNA_TYPE_FIXNUM;
   (D->stack[0]).value.fixnum = 0;
-  (D->stack[1]).type = DUNA_TYPE_BOOL;
-  (D->stack[1]).value.bool = 0;
+  (D->stack[1]).type = DUNA_TYPE_UNDEF;
   (D->stack[2]).type = DUNA_TYPE_FIXNUM;
   (D->stack[2]).value.fixnum = 0;
   (D->stack[3]).type = DUNA_TYPE_FIXNUM;
@@ -1351,6 +1351,23 @@ int duna_vm_run(duna_State* D)
     case DUNA_OP_CDR:
       D->accum = ((duna_Pair*)D->accum.value.gc)->cdr;
       break;
+
+    case DUNA_OP_NUM_EQ:
+      /* TODO: throw error if args are not numbers */
+      DUNA_SET_BOOL(D->accum.value.fixnum == D->stack[--D->sp].value.fixnum);
+      break;
+
+    case DUNA_OP_EQ:
+      DUNA_SET_BOOL(D->accum.type == D->stack[D->sp-1].type &&
+		    D->accum.value.symbol == D->stack[D->sp-1].value.symbol);
+      --D->sp;
+      break;
+
+    case DUNA_OP_EQV:
+      DUNA_SET_BOOL(D->accum.type == D->stack[D->sp-1].type &&
+		    D->accum.value.symbol == D->stack[D->sp-1].value.symbol);
+      --D->sp;
+      break;
     }
   }
 
@@ -1471,7 +1488,7 @@ static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
       dw = env.vars[dw].value.value.fixnum;
       instr = ((uint32_t)op) | dw << 8;
       break;
-    };
+    }
 
     D->code[growth+i] = instr;
   }

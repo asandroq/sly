@@ -1007,7 +1007,10 @@
     (MULT               . 109)
     (CONS               . 110)
     (CAR                . 111)
-    (CDR                . 112)))
+    (CDR                . 112)
+    (NUM-EQ             . 113)
+    (EQ                 . 114)
+    (EQV                . 115)))
 
 (define (make-compiler-state)
   (vector
@@ -1147,7 +1150,10 @@
     (* MULT 2)
     (cons CONS 2)
     (car CAR 1)
-    (cdr CDR 1)))
+    (cdr CDR 1)
+    (= NUM-EQ 2)
+    (eq? EQ 2)
+    (eqv? EQV 2)))
 
 ;;
 ;; Utilities

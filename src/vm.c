@@ -53,87 +53,96 @@ typedef unsigned int  uint32_t;
  */
 
 /* basic VM instructions */
-#define DUNA_OP_LOAD_NIL          1
-#define DUNA_OP_LOAD_FALSE        2
-#define DUNA_OP_LOAD_TRUE         3
-#define DUNA_OP_LOAD_ZERO         4
-#define DUNA_OP_LOAD_ONE          5
-#define DUNA_OP_LOAD_FIXNUM       6
-#define DUNA_OP_LOAD_CHAR         7
-#define DUNA_OP_PUSH              8
-#define DUNA_OP_LOAD_0            9
-#define DUNA_OP_LOAD_1           10
-#define DUNA_OP_LOAD_2           11
-#define DUNA_OP_LOAD_3           12
-#define DUNA_OP_LOAD             13
-#define DUNA_OP_MAKE_CLOSURE     14
-#define DUNA_OP_CALL             15
-#define DUNA_OP_RETURN           16
-#define DUNA_OP_JMP_IF           17
-#define DUNA_OP_JMP              18
-#define DUNA_OP_LOAD_FREE        19
-#define DUNA_OP_SAVE_CONT        20
-#define DUNA_OP_REST_CONT        21
-#define DUNA_OP_ASSIGN           22
-#define DUNA_OP_ASSIGN_FREE      23
-#define DUNA_OP_BOX              24
-#define DUNA_OP_OPEN_BOX         25
-#define DUNA_OP_FRAME            26
-#define DUNA_OP_TAIL_CALL        27
-#define DUNA_OP_HALT             28
-#define DUNA_OP_LOAD_LOCAL       29
-#define DUNA_OP_INSERT_BOX       30
-#define DUNA_OP_ASSIGN_LOCAL     31
-#define DUNA_OP_POP              32
+#define DUNA_OP_LOAD_NIL                1
+#define DUNA_OP_LOAD_FALSE              2
+#define DUNA_OP_LOAD_TRUE               3
+#define DUNA_OP_LOAD_ZERO               4
+#define DUNA_OP_LOAD_ONE                5
+#define DUNA_OP_LOAD_FIXNUM             6
+#define DUNA_OP_LOAD_CHAR               7
+#define DUNA_OP_PUSH                    8
+#define DUNA_OP_LOAD_0                  9
+#define DUNA_OP_LOAD_1                 10
+#define DUNA_OP_LOAD_2                 11
+#define DUNA_OP_LOAD_3                 12
+#define DUNA_OP_LOAD                   13
+#define DUNA_OP_MAKE_CLOSURE           14
+#define DUNA_OP_CALL                   15
+#define DUNA_OP_RETURN                 16
+#define DUNA_OP_JMP_IF                 17
+#define DUNA_OP_JMP                    18
+#define DUNA_OP_LOAD_FREE              19
+#define DUNA_OP_SAVE_CONT              20
+#define DUNA_OP_REST_CONT              21
+#define DUNA_OP_ASSIGN                 22
+#define DUNA_OP_ASSIGN_FREE            23
+#define DUNA_OP_BOX                    24
+#define DUNA_OP_OPEN_BOX               25
+#define DUNA_OP_FRAME                  26
+#define DUNA_OP_TAIL_CALL              27
+#define DUNA_OP_HALT                   28
+#define DUNA_OP_LOAD_LOCAL             29
+#define DUNA_OP_INSERT_BOX             30
+#define DUNA_OP_ASSIGN_LOCAL           31
+#define DUNA_OP_POP                    32
+#define DUNA_OP_GLOBAL_REF             33
+#define DUNA_OP_CHECKED_GLOBAL_REF     34
+#define DUNA_OP_GLOBAL_SET             35
+#define DUNA_OP_CHECKED_GLOBAL_SET     36
 
 /* type predicates */
-#define DUNA_OP_NULL_P           81
-#define DUNA_OP_BOOL_P           82
-#define DUNA_OP_CHAR_P           83
-#define DUNA_OP_FIXNUM_P         84
+#define DUNA_OP_NULL_P                 81
+#define DUNA_OP_BOOL_P                 82
+#define DUNA_OP_CHAR_P                 83
+#define DUNA_OP_FIXNUM_P               84
 
 /* primitives optimised as instructions */
-#define DUNA_OP_INC              101
-#define DUNA_OP_DEC              102
-#define DUNA_OP_FIXNUM_TO_CHAR   103
-#define DUNA_OP_CHAR_TO_FIXNUM   104
-#define DUNA_OP_ZERO_P           105
-#define DUNA_OP_NOT              106
-#define DUNA_OP_PLUS             107
-#define DUNA_OP_MINUS            108
-#define DUNA_OP_MULT             109
-#define DUNA_OP_CONS             110
-#define DUNA_OP_CAR              111
-#define DUNA_OP_CDR              112
+#define DUNA_OP_INC                   101
+#define DUNA_OP_DEC                   102
+#define DUNA_OP_FIXNUM_TO_CHAR        103
+#define DUNA_OP_CHAR_TO_FIXNUM        104
+#define DUNA_OP_ZERO_P                105
+#define DUNA_OP_NOT                   106
+#define DUNA_OP_PLUS                  107
+#define DUNA_OP_MINUS                 108
+#define DUNA_OP_MULT                  109
+#define DUNA_OP_CONS                  110
+#define DUNA_OP_CAR                   111
+#define DUNA_OP_CDR                   112
 
 /*
  * data types tags
  */
-#define DUNA_TYPE_NIL            1
-#define DUNA_TYPE_BOOL           2
-#define DUNA_TYPE_FIXNUM         3
-#define DUNA_TYPE_CHAR           4
-#define DUNA_TYPE_SYMBOL         5
-#define DUNA_TYPE_CLOSURE        6
-#define DUNA_TYPE_PAIR           7
-#define DUNA_TYPE_CONTINUATION   8
-#define DUNA_TYPE_BOX            9
+#define DUNA_TYPE_UNDEF                 1
+#define DUNA_TYPE_NIL                   2
+#define DUNA_TYPE_BOOL                  3
+#define DUNA_TYPE_FIXNUM                4
+#define DUNA_TYPE_CHAR                  5
+#define DUNA_TYPE_SYMBOL                6
+#define DUNA_TYPE_CLOSURE               7
+#define DUNA_TYPE_PAIR                  8
+#define DUNA_TYPE_CONTINUATION          9
+#define DUNA_TYPE_BOX                  10
 
 #define IS_TYPE_B(instr) \
-   ((instr) == DUNA_OP_LOAD_FIXNUM ||  \
-    (instr) == DUNA_OP_LOAD_CHAR ||    \
-    (instr) == DUNA_OP_MAKE_CLOSURE || \
-    (instr) == DUNA_OP_JMP_IF ||       \
-    (instr) == DUNA_OP_JMP ||          \
-    (instr) == DUNA_OP_LOAD_FREE ||    \
-    (instr) == DUNA_OP_ASSIGN_FREE ||  \
-    (instr) == DUNA_OP_FRAME ||        \
-    (instr) == DUNA_OP_INSERT_BOX ||   \
-    (instr) == DUNA_OP_ASSIGN_LOCAL || \
-    (instr) == DUNA_OP_LOAD ||         \
-    (instr) == DUNA_OP_ASSIGN ||       \
-    (instr) == DUNA_OP_LOAD_LOCAL ||   \
-    (instr) == DUNA_OP_POP)
+   ((instr) == DUNA_OP_LOAD_FIXNUM ||            \
+    (instr) == DUNA_OP_LOAD_CHAR ||              \
+    (instr) == DUNA_OP_MAKE_CLOSURE ||           \
+    (instr) == DUNA_OP_JMP_IF ||                 \
+    (instr) == DUNA_OP_JMP ||                    \
+    (instr) == DUNA_OP_LOAD_FREE ||              \
+    (instr) == DUNA_OP_ASSIGN_FREE ||            \
+    (instr) == DUNA_OP_FRAME ||                  \
+    (instr) == DUNA_OP_INSERT_BOX ||             \
+    (instr) == DUNA_OP_ASSIGN_LOCAL ||           \
+    (instr) == DUNA_OP_LOAD ||                   \
+    (instr) == DUNA_OP_ASSIGN ||                 \
+    (instr) == DUNA_OP_LOAD_LOCAL ||             \
+    (instr) == DUNA_OP_POP ||                    \
+    (instr) == DUNA_OP_GLOBAL_REF ||             \
+    (instr) == DUNA_OP_CHECKED_GLOBAL_REF ||     \
+    (instr) == DUNA_OP_GLOBAL_SET ||             \
+    (instr) == DUNA_OP_CHECKED_GLOBAL_SET)
 
 #define EXTRACT_OP(instr)   ((uint8_t)((instr) & 0x000000ff))
 #define EXTRACT_ARG(instr)  ((uint32_t)((instr) >> 8))
@@ -179,6 +188,10 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_INSERT_BOX,        "INSERT-BOX"},
   {DUNA_OP_ASSIGN_LOCAL,      "ASSIGN-LOCAL"},
   {DUNA_OP_POP,               "POP"},
+  {DUNA_OP_GLOBAL_REF,             "GLOBAL-REF"},
+  {DUNA_OP_CHECKED_GLOBAL_REF,     "CHECKED-GLOBAL-REF"},
+  {DUNA_OP_GLOBAL_SET,             "GLOBAL-SET"},
+  {DUNA_OP_CHECKED_GLOBAL_SET,     "CHECKED-GLOBAL-SET"},
   {DUNA_OP_NULL_P,            "NULL?"},
   {DUNA_OP_BOOL_P,            "BOOL?"},
   {DUNA_OP_CHAR_P,            "CHAR?"},
@@ -589,8 +602,12 @@ static duna_Continuation *alloc_continuation(duna_Store *S, uint32_t stack_size)
  * the virtual machine
  */
 
+typedef struct duna_Env_ duna_Env;
+typedef struct duna_Env_Var_ duna_Env_Var;
+
 /* an entry in an environment */
-struct duna_Env_Item_ {
+struct duna_Env_Var_ {
+
   /* entry in the symbol table */
   duna_Symbol *symbol;
 
@@ -598,7 +615,11 @@ struct duna_Env_Item_ {
   duna_Object value;
 };
 
-typedef struct duna_Env_Item_ duna_Env_Item;
+/* a global environment */
+struct duna_Env_ {
+  uint32_t size;
+  duna_Env_Var *vars;
+};
 
 /* the state of the Duna interpreter */
 typedef struct duna_State_ duna_State;
@@ -613,9 +634,6 @@ struct duna_State_ {
 
   /* stack allocated size */
   uint32_t stack_size;
-
-  /* size of global environment */
-  uint32_t global_env_size;
 
   /* where is the top of the stack */
   uint32_t sp;
@@ -632,14 +650,14 @@ struct duna_State_ {
   /* the current procedure */
   duna_Object proc;
 
+  /* global environment */
+  duna_Env global_env;
+
   /* the bytecode to be interpreted */
   uint32_t *code;
 
   /* the machine stack */
   duna_Object *stack;
-
-  /* global environment */
-  duna_Env_Item *global_env;
 
   /* symbol table */
   duna_Symbol *symbol_table;
@@ -675,12 +693,12 @@ static duna_Object* gc_callback(void *ud)
       }
     } else if(gc_data->state == 1) {
       /* globals */
-      if(gc_data->count == gc_data->D->global_env_size) {
+      if(gc_data->count == gc_data->D->global_env.size) {
 	gc_data->state++;
 	gc_data->count = 0;
 	continue;
       } else {
-	return &gc_data->D->global_env[gc_data->count++].value;
+	return &gc_data->D->global_env.vars[gc_data->count++].value;
       }
     } else if(gc_data->state == 2) {
       /* registers */
@@ -761,14 +779,12 @@ duna_State* duna_init(void)
   D->symbol_table = NULL;
 
   /* globals */
-  D->global_env = NULL;
-  D->global_env_size = 0;
+  D->global_env.size = 0;
+  D->global_env.vars = NULL;
 
-  /* current procedure */
-  D->proc.type = DUNA_TYPE_BOOL;
-  D->proc.value.bool = 0;
-
-  D->accum.type = DUNA_TYPE_NIL;
+  /* registers */
+  D->proc.type = DUNA_TYPE_UNDEF;
+  D->accum.type = DUNA_TYPE_UNDEF;
 
   return D;
 }
@@ -800,25 +816,31 @@ void duna_close(duna_State* D)
   }
 }
 
-static duna_Symbol* duna_add_symbol(duna_State* D, uint8_t *str)
+static duna_Object duna_make_symbol(duna_State* D, uint8_t *str)
 {
+  duna_Object obj;
   duna_Symbol *tmp;
 
   /* is the symbol already there? */
   for(tmp = D->symbol_table; tmp != NULL; tmp = tmp->next) {
     if(strcmp(str, tmp->str) == 0) {
       free(str);
-      return tmp;
+      break;
     }
   }
 
-  /* adding new symbol */
-  tmp = (duna_Symbol*)malloc(sizeof(duna_Symbol));
-  tmp->str = str;
-  tmp->next = D->symbol_table;
-  D->symbol_table = tmp;
+  if(tmp == NULL) {
+    /* adding new symbol */
+    tmp = (duna_Symbol*)malloc(sizeof(duna_Symbol));
+    tmp->str = str;
+    tmp->next = D->symbol_table;
+    D->symbol_table = tmp;
+  }
 
-  return tmp;
+  obj.type = DUNA_TYPE_SYMBOL;
+  obj.value.symbol = tmp;
+
+  return obj;
 }
 
 /*
@@ -828,9 +850,15 @@ static duna_Symbol* duna_add_symbol(duna_State* D, uint8_t *str)
 static void write_obj(duna_Object* obj)
 {
   switch(obj->type) {
+
+  case DUNA_TYPE_UNDEF:
+    printf("<#undefined>");
+    break;
+
   case DUNA_TYPE_NIL:
     printf("()");
     break;
+
   case DUNA_TYPE_BOOL:
     if(obj->value.bool) {
       printf("#t");
@@ -838,18 +866,23 @@ static void write_obj(duna_Object* obj)
       printf("#f");
     }
     break;
+
   case DUNA_TYPE_FIXNUM:
     printf("%d", obj->value.fixnum);
     break;
+
   case DUNA_TYPE_CHAR:
     printf("#\\%c", obj->value.chr);
     break;
+
   case DUNA_TYPE_SYMBOL:
     printf("%s", obj->value.symbol->str);
     break;
+
   case DUNA_TYPE_CLOSURE:
     printf("<#closure %u>", ((duna_Closure*)obj->value.gc)->entry_point);
     break;
+
   case DUNA_TYPE_PAIR:
     printf("(");
     write_obj(&(((duna_Pair*)obj->value.gc)->car));
@@ -857,13 +890,16 @@ static void write_obj(duna_Object* obj)
     write_obj(&(((duna_Pair*)obj->value.gc)->cdr));
     printf(")");
     break;
+
   case DUNA_TYPE_CONTINUATION:
     printf("<#continuation %u>", ((duna_Continuation*)obj->value.gc)->size);
     break;
+
   case DUNA_TYPE_BOX:
     printf("#&");
     write_obj(&(((duna_Box*)obj->value.gc)->value));
     break;
+
   default:
     printf("Unknown type!");
   }
@@ -1278,6 +1314,26 @@ int duna_vm_run(duna_State* D)
       D->sp -= EXTRACT_ARG(instr);
       break;
 
+    case DUNA_OP_CHECKED_GLOBAL_REF:
+      if(D->global_env.vars[EXTRACT_ARG(instr)].value.type == DUNA_TYPE_UNDEF) {
+	/* throw error */
+      }
+      /* fall through */
+
+    case DUNA_OP_GLOBAL_REF:
+      D->accum = D->global_env.vars[EXTRACT_ARG(instr)].value;
+      break;
+
+    case DUNA_OP_CHECKED_GLOBAL_SET:
+      if(D->global_env.vars[EXTRACT_ARG(instr)].value.type == DUNA_TYPE_UNDEF) {
+	/* throw error */
+      }
+      /* fall through */
+
+    case DUNA_OP_GLOBAL_SET:
+      D->global_env.vars[EXTRACT_ARG(instr)].value = D->accum;
+      break;
+
     case DUNA_OP_CONS:
       tmp.type = DUNA_TYPE_PAIR;
       tmp.value.gc = (duna_GCObject*) alloc_pair(&D->store);
@@ -1305,21 +1361,133 @@ int duna_vm_run(duna_State* D)
  * loading
  */
 
+typedef struct duna_Module_ duna_Module;
+
+struct duna_Module_ {
+
+  /* uninterned globals */
+  uint8_t **globals;
+  uint32_t nr_globals;
+
+  /* code */
+  uint32_t *code, code_size;
+};
+
+static void duna_destroy_module(duna_Module *M)
+{
+  uint32_t i;
+
+  free(M->code);
+
+  for(i = 0; i < M->nr_globals; i++) {
+    if(M->globals[i]) {
+      free(M->globals[i]);
+    }
+  }
+  free(M->globals);
+}
+
+static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
+{
+  duna_Env env;
+  duna_Object obj;
+  duna_Env_Var *vars;
+  uint32_t *code;
+  uint32_t i, j, dw, growth;
+
+  env.size = mod->nr_globals;
+  env.vars = (duna_Env_Var*)malloc(env.size * sizeof(duna_Env_Var));
+  /* TODO: test return and throw error */
+
+  /*
+   * adding global to environment
+   * a little trick is used here, I use the value
+   * of the global var to store the index where the
+   * global will be mapped to when linking the code
+   *
+   */
+  for(growth = 0, i = 0; i < env.size; i++) {
+    obj = duna_make_symbol(D, mod->globals[i]);
+    env.vars[i].symbol = obj.value.symbol;
+    env.vars[i].value.type = DUNA_TYPE_FIXNUM;
+
+    for(j = 0; j < D->global_env.size; j++) {
+      if(env.vars[i].symbol == D->global_env.vars[j].symbol) {
+	env.vars[i].value.value.fixnum = j;
+	break;
+      }
+    }
+
+    if(j == D->global_env.size) {
+      env.vars[i].value.value.fixnum = D->global_env.size + growth++;
+    }
+  }
+
+  /* enlarging global environment */
+  if(growth > 0) {
+    dw = D->global_env.size + growth;
+    vars = (duna_Env_Var*)realloc(D->global_env.vars,
+				  dw * sizeof(duna_Env_Var));
+    /* TODO: test return and throw error */
+    D->global_env.vars = vars;
+
+    for(i = 0; i < env.size; i++) {
+      j = env.vars[i].value.value.fixnum;
+      if(D->global_env.size < j) {
+	D->global_env.vars[j].symbol = env.vars[i].symbol;
+	D->global_env.vars[j].value.type = DUNA_TYPE_UNDEF;
+      }
+    }
+    D->global_env.size = dw;
+  }
+
+  /* enlarging code */
+  growth = D->code_size;
+  dw = D->code_size + mod->code_size;
+  code = (uint32_t*)realloc(D->code, dw * sizeof(uint32_t));
+  /* TODO: test return and throw error */
+  D->code_size = dw;
+  D->code = code;
+
+  for(i = 0; i < mod->code_size; i++) {
+    uint32_t instr, op;
+
+    instr = mod->code[i];
+    op = EXTRACT_OP(instr);
+
+    switch(op) {
+
+    case DUNA_OP_FRAME:
+      dw = EXTRACT_ARG(instr);
+      dw += growth;
+      instr = ((uint32_t)op) | dw << 8;
+      break;
+
+    case DUNA_OP_GLOBAL_REF:
+    case DUNA_OP_CHECKED_GLOBAL_REF:
+    case DUNA_OP_GLOBAL_SET:
+    case DUNA_OP_CHECKED_GLOBAL_SET:
+      dw = EXTRACT_ARG(instr);
+      dw = env.vars[dw].value.value.fixnum;
+      instr = ((uint32_t)op) | dw << 8;
+      break;
+    };
+
+    D->code[growth+i] = instr;
+  }
+
+  free(env.vars);
+
+  return growth;
+}
+
 static int get_next(FILE* f, uint32_t *next)
 {
   int ret;
 
   ret = fscanf(f, " %u", next);
-  if(ret == EOF) {
+  if(ret == EOF || ret == 0) {
     return -1;
-  } else if(ret == 0) {
-    /* maybe got to end? */
-    ret = fscanf(f, ")");
-    if(ret == EOF) {
-      return -1;
-    } else {
-      return 0;
-    }
   } else {
     return 1;
   }
@@ -1331,19 +1499,19 @@ static int get_fixnum(FILE* f, uint32_t *num)
   uint32_t b1, b2, b3, b4;
 
   ret = get_next(f, &b1);
-  if(ret <= 0) {
+  if(ret < 0) {
     return -1;
   }
   ret = get_next(f, &b2);
-  if(ret <= 0) {
+  if(ret < 0) {
     return -1;
   }
   ret = get_next(f, &b3);
-  if(ret <= 0) {
+  if(ret < 0) {
     return -1;
   }
   ret = get_next(f, &b4);
-  if(ret <= 0) {
+  if(ret < 0) {
     return -1;
   }
 
@@ -1352,11 +1520,11 @@ static int get_fixnum(FILE* f, uint32_t *num)
   return 1;
 }
 
-static int load_code_from_file(duna_State* D, const char* fname)
+static int load_code_from_file(duna_Module *mod, const char* fname)
 {
   int ret;
   FILE *f;
-  uint32_t i, j, dw1, dw2, dw3, pc;
+  uint32_t i, j, dw1, dw2;
 
   /* opening input file */
   f = fopen(fname, "r");
@@ -1365,12 +1533,11 @@ static int load_code_from_file(duna_State* D, const char* fname)
   }
 
   /* bytecode beginning */
-  if(fscanf(f, " #(") == EOF) {
+  ret = fscanf(f, " #(");
+  if(ret == EOF) {
     fclose(f);
     return -1;
   }
-
-  pc = D->code_size;
 
   /* reading number of globals */
   ret = get_fixnum(f, &dw1);
@@ -1379,23 +1546,34 @@ static int load_code_from_file(duna_State* D, const char* fname)
     return -1;
   }
 
+  mod->nr_globals = dw1;
+  mod->globals = (uint8_t**)malloc(dw1 * sizeof(uint8_t*));
+  /* TODO: test return and throw error */
+  memset(mod->globals, 0x00, dw1 * sizeof(uint8_t*));
+
   /* reading globals */
-  for(i = 0; i < dw1; i++) {
+  for(i = 0; i < mod->nr_globals; i++) {
 
     /* string size */
-    ret = get_fixnum(f, &dw2);
+    ret = get_fixnum(f, &dw1);
     if(ret < 0) {
       fclose(f);
       return -1;
     }
 
-    for(j = 0; j < dw2; j++) {
-      ret = get_fixnum(f, &dw3);
+    mod->globals[i] = (uint8_t*)malloc((dw1+1) * sizeof(uint8_t));
+    /* TODO: test return and throw error */
+
+    for(j = 0; j < dw1; j++) {
+      ret = get_fixnum(f, &dw2);
       if(ret < 0) {
+	duna_destroy_module(mod);
 	fclose(f);
 	return -1;
       }
+      mod->globals[i][j] = (uint8_t)dw2;
     }
+    mod->globals[i][dw1] = '\0';
   }
 
   /* reading code size */
@@ -1405,73 +1583,52 @@ static int load_code_from_file(duna_State* D, const char* fname)
     return -1;
   }
 
+  mod->code_size = dw1;
+  mod->code = (uint32_t*)malloc(dw1 * sizeof(uint32_t));
+  /* TODO: test return and throw error */
+
   /* reading actual code */
-  while(1) {
+  for(i = 0; i < mod->code_size; i++) {
     uint32_t instr;
 
     ret = get_next(f, &instr);
-    if(ret == -1) {
+    if(ret < 0) {
       /* unexpected end */
+      duna_destroy_module(mod);
       fclose(f);
       return -1;
-    }
-    if(ret == 0 || instr == 0) {
-      /* real end */
-      return pc;
     }
 
     /* retrieve operands if any */
     if(IS_TYPE_B(instr)) {
       ret = get_fixnum(f, &dw1);
       if(ret < 0) {
+	duna_destroy_module(mod);
 	fclose(f);
 	return -1;
-      }
-
-      /*
-       * if instruction is FRAME, the return address
-       * encoded must be patched to account for
-       * the current code offset
-       */
-      if(instr == DUNA_OP_FRAME) {
-	dw1 += pc;
       }
 
       instr |= (dw1 << 8);
-
     }
 
-    /* does the code vector has space? */
-    if(D->code_size == D->code_capacity) {
-      uint32_t *code, size;
-
-      size = D->code_size * 3 / 2;
-      code = (uint32_t*)realloc(D->code, size);
-      if(!code) {
-	fclose(f);
-	return -1;
-      }
-
-      D->code = code;
-      D->code_capacity = size;
-    }
-
-    /* adds new read byte to code vector */
-    D->code[D->code_size++] = instr;
+    mod->code[i] = instr;
   }
+
+  fclose(f);
+  return 1;
 }
 
 int duna_load_file(duna_State* D, const char *fname)
 {
-  int pc;
+  duna_Module mod;
 
-  /* tries to load code into state */
-  pc = load_code_from_file(D, fname);
-  if(pc < 0) {
+  /* tries to load code into module */
+  if(load_code_from_file(&mod, fname) < 0) {
     return 0;
   }
 
-  D->pc = pc;
+  D->pc = duna_link_module(D, &mod);
+  duna_destroy_module(&mod);
 
   return duna_vm_run(D);
 }

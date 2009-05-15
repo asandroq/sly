@@ -316,10 +316,10 @@ struct duna_Store_ {
   void *os_address;
 
   /* the space from where objects are copied */
-  void *from_space;
+  uint8_t *from_space;
 
   /* the space to which objects are copied */
-  void *to_space;
+  uint8_t *to_space;
 
   /* roots callback */
   duna_Roots_Callback roots_cb;
@@ -419,7 +419,7 @@ static void collect_garbage(duna_Store* S)
    * classic, simple 2-space copy collector
    * using Cheney's algorithm
    */
-  void *scan;
+  uint8_t *scan;
   duna_Object *obj;
   uint32_t old_size;
 
@@ -441,7 +441,7 @@ static void collect_garbage(duna_Store* S)
     uint32_t i, size;
     duna_GCObject *gcobj;
 
-    gcobj = scan;
+    gcobj = (duna_GCObject*)scan;
     size = sizeof_gcobj(gcobj);
 
     switch(gcobj->type) {
@@ -501,7 +501,7 @@ static int expand_store(duna_Store* S)
     S->capacity = size;
     S->os_address = tmp;
     S->from_space = tmp;
-    S->to_space = tmp + size;
+    S->to_space = (uint8_t*)tmp + size;
     return 1;
   }
 }

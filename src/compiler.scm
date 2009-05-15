@@ -21,8 +21,15 @@
 ;;; THE SOFTWARE.
 ;;;
 
-;; already seen globals
-(define *defined-globals* '())
+(define (duna-load file)
+  (with-input-from-file (string-append file ".scm")
+    (lambda ()
+      (let loop ((exps '()))
+        (let ((e (read)))
+          (if (eof-object? e)
+              (compile-to-file (string-append file ".fasl")
+                               (reverse exps))
+              (loop (cons e exps))))))))
 
 (define (compile-to-file file e+)
   (let ((cs (make-compiler-state)))
@@ -49,6 +56,9 @@
          (b (flag-boxes m))
          (u (update-lexical-addresses b)))
     (generate-code cs u)))
+
+;; already seen globals
+(define *defined-globals* '())
 
 ;;
 ;; Preprocessing

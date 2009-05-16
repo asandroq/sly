@@ -42,7 +42,7 @@
             a
             (fact-iter (- n 1) (* a n))))
       (fact-iter n 1))
-    (fact 10)))
+    (fact 12)))
 
 (compile-to-file "test.fasl" test1)
 

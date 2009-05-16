@@ -46,16 +46,20 @@
          (cs (make-compiler-state)))
     (set! *defined-globals*
           (append defs *defined-globals*))
-    (for-each (lambda (t) (compile cs t)) t+)
-    (instr cs 'RETURN)
-    (write-code-vector cs)))
+    (let* ((m+ (meaning-toplevel t+))
+           (b+ (flag-boxes m+))
+           (u+ (update-lexical-addresses b+)))
+      (generate-code cs u+)
+      (instr cs 'RETURN)
+      (write-code-vector cs))))
 
-;; compiles a single toplevel expression
-(define (compile cs e)
-  (let* ((m (meaning e '() #t))
-         (b (flag-boxes m))
-         (u (update-lexical-addresses b)))
-    (generate-code cs u)))
+;; compiles toplevel
+(define (meaning-toplevel e+)
+  (if (null? (cdr e+))
+      (meaning (car e+) '() #t)
+      (let ((m (meaning (car e+) '() #f))
+            (m+ (meaning-toplevel (cdr e+))))
+        (vector 'sequence m m+))))
 
 ;; already seen globals
 (define *defined-globals* '())

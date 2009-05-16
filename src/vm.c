@@ -494,7 +494,7 @@ static void collect_garbage(duna_Store* S)
   S->from_space = S->to_space;
   S->to_space = scan;
 
-  printf("GC: before: %u after: %u\n", old_size, S->size);
+  fprintf(stderr, "GC: before: %u after: %u\n", old_size, S->size);
 }
 
 static int expand_store(duna_Store* S)
@@ -508,19 +508,21 @@ static int expand_store(duna_Store* S)
   size = old_size * 4 / 3;
   size += size % 4;
   fprintf(stderr, "Expanding store from %u to %u\n", old_size, size);
-  
-  tmp = realloc(S->os_address, size * 2);
+
+  tmp = malloc(size * 2);
   if(tmp == NULL) {
     return 0;
   } else {
-    if(S->os_address == S->to_space) {
-      /* argh */
-      memcpy(S->from_space, S->to_space, S->size);
-    }
     S->capacity = size;
-    S->os_address = tmp;
-    S->from_space = tmp;
+
+    /* copy objects to new memory */
+    S->to_space = tmp;
+    collect_garbage(S);
+
+    /* fix pointers */
     S->to_space = (uint8_t*)tmp + size;
+    free(S->os_address);
+    S->os_address = tmp;
     return 1;
   }
 }
@@ -529,11 +531,11 @@ static void* alloc_from_store(duna_Store *S, uint32_t size)
 {
   void *ret;
 
-  if(S->size + size > S->capacity) {
+  if(S->capacity - S->size < size) {
     /* not enough space, try to find some */
     collect_garbage(S);
 
-    while(S->size + size > S->capacity) {
+    while(S->capacity - S->size < size) {
       /* expand store until it fits */
       if(expand_store(S) == 0) {
 	return NULL;
@@ -824,7 +826,6 @@ static duna_Object duna_make_symbol(duna_State* D, uint8_t *str)
   /* is the symbol already there? */
   for(tmp = D->symbol_table; tmp != NULL; tmp = tmp->next) {
     if(strcmp(str, tmp->str) == 0) {
-      free(str);
       break;
     }
   }
@@ -832,7 +833,7 @@ static duna_Object duna_make_symbol(duna_State* D, uint8_t *str)
   if(tmp == NULL) {
     /* adding new symbol */
     tmp = (duna_Symbol*)malloc(sizeof(duna_Symbol));
-    tmp->str = str;
+    tmp->str = strdup(tmp);
     tmp->next = D->symbol_table;
     D->symbol_table = tmp;
   }

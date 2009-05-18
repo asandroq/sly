@@ -493,8 +493,6 @@ static void collect_garbage(duna_Store* S)
   scan = S->from_space;
   S->from_space = S->to_space;
   S->to_space = scan;
-
-  fprintf(stderr, "GC: before: %u after: %u\n", old_size, S->size);
 }
 
 static int expand_store(duna_Store* S)
@@ -507,7 +505,6 @@ static int expand_store(duna_Store* S)
   /* new size is 30% larger, multiple of 4 */
   size = old_size * 4 / 3;
   size -= size % 4;
-  fprintf(stderr, "Expanding store from %u to %u\n", old_size, size);
 
   tmp = malloc(size * 2);
   if(tmp == NULL) {

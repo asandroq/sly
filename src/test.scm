@@ -29,10 +29,13 @@
     (proc1 (char->integer #\A) (* 24 3) (add1 (sub1 (add1 1024))))))
 
 (define test2
-  '(let loop ((a (cons 1 (cons 2 (cons 3 '())))))
-     (if (null? a)
-	 #t
-	 (loop (cdr a)))))
+  '((define my-name "Alex")
+    (define (proc2 n)
+      (if (equal? my-name n)
+          'equal
+          'different))
+    (proc2 "Ramirez")
+    (proc2 "Alex")))
 
 (define test3
   '((define (fact n)

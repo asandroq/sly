@@ -302,7 +302,7 @@ typedef struct duna_Continuation_ duna_Continuation;
  * the store, i.e., memory
  */
 
-#define DUNA_INITIAL_SPACE_SIZE     ((uint32_t)(1 << 8))
+#define DUNA_INITIAL_SPACE_SIZE     ((uint32_t)(1 << 7))
 #define DUNA_IMMEDIATE_P(o)         ((o)->type < DUNA_TYPE_CLOSURE)
 #define DUNA_FORWARD_TAG            199
 
@@ -506,7 +506,7 @@ static int expand_store(duna_Store* S)
 
   /* new size is 30% larger, multiple of 4 */
   size = old_size * 4 / 3;
-  size += size % 4;
+  size -= size % 4;
   fprintf(stderr, "Expanding store from %u to %u\n", old_size, size);
 
   tmp = malloc(size * 2);
@@ -530,6 +530,9 @@ static int expand_store(duna_Store* S)
 static void* alloc_from_store(duna_Store *S, uint32_t size)
 {
   void *ret;
+
+  /* allocating only 4-byte aligned blocks */
+  assert(size % 4 == 0);
 
   if(S->capacity - S->size < size) {
     /* not enough space, try to find some */
@@ -1016,7 +1019,7 @@ int duna_vm_run(duna_State* D)
     duna_Object tmp;
 
     /* debugging */
-    duna_dump(D);
+    //duna_dump(D);
     assert(D->pc < D->code_size);
 
     instr = D->code[D->pc++];

@@ -29,8 +29,7 @@
 #if __GNUC__ > 2
 #include <stdint.h>
 #else
-typedef unsigned char uint8_t;
-typedef unsigned int  uint32_t;
+#include <inttypes.h>
 #endif
 
 /*

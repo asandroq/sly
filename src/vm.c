@@ -89,6 +89,7 @@ typedef unsigned int  uint32_t;
 #define DUNA_OP_CHECKED_GLOBAL_REF     34
 #define DUNA_OP_GLOBAL_SET             35
 #define DUNA_OP_CHECKED_GLOBAL_SET     36
+#define DUNA_OP_LOAD_UNDEF             37
 
 /* type predicates */
 #define DUNA_OP_NULL_P                 81
@@ -195,6 +196,7 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_CHECKED_GLOBAL_REF,     "CHECKED-GLOBAL-REF"},
   {DUNA_OP_GLOBAL_SET,             "GLOBAL-SET"},
   {DUNA_OP_CHECKED_GLOBAL_SET,     "CHECKED-GLOBAL-SET"},
+  {DUNA_OP_LOAD_UNDEF,             "LOAD-UNDEF"},
   {DUNA_OP_NULL_P,            "NULL?"},
   {DUNA_OP_BOOL_P,            "BOOL?"},
   {DUNA_OP_CHAR_P,            "CHAR?"},
@@ -1333,6 +1335,10 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_GLOBAL_SET:
       D->global_env.vars[EXTRACT_ARG(instr)].value = D->accum;
+      break;
+
+    case DUNA_OP_LOAD_UNDEF:
+      D->accum.type = DUNA_TYPE_UNDEF;
       break;
 
     case DUNA_OP_CONS:

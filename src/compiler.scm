@@ -738,7 +738,7 @@
     ((undef)
      (generate-undef cs))
     ((const)
-     (generate-quote cs m))
+     (generate-constant cs m))
     ((refer)
      (generate-reference cs m #t))
     ((sequence)
@@ -761,10 +761,7 @@
 (define (generate-undef cs)
   (instr cs 'LOAD-UNDEF))
 
-(define (generate-immediate cs m)
-  (emit-immediate cs (vector-ref m 1)))
-
-(define (generate-quote cs m)
+(define (generate-constant cs m)
   (let ((c (vector-ref m 1)))
     (if (immediate? c)
         (emit-immediate cs c)
@@ -1199,7 +1196,7 @@
     (if (null? list)
         #f
         (let ((ele (car list)))
-          (if (eq? item ele)
+          (if (equal? item ele)
               i
               (loop (+ i 1) (cdr list)))))))
 

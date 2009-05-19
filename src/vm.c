@@ -90,6 +90,7 @@ typedef unsigned int  uint32_t;
 #define DUNA_OP_GLOBAL_SET             35
 #define DUNA_OP_CHECKED_GLOBAL_SET     36
 #define DUNA_OP_LOAD_UNDEF             37
+#define DUNA_OP_CONST                  38
 
 /* type predicates */
 #define DUNA_OP_NULL_P                 81
@@ -127,6 +128,7 @@ typedef unsigned int  uint32_t;
 #define DUNA_TYPE_PAIR                  8
 #define DUNA_TYPE_CONTINUATION          9
 #define DUNA_TYPE_BOX                  10
+#define DUNA_TYPE_STRING               11
 
 #define IS_TYPE_B(instr) \
    ((instr) == DUNA_OP_LOAD_FIXNUM ||            \
@@ -227,21 +229,13 @@ static opcode_t global_opcodes[] = {
 typedef struct duna_Object_ duna_Object;
 typedef struct duna_GCObject_ duna_GCObject;
 
-/*
- * entry in the symbol table
- * symbols are not collected
- * some hash functions:
- * http://burtleburtle.net/bob/c/lookup3.c
- */
+typedef uint32_t duna_Char;
+typedef struct duna_Box_ duna_Box;
+typedef struct duna_Closure_ duna_Closure;
+typedef struct duna_Pair_ duna_Pair;
+typedef struct duna_Continuation_ duna_Continuation;
+typedef struct duna_String_ duna_String;
 typedef struct duna_Symbol_ duna_Symbol;
-
-struct duna_Symbol_ {
-  /* symbol textual representation */
-  uint8_t *str;
-
-  /* next symbol in chain */
-  duna_Symbol *next;
-};
 
 /* value types */
 struct duna_Object_ {
@@ -253,7 +247,7 @@ struct duna_Object_ {
   union {
     /* immediates */
     uint8_t bool;
-    uint8_t chr;
+    duna_Char chr;
     uint32_t fixnum;
     duna_Symbol *symbol;
 
@@ -273,16 +267,12 @@ struct duna_Box_ {
   duna_Object value;
 };
 
-typedef struct duna_Box_ duna_Box;
-
 struct duna_Closure_ {
   DUNA_GC_BASE;
   uint32_t entry_point;
   uint32_t nr_free;
-  duna_Object free_vars[1];
+  duna_Object free_vars[0];
 };
-
-typedef struct duna_Closure_ duna_Closure;
 
 struct duna_Pair_ {
   DUNA_GC_BASE;
@@ -290,15 +280,31 @@ struct duna_Pair_ {
   duna_Object cdr;  
 };
 
-typedef struct duna_Pair_ duna_Pair;
-
 struct duna_Continuation_ {
   DUNA_GC_BASE;
   uint32_t size;
-  duna_Object stack[1];
+  duna_Object stack[0];
 };
 
-typedef struct duna_Continuation_ duna_Continuation;
+struct duna_String_ {
+  DUNA_GC_BASE;
+  uint32_t size;
+  duna_Char chars[0];
+};
+
+/*
+ * entry in the symbol table
+ * symbols are not collected
+ * some hash functions:
+ * http://burtleburtle.net/bob/c/lookup3.c
+ */
+struct duna_Symbol_ {
+  /* symbol textual representation */
+  duna_String *str;
+
+  /* next symbol in chain */
+  duna_Symbol *next;
+};
 
 /*
  * the store, i.e., memory
@@ -307,6 +313,17 @@ typedef struct duna_Continuation_ duna_Continuation;
 #define DUNA_INITIAL_SPACE_SIZE     ((uint32_t)(1 << 7))
 #define DUNA_IMMEDIATE_P(o)         ((o)->type < DUNA_TYPE_CLOSURE)
 #define DUNA_FORWARD_TAG            199
+
+#define DUNA_SIZE_OF_BOX \
+   (sizeof(duna_Box))
+#define DUNA_SIZE_OF_PAIR \
+   (sizeof(duna_Pair))
+#define DUNA_SIZE_OF_CLOSURE(n) \
+   (sizeof(duna_Closure) + (n) * sizeof(duna_Object))
+#define DUNA_SIZE_OF_CONTINUATION(n) \
+   (sizeof(duna_Continuation) + (n) * sizeof(duna_Object))
+#define DUNA_SIZE_OF_STRING(n) \
+   (sizeof(duna_String) + (n) * sizeof(duna_Char))
 
 /*
  * this callback is called by the garbage collector
@@ -337,10 +354,10 @@ struct duna_Store_ {
   void *os_address;
 
   /* the space from where objects are copied */
-  uint8_t *from_space;
+  void *from_space;
 
   /* the space to which objects are copied */
-  uint8_t *to_space;
+  void *to_space;
 
   /* roots callback */
   duna_Roots_Callback roots_cb;
@@ -382,23 +399,25 @@ static uint32_t sizeof_gcobj(duna_GCObject* obj)
 
   switch(obj->type) {
   case DUNA_TYPE_CLOSURE:
-    size = ((duna_Closure*)obj)->nr_free;
-    size = sizeof(duna_Closure) +
-           (size == 0 ? 0 : size - 1) * sizeof(duna_Object);
+    size = DUNA_SIZE_OF_CLOSURE(((duna_Closure*)obj)->nr_free);
     break;
 
   case DUNA_TYPE_PAIR:
-    size = sizeof(duna_Pair);
+    size = DUNA_SIZE_OF_PAIR;
     break;
 
   case DUNA_TYPE_CONTINUATION:
-    size = sizeof(duna_Continuation) +
-           (((duna_Continuation*)obj)->size-1) * sizeof(duna_Object);
+    size = DUNA_SIZE_OF_CONTINUATION(((duna_Continuation*)obj)->size);
     break;
 
   case DUNA_TYPE_BOX:
-    size = sizeof(duna_Box);
+    size = DUNA_SIZE_OF_BOX;
     break;
+
+  case DUNA_TYPE_STRING:
+    size = DUNA_SIZE_OF_STRING(((duna_String*)obj)->size);
+    break;
+
   default:
     size = 0;
   }
@@ -440,7 +459,7 @@ static void collect_garbage(duna_Store* S)
    * classic, simple 2-space copy collector
    * using Cheney's algorithm
    */
-  uint8_t *scan;
+  void *scan;
   duna_Object *obj;
   uint32_t old_size;
 
@@ -519,7 +538,7 @@ static int expand_store(duna_Store* S)
     collect_garbage(S);
 
     /* fix pointers */
-    S->to_space = (uint8_t*)tmp + size;
+    S->to_space = tmp + size;
     free(S->os_address);
     S->os_address = tmp;
     return 1;
@@ -556,7 +575,7 @@ static duna_Box *alloc_box(duna_Store *S)
 {
   duna_Box *ret;
 
-  ret = (duna_Box*)alloc_from_store(S, sizeof(duna_Box));
+  ret = (duna_Box*)alloc_from_store(S, DUNA_SIZE_OF_BOX);
   if(ret) {
     ret->type = DUNA_TYPE_BOX;
   }
@@ -566,13 +585,9 @@ static duna_Box *alloc_box(duna_Store *S)
 
 static duna_Closure *alloc_closure(duna_Store *S, uint32_t nr_vars)
 {
-  uint32_t size;
   duna_Closure *ret;
 
-  size = sizeof(duna_Closure) +
-         (nr_vars == 0 ? 0 : (nr_vars-1)) * sizeof(duna_Object);
-
-  ret = (duna_Closure*) alloc_from_store(S, size);
+  ret = (duna_Closure*) alloc_from_store(S, DUNA_SIZE_OF_CLOSURE(nr_vars));
   if(ret) {
     ret->type = DUNA_TYPE_CLOSURE;
     ret->nr_free = nr_vars;
@@ -585,7 +600,7 @@ static duna_Pair *alloc_pair(duna_Store *S)
 {
   duna_Pair *ret;
 
-  ret = (duna_Pair*) alloc_from_store(S, sizeof(duna_Pair));
+  ret = (duna_Pair*) alloc_from_store(S, DUNA_SIZE_OF_PAIR);
   if(ret) {
     ret->type = DUNA_TYPE_PAIR;
   }
@@ -595,14 +610,26 @@ static duna_Pair *alloc_pair(duna_Store *S)
 
 static duna_Continuation *alloc_continuation(duna_Store *S, uint32_t stack_size)
 {
-  uint32_t size;
   duna_Continuation *ret;
 
-  size = sizeof(duna_Continuation) + (stack_size-1) * sizeof(duna_Object);
-  ret = (duna_Continuation*)alloc_from_store(S, size);
+  ret = (duna_Continuation*)alloc_from_store(S, DUNA_SIZE_OF_CONTINUATION(stack_size));
   if(ret) {
     ret->type = DUNA_TYPE_CONTINUATION;
     ret->size = stack_size;
+  }
+
+  return ret;
+}
+
+static duna_String *alloc_string(duna_Store *S, uint32_t size)
+{
+  duna_String *ret;
+
+  ret = (duna_String*)alloc_from_store(S, DUNA_SIZE_OF_STRING(size));
+
+  if(ret) {
+    ret->type = DUNA_TYPE_STRING;
+    ret->size = size;
   }
 
   return ret;
@@ -642,6 +669,9 @@ struct duna_State_ {
   /* stack allocated size */
   uint32_t stack_size;
 
+  /* number of constants */
+  uint32_t nr_consts;
+
   /* where is the top of the stack */
   uint32_t sp;
 
@@ -665,6 +695,9 @@ struct duna_State_ {
 
   /* the machine stack */
   duna_Object *stack;
+
+  /* constants */
+  duna_Object *consts;
 
   /* symbol table */
   duna_Symbol *symbol_table;
@@ -749,7 +782,7 @@ duna_State* duna_init(void)
   D->fp = 0;
 
   /* code */
-  D->code_size = 0;
+  D->code_size = 1;
   D->code = (uint32_t*)malloc(sizeof(uint32_t));
   if(D->code == NULL) {
     free(D);
@@ -757,7 +790,6 @@ duna_State* duna_init(void)
   }
   /* instruction to halt the machine always at address 0 */
   D->code[0] = (uint32_t) DUNA_OP_HALT;
-  D->code_size = 1;
 
   /* stack */
   D->sp = 0;
@@ -781,6 +813,9 @@ duna_State* duna_init(void)
   D->fp = 3;
 
   D->symbol_table = NULL;
+
+  D->consts = NULL;
+  D->nr_consts = 0;
 
   /* globals */
   D->global_env.size = 0;
@@ -820,14 +855,47 @@ void duna_close(duna_State* D)
   }
 }
 
-static duna_Object duna_make_symbol(duna_State* D, uint8_t *str)
+static int string_equal_p(duna_String *s1, duna_String *s2)
+{
+  if(s1->size != s2->size) {
+    return 0;
+  }
+
+  return memcmp(s1->chars, s2->chars, s1->size * sizeof(duna_Char)) == 0;
+}
+
+static duna_String* string_copy(duna_State* D, duna_String* s)
+{
+  duna_String *ret;
+
+  ret = alloc_string(&D->store, s->size);
+  memcpy(ret->chars, s->chars, s->size * sizeof(duna_Char));
+
+  return ret;
+}
+
+static duna_String* string_copy_extern(duna_String* s)
+{
+  uint32_t size;
+  duna_String *ret;
+
+  size = DUNA_SIZE_OF_STRING(s->size);
+
+  ret = (duna_String*)malloc(size);
+  /* TODO: test and throw error */
+  memcpy(ret, s, size);
+
+  return ret;
+}
+
+static duna_Object duna_make_symbol(duna_State* D, duna_String *str)
 {
   duna_Object obj;
   duna_Symbol *tmp;
 
   /* is the symbol already there? */
   for(tmp = D->symbol_table; tmp != NULL; tmp = tmp->next) {
-    if(strcmp(str, tmp->str) == 0) {
+    if(string_equal_p(tmp->str, str)) {
       break;
     }
   }
@@ -835,7 +903,7 @@ static duna_Object duna_make_symbol(duna_State* D, uint8_t *str)
   if(tmp == NULL) {
     /* adding new symbol */
     tmp = (duna_Symbol*)malloc(sizeof(duna_Symbol));
-    tmp->str = strdup(tmp);
+    tmp->str = string_copy_extern(str);
     tmp->next = D->symbol_table;
     D->symbol_table = tmp;
   }
@@ -849,6 +917,23 @@ static duna_Object duna_make_symbol(duna_State* D, uint8_t *str)
 /*
  * writer
  */
+
+static void write_string(duna_String* s, int quote)
+{
+  uint32_t i;
+
+  if(quote) {
+    printf("\"");
+  }
+
+  for(i = 0; i < s->size; i++) {
+    printf("%c", s->chars[i]);
+  }
+
+  if(quote) {
+    printf("\"");
+  }
+}
 
 static void write_obj(duna_Object* obj)
 {
@@ -879,7 +964,7 @@ static void write_obj(duna_Object* obj)
     break;
 
   case DUNA_TYPE_SYMBOL:
-    printf("%s", obj->value.symbol->str);
+    write_string(obj->value.symbol->str, 0);
     break;
 
   case DUNA_TYPE_CLOSURE:
@@ -901,6 +986,10 @@ static void write_obj(duna_Object* obj)
   case DUNA_TYPE_BOX:
     printf("#&");
     write_obj(&(((duna_Box*)obj->value.gc)->value));
+    break;
+
+  case DUNA_TYPE_STRING:
+    write_string((duna_String*)obj->value.gc, 1);
     break;
 
   default:
@@ -1390,8 +1479,12 @@ typedef struct duna_Module_ duna_Module;
 struct duna_Module_ {
 
   /* uninterned globals */
-  uint8_t **globals;
   uint32_t nr_globals;
+  duna_String **globals;
+
+  /* constants */
+  uint32_t nr_consts;
+  duna_Object *consts;
 
   /* code */
   uint32_t *code, code_size;
@@ -1404,9 +1497,7 @@ static void duna_destroy_module(duna_Module *M)
   free(M->code);
 
   for(i = 0; i < M->nr_globals; i++) {
-    if(M->globals[i]) {
-      free(M->globals[i]);
-    }
+    free(M->globals[i]);
   }
   free(M->globals);
 }
@@ -1511,7 +1602,7 @@ static int get_next(FILE* f, uint32_t *next)
 
   ret = fscanf(f, " %u", next);
   if(ret == EOF || ret == 0) {
-    return -1;
+    return 0;
   } else {
     return 1;
   }
@@ -1524,22 +1615,50 @@ static int get_fixnum(FILE* f, uint32_t *num)
 
   ret = get_next(f, &b1);
   if(ret < 0) {
-    return -1;
+    return 0;
   }
   ret = get_next(f, &b2);
   if(ret < 0) {
-    return -1;
+    return 0;
   }
   ret = get_next(f, &b3);
   if(ret < 0) {
-    return -1;
+    return 0;
   }
   ret = get_next(f, &b4);
   if(ret < 0) {
-    return -1;
+    return 0;
   }
 
   *num = b1 | (b2 << 8) | (b3 << 16) | (b4 << 24);
+
+  return 1;
+}
+
+static int get_string(FILE *f, duna_String **str)
+{
+  int ret;
+  uint32_t i, dw1, dw2;
+
+  /* string size */
+  ret = get_fixnum(f, &dw1);
+  if(!ret) {
+    return 0;
+  }
+
+  *str = (duna_String*)malloc(DUNA_SIZE_OF_STRING(dw1));
+  /* TODO: test return and throw error */
+  (*str)->size  = dw1;
+  (*str)->type = DUNA_TYPE_STRING;
+
+  for(i = 0; i < dw1; i++) {
+    ret = get_fixnum(f, &dw2);
+    if(!ret) {
+      free(*str);
+      return 0;
+    }
+    (*str)->chars[i] = dw2;
+  }
 
   return 1;
 }
@@ -1548,61 +1667,90 @@ static int load_code_from_file(duna_Module *mod, const char* fname)
 {
   int ret;
   FILE *f;
-  uint32_t i, j, dw1, dw2;
+  uint32_t i, dw1, dw2;
 
   /* opening input file */
   f = fopen(fname, "r");
   if(!f) {
-    return -1;
+    return 0;
   }
 
   /* bytecode beginning */
   ret = fscanf(f, " #(");
   if(ret == EOF) {
     fclose(f);
-    return -1;
+    return 0;
   }
 
   /* reading number of globals */
   ret = get_fixnum(f, &dw1);
-  if(ret < 0) {
+  if(!ret) {
+    fclose(f);
+    return 0;
+  }
+
+  mod->nr_globals = dw1;
+  dw2 = dw1 * sizeof(duna_String*);
+  mod->globals = (duna_String**)malloc(dw2);
+  /* TODO: test return and throw error */
+  memset(mod->globals, 0x00, dw2);
+
+  /* reading globals */
+  for(i = 0; i < mod->nr_globals; i++) {
+    ret = get_string(f, mod->globals+i);
+    if(!ret) {
+      fclose(f);
+      return 0;
+    }
+  }
+
+  /* reading number of constants */
+  ret = get_fixnum(f, &dw1);
+  if(!ret) {
     fclose(f);
     return -1;
   }
 
-  mod->nr_globals = dw1;
-  mod->globals = (uint8_t**)malloc(dw1 * sizeof(uint8_t*));
+  mod->nr_consts = dw1;
+  mod->consts = (duna_Object*)malloc(dw1 * sizeof(duna_Object));
   /* TODO: test return and throw error */
-  memset(mod->globals, 0x00, dw1 * sizeof(uint8_t*));
 
-  /* reading globals */
-  for(i = 0; i < mod->nr_globals; i++) {
+  /* reading constants */
+  for(i = 0; i < dw1; i++) {
 
-    /* string size */
-    ret = get_fixnum(f, &dw1);
-    if(ret < 0) {
+    /* reading type */
+    ret = get_fixnum(f, &dw2);
+    if(!ret) {
       fclose(f);
-      return -1;
+      return 0;
     }
 
-    mod->globals[i] = (uint8_t*)malloc((dw1+1) * sizeof(uint8_t));
-    /* TODO: test return and throw error */
+    mod->consts[i].type = dw2;
 
-    for(j = 0; j < dw1; j++) {
-      ret = get_fixnum(f, &dw2);
-      if(ret < 0) {
-	duna_destroy_module(mod);
+    switch(dw2) {
+
+    case DUNA_TYPE_STRING:
+      ret = get_string(f, (duna_String**)&mod->consts[i].value.gc);
+      if(!ret) {
 	fclose(f);
-	return -1;
+	return 0;
       }
-      mod->globals[i][j] = (uint8_t)dw2;
+      break;
+
+    case DUNA_TYPE_SYMBOL:
+      ret = get_string(f, (duna_String**)&mod->consts[i].value.gc);
+      if(!ret) {
+	fclose(f);
+	return 0;
+      }
+      break;
     }
-    mod->globals[i][dw1] = '\0';
+
   }
 
   /* reading code size */
   ret = get_fixnum(f, &dw1);
-  if(ret < 0) {
+  if(!ret) {
     fclose(f);
     return -1;
   }
@@ -1616,20 +1764,20 @@ static int load_code_from_file(duna_Module *mod, const char* fname)
     uint32_t instr;
 
     ret = get_next(f, &instr);
-    if(ret < 0) {
+    if(!ret) {
       /* unexpected end */
       duna_destroy_module(mod);
       fclose(f);
-      return -1;
+      return 0;
     }
 
     /* retrieve operands if any */
     if(IS_TYPE_B(instr)) {
       ret = get_fixnum(f, &dw1);
-      if(ret < 0) {
+      if(!ret) {
 	duna_destroy_module(mod);
 	fclose(f);
-	return -1;
+	return 0;
       }
 
       instr |= (dw1 << 8);
@@ -1647,7 +1795,7 @@ int duna_load_file(duna_State* D, const char *fname)
   duna_Module mod;
 
   /* tries to load code into module */
-  if(load_code_from_file(&mod, fname) < 0) {
+  if(!load_code_from_file(&mod, fname)) {
     return 0;
   }
 

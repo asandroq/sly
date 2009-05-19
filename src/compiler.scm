@@ -32,10 +32,10 @@
               (loop (cons e exps))))))))
 
 (define (compile-to-file file e+)
-  (let ((cs (make-compiler-state)))
+  (let ((cs (compile-toplevel e+)))
     (with-output-to-file file
       (lambda ()
-        (compile-toplevel e+)))))
+        (write-code-vector cs)))))
 
 ;; generates code for module,
 ;; a list of toplevel expressions
@@ -51,7 +51,7 @@
            (u+ (update-lexical-addresses b+)))
       (generate-code cs u+)
       (instr cs 'RETURN)
-      (write-code-vector cs))))
+      cs)))
 
 ;; compiles toplevel
 (define (meaning-toplevel e+)
@@ -999,6 +999,8 @@
     (CHECKED-GLOBAL-REF . 34)
     (GLOBAL-SET         . 35)
     (CHECKED-GLOBAL-SET . 36)
+    (LOAD-UNDEF         . 37)
+    (CONST              . 38)
 
     ;; type predicates
     (NULL-P             . 81)
@@ -1064,25 +1066,19 @@
           new-index))))
 
 (define (write-code-vector cs)
-
-  (define (write-global g)
-    (let* ((str (symbol->string g))
-           (len (string-length str)))
-      (write-fixnum len)
-      (let loop ((i 0))
-        (if (< i len)
-            (begin
-              (write-fixnum (char->integer (string-ref str i)))
-              (loop (+ i 1)))))))
-
   (display "#( ")
   (let ((globals (vector-ref cs 0))
+        (consts (vector-ref cs 1))
         (code (vector-ref cs 3))
 	(code-size (code-size cs)))
     
     ;; globals
     (write-fixnum (length globals))
-    (for-each write-global globals)
+    (for-each write-symbol globals)
+
+    ;; constants
+    (write-fixnum (length consts))
+    (for-each write-constant consts)
 
     ;; code
     (write-fixnum code-size)
@@ -1096,6 +1092,36 @@
 	      (display " ")
 	      (and arg1 (write-fixnum arg1)))
 	    (loop (+ i 1)))))))
+
+(define (write-constant c)
+  (cond
+   ((string? c)
+    (write-string c))
+   ((symbol? c)
+    (write-symbol c))
+   (else
+    (error "writing constant not implemented yet" c))))
+
+(define (write-string s)
+  (let ((len (string-length s)))
+    (write-fixnum (type-tag 'string))
+    (write-fixnum len)
+    (let loop ((i 0))
+      (if (< i len)
+          (begin
+            (write-fixnum (char->integer (string-ref s i)))
+            (loop (+ i 1)))))))
+
+(define (write-symbol s)
+  (let* ((str (symbol->string s))
+         (len (string-length str)))
+    (write-fixnum (type-tag 'symbol))
+    (write-fixnum len)
+    (let loop ((i 0))
+      (if (< i len)
+          (begin
+            (write-fixnum (char->integer (string-ref str i)))
+            (loop (+ i 1)))))))
 
 (define (write-fixnum x)
   (let* ((b4 (quotient  x  16777216))
@@ -1113,6 +1139,14 @@
     (display b4)
     (display " ")))
 
+(define type-tag
+  (let ((types '((string . 11)
+                 (symbol .  6))))
+    (lambda (type)
+      (let ((tag (assq type types)))
+        (and tag
+             (cdr tag))))))
+  
 (define (extend-code-vector! cs)
   (let* ((len (vector-length (vector-ref cs 3)))
          (new-len (round (/ (* 3 len) 2)))

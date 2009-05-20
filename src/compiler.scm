@@ -46,10 +46,10 @@
          (cs (make-compiler-state)))
     (set! *defined-globals*
           (append defs *defined-globals*))
-    (let* ((m+ (meaning-toplevel t+))
-           (b+ (flag-boxes m+))
-           (u+ (update-lexical-addresses b+)))
-      (generate-code cs u+)
+    (let* ((m (meaning-toplevel t+))
+           (b (flag-boxes m))
+           (u (update-lexical-addresses b)))
+      (generate-toplevel-code cs u)
       (instr cs 'RETURN)
       cs)))
 
@@ -537,208 +537,117 @@
 ;; flags references to assigned variables as boxes
 (define (flag-boxes m)
 
-  (define (flag-boxes* m sets level)
-    (case (vector-ref m 0)
-      ((refer)
-       (let ((address (vector-ref m 2)))
-         (if address
-             (let ((var (vector-ref m 1))
-                   (frame (cdr address)))
-               (if (and (= frame level)
-                        (memq var sets))
-                   (vector 'refer
-                           var
-                           address
-                           (cons 'box (vector-ref m 3)))
-                   m))
-             m)))
-      ((sequence)
-       (vector 'sequence
-               (flag-boxes* (vector-ref m 1) sets level)
-               (flag-boxes* (vector-ref m 2) sets level)))
-      ((call/cc)
-       (vector 'call/cc
-               (flag-boxes* (vector-ref m 1) sets level)
-               (vector-ref m 2)))
-      ((alternative)
-       (vector 'alternative
-               (flag-boxes* (vector-ref m 1) sets level)
-               (flag-boxes* (vector-ref m 2) sets level)
-               (flag-boxes* (vector-ref m 3) sets level)))
-      ((lambda)
-       (vector 'lambda
-               (vector-ref m 1)
-               (vector-ref m 2)
-               (map (lambda (m)
-                      (flag-boxes* m sets level))
-                    (vector-ref m 3))
-               (flag-boxes* (vector-ref m 4) sets (+ level 1))))
-      ((assign)
-       (vector 'assign
-                (vector-ref m 1)
-                (vector-ref m 2)
-                (flag-boxes* (vector-ref m 3) sets level)))
-      ((apply)
-       (vector 'apply
-               (vector-ref m 1)
-               (flag-boxes* (vector-ref m 2) sets level)
-               (flag-boxes* (vector-ref m 3) sets level)))
-      ((arg-list)
-       (vector 'arg-list
-               (flag-boxes* (vector-ref m 1) sets level)
-               (flag-boxes* (vector-ref m 2) sets level)))
-      (else
-        m)))
+  (define (internal-refer visitor m sets level)
+    (let ((address (vector-ref m 2)))
+      (if address
+          (let ((var (vector-ref m 1))
+                (frame (cdr address)))
+            (if (and (= frame level)
+                     (memq var sets))
+                (vector 'refer
+                        var
+                        address
+                        (cons 'box (vector-ref m 3)))
+                m))
+          m)))
 
-  (case (vector-ref m 0)
-    ((sequence)
-     (vector 'sequence
-             (flag-boxes (vector-ref m 1))
-             (flag-boxes (vector-ref m 2))))
-    ((call/cc)
-     (vector 'call/cc
-             (flag-boxes (vector-ref m 1))
-             (vector-ref m 2)))
-    ((alternative)
-     (vector 'alternative
-             (flag-boxes (vector-ref m 1))
-             (flag-boxes (vector-ref m 2))
-             (flag-boxes (vector-ref m 3))))
-    ((lambda)
-     (let* ((sets (vector-ref m 2))
-            (boxed (flag-boxes* (vector-ref m 4) sets 0)))
-       (vector 'lambda
-               (vector-ref m 1)
-               sets
-               (vector-ref m 3)
-               (flag-boxes boxed))))
-    ((assign)
-     (vector 'assign
-             (vector-ref m 1)
-             (vector-ref m 2)
-             (flag-boxes (vector-ref m 3))))
-    ((apply)
-     (vector 'apply
-             (vector-ref m 1)
-             (flag-boxes (vector-ref m 2))
-             (flag-boxes (vector-ref m 3))))
-    ((arg-list)
-     (vector 'arg-list
-             (flag-boxes (vector-ref m 1))
-             (flag-boxes (vector-ref m 2))))
-    (else
-     m)))
+  (define (internal-lambda visitor m sets level)
+    (vector 'lambda
+            (vector-ref m 1)
+            (vector-ref m 2)
+            (map (lambda (m)
+                   (visitor m sets level))
+                 (vector-ref m 3))
+            (visitor (vector-ref m 4) sets (+ level 1))))
+
+  (define (external-lambda visitor m)
+    (let* ((sets (vector-ref m 2))
+           (boxed (visit (list (cons 'refer
+                                     internal-refer)
+                               (cons 'lambda
+                                     internal-lambda))
+                         (vector-ref m 4) sets 0)))
+      (vector 'lambda
+              (vector-ref m 1)
+              sets
+              (vector-ref m 3)
+              (visitor boxed))))
+
+  (visit (list (cons 'lambda external-lambda)) m))
 
 ;; updates lexical addresses to remove multi-frame references
 (define (update-lexical-addresses m)
-  
-  (define (update-for-lambda m bound free)
 
-    (define (new-address)
-      (let ((var (vector-ref m 1))
-            (address (vector-ref m 2)))
-        (if address
-            (let ((frame (cdr address)))
-              (if (zero? frame)
-                  (cons 'bound (index-of var bound))
-                  (cons 'free (index-of var free))))
-            #f)))
+  (define (internal-refer visitor m bound free)
+    (let ((var (vector-ref m 1))
+          (address (vector-ref m 2)))
+      (vector 'refer
+              var
+              (if address
+                  (let ((frame (cdr address)))
+                    (if (zero? frame)
+                        (cons 'bound (index-of var bound))
+                        (cons 'free (index-of var free))))
+                  #f)
+              (vector-ref m 3))))
 
-    (case (vector-ref m 0)
-      ((refer)
-       (vector 'refer
-               (vector-ref m 1)
-               (new-address)
-               (vector-ref m 3)))
-      ((sequence)
-       (vector 'sequence
-               (update-for-lambda (vector-ref m 1) bound free)
-               (update-for-lambda (vector-ref m 2) bound free)))
-      ((call/cc)
-       (vector 'call/cc
-               (update-for-lambda (vector-ref m 1) bound free)
-               (vector-ref m 2)))
-      ((alternative)
-       (vector 'alternative
-               (update-for-lambda (vector-ref m 1) bound free)
-               (update-for-lambda (vector-ref m 2) bound free)
-               (update-for-lambda (vector-ref m 3) bound free)))
-      ((lambda)
-       (vector 'lambda
-               (vector-ref m 1)
-               (vector-ref m 2)
-               (map (lambda (m)
-                      (update-for-lambda m bound free))
-                    (vector-ref m 3))
-               (vector-ref m 4)))
-      ((assign)
-       (vector 'assign
-               (vector-ref m 1)
-               (new-address)
-               (update-for-lambda (vector-ref m 3) bound free)))
-      ((apply)
-       (vector 'apply
-               (vector-ref m 1)
-               (update-for-lambda (vector-ref m 2) bound free)
-               (update-for-lambda (vector-ref m 3) bound free)))
-      ((arg-list)
-       (vector 'arg-list
-               (update-for-lambda (vector-ref m 1) bound free)
-               (update-for-lambda (vector-ref m 2) bound free)))
-      (else
-       m)))
+  (define (internal-assign visitor m bound free)
+    (let ((var (vector-ref m 1))
+          (address (vector-ref m 2)))
+      (vector 'assign
+              var
+              (if address
+                  (let ((frame (cdr address)))
+                    (if (zero? frame)
+                        (cons 'bound (index-of var bound))
+                        (cons 'free (index-of var free))))
+                  #f)
+              (visitor (vector-ref m 3) bound free))))
 
-  (case (vector-ref m 0)
-    ((sequence)
-     (vector 'sequence
-             (update-lexical-addresses (vector-ref m 1))
-             (update-lexical-addresses (vector-ref m 2))))
-    ((call/cc)
-     (vector 'call/cc
-             (update-lexical-addresses (vector-ref m 1))
-             (vector-ref m 2)))
-    ((alternative)
-     (vector 'alternative
-             (update-lexical-addresses (vector-ref m 1))
-             (update-lexical-addresses (vector-ref m 2))
-             (update-lexical-addresses (vector-ref m 3))))
-    ((lambda)
-     (let ((bound (vector-ref m 1))
-           (free (map (lambda (m)
-                        (vector-ref m 1))
-                      (vector-ref m 3))))
-       (let ((updated (update-for-lambda (vector-ref m 4)
-                                         bound
-                                         free)))
-         (vector 'lambda
-                 bound
-                 (vector-ref m 2)
-                 (vector-ref m 3)
-                 (update-lexical-addresses updated)))))
-    ((assign)
-     (vector 'assign
-             (vector-ref m 1)
-             (vector-ref m 2)
-             (update-lexical-addresses (vector-ref m 3))))
-    ((apply)
-     (vector 'apply
-             (vector-ref m 1)
-             (update-lexical-addresses (vector-ref m 2))
-             (update-lexical-addresses (vector-ref m 3))))
-    ((arg-list)
-     (vector 'arg-list
-             (update-lexical-addresses (vector-ref m 1))
-             (update-lexical-addresses (vector-ref m 2))))
-    (else
-     m)))
+  (define (internal-lambda visitor m bound free)
+    (vector 'lambda
+            (vector-ref m 1)
+            (vector-ref m 2)
+            (map (lambda (m)
+                   (visitor m bound free))
+                 (vector-ref m 3))
+            (vector-ref m 4)))
+
+  (define (external-lambda visitor m)
+    (let ((bound (vector-ref m 1))
+          (free (map (lambda (m)
+                       (vector-ref m 1))
+                     (vector-ref m 3))))
+      (let ((updated (visit (list (cons 'refer
+                                        internal-refer)
+                                  (cons 'assign
+                                        internal-assign)
+                                  (cons 'lambda
+                                        internal-lambda))
+                            (vector-ref m 4) bound free)))
+        (vector 'lambda
+                bound
+                (vector-ref m 2)
+                (vector-ref m 3)
+                (visitor updated)))))
+
+  (visit (list (cons 'lambda external-lambda)) m))
 
 ;; this pass generates the code for the virtual machine
+(define (generate-toplevel-code cs m)
+  (let ((c (collect-constants! cs m)))
+    (generate-code cs c)))
+
+(define (collect-constants! cs m) m)
+
 (define (generate-code cs m)
   (case (vector-ref m 0)
     ((undef)
      (generate-undef cs))
     ((const)
      (generate-constant cs m))
+    ((immed)
+     (generate-immediate cs m))
     ((refer)
      (generate-reference cs m #t))
     ((sequence)
@@ -761,12 +670,14 @@
 (define (generate-undef cs)
   (instr cs 'LOAD-UNDEF))
 
+;(define (generate-constant cs m)
+;  (instr1 cs 'CONST (vector-ref m 1)))
+
 (define (generate-constant cs m)
-  (let ((c (vector-ref m 1)))
-    (if (immediate? c)
-        (emit-immediate cs c)
-        (let ((index (install-constant! cs c)))
-          (instr1 cs 'CONST index)))))
+  (emit-immediate cs (vector-ref m 1)))
+
+(define (generate-immediate cs m)
+  (emit-immediate cs (vector-ref m 1)))
 
 (define (generate-reference cs m unbox?)
   (let ((address (vector-ref m 2)))
@@ -955,6 +866,55 @@
 	      (and (memq v sets)
 		   (instr1 cs 'INSERT-BOX (index-of v vars))))
 	    vars))
+
+;; procs is an alist of (tag . proc)
+;; the procedure gets the node and the visitor
+;; to apply it again
+(define (visit procs m . args)
+
+  (define (visitor m . args)
+    (let* ((tag (vector-ref m 0))
+           (tag-proc (assq tag procs)))
+      (if tag-proc
+          (apply (cdr tag-proc) visitor m args)
+          (case tag
+            ((sequence)
+             (vector 'sequence
+                     (apply visitor (vector-ref m 1) args)
+                     (apply visitor (vector-ref m 2) args)))
+            ((call/cc)
+             (vector 'call/cc
+                     (apply visitor (vector-ref m 1) args)
+                     (vector-ref m 2)))
+            ((alternative)
+             (vector 'alternative
+                     (apply visitor (vector-ref m 1) args)
+                     (apply visitor (vector-ref m 2) args)
+                     (apply visitor (vector-ref m 3) args)))
+            ((lambda)
+             (vector 'lambda
+                     (vector-ref m 1)
+                     (vector-ref m 2)
+                     (vector-ref m 3)
+                     (apply visitor (vector-ref m 4) args)))
+            ((assign)
+             (vector 'assign
+                     (vector-ref m 1)
+                     (vector-ref m 2)
+                     (apply visitor (vector-ref m 3) args)))
+            ((apply)
+             (vector 'apply
+                     (vector-ref m 1)
+                     (apply visitor (vector-ref m 2) args)
+                     (apply visitor (vector-ref m 3) args)))
+            ((arg-list)
+             (vector 'arg-list
+                     (apply visitor (vector-ref m 1) args)
+                     (apply visitor (vector-ref m 2) args)))
+            (else
+             m)))))
+
+  (apply visitor m args))
 
 ;;
 ;; low-level code generation

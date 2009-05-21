@@ -90,6 +90,9 @@
 #define DUNA_OP_CHECKED_GLOBAL_SET     36
 #define DUNA_OP_LOAD_UNDEF             37
 #define DUNA_OP_CONST                  38
+#define DUNA_OP_CONST_INIT             39
+#define DUNA_OP_STRING                 40
+#define DUNA_OP_STRING_TO_SYMBOL       41
 
 /* type predicates */
 #define DUNA_OP_NULL_P                 81
@@ -147,7 +150,9 @@
     (instr) == DUNA_OP_GLOBAL_REF ||             \
     (instr) == DUNA_OP_CHECKED_GLOBAL_REF ||     \
     (instr) == DUNA_OP_GLOBAL_SET ||             \
-    (instr) == DUNA_OP_CHECKED_GLOBAL_SET)
+    (instr) == DUNA_OP_CHECKED_GLOBAL_SET ||     \
+    (instr) == DUNA_OP_CONST ||                  \
+    (instr) == DUNA_OP_CONST_INIT)
 
 #define EXTRACT_OP(instr)   ((uint8_t)((instr) & 0x000000ff))
 #define EXTRACT_ARG(instr)  ((uint32_t)((instr) >> 8))
@@ -198,6 +203,10 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_GLOBAL_SET,             "GLOBAL-SET"},
   {DUNA_OP_CHECKED_GLOBAL_SET,     "CHECKED-GLOBAL-SET"},
   {DUNA_OP_LOAD_UNDEF,             "LOAD-UNDEF"},
+  {DUNA_OP_CONST,                  "CONST"},
+  {DUNA_OP_CONST_INIT,             "CONST-INIT"},
+  {DUNA_OP_STRING,                 "STRING"},
+  {DUNA_OP_STRING_TO_SYMBOL,       "STRING->SYMBOL"},
   {DUNA_OP_NULL_P,            "NULL?"},
   {DUNA_OP_BOOL_P,            "BOOL?"},
   {DUNA_OP_CHAR_P,            "CHAR?"},
@@ -740,6 +749,15 @@ static duna_Object* gc_callback(void *ud)
 	return &gc_data->D->global_env.vars[gc_data->count++].value;
       }
     } else if(gc_data->state == 2) {
+      /* constants */
+      if(gc_data->count == gc_data->D->nr_consts) {
+	gc_data->state++;
+	gc_data->count = 0;
+	continue;
+      } else {
+	return &gc_data->D->consts[gc_data->count++];
+      }
+    } else if(gc_data->state == 3) {
       /* registers */
       if(gc_data->count == 0) {
 	gc_data->count++;
@@ -1419,6 +1437,34 @@ int duna_vm_run(duna_State* D)
       D->accum.type = DUNA_TYPE_UNDEF;
       break;
 
+    case DUNA_OP_CONST:
+      D->accum = D->consts[EXTRACT_ARG(instr)];
+      break;
+
+    case DUNA_OP_CONST_INIT:
+      D->consts[EXTRACT_ARG(instr)] = D->accum;
+      break;
+
+    case DUNA_OP_STRING:
+      /* string size */
+      dw1 = D->accum.value.fixnum;
+
+      tmp.type = DUNA_TYPE_STRING;
+      tmp.value.gc = (duna_GCObject*)alloc_string(&D->store, DUNA_SIZE_OF_STRING(dw1));
+      check_alloc(D, tmp.value.gc);
+
+      D->accum = tmp;
+      for(i = 0; i < dw1; i++) {
+	((duna_String*)D->accum.value.gc)->chars[i] =
+	  D->stack[--D->sp].value.fixnum;
+      }
+      break;
+
+    case DUNA_OP_STRING_TO_SYMBOL:
+      tmp = duna_make_symbol(D, (duna_String*)D->accum.value.gc);
+      D->accum = tmp;
+      break;
+
     case DUNA_OP_CONS:
       tmp.type = DUNA_TYPE_PAIR;
       tmp.value.gc = (duna_GCObject*) alloc_pair(&D->store);
@@ -1473,7 +1519,6 @@ struct duna_Module_ {
 
   /* constants */
   uint32_t nr_consts;
-  duna_Object *consts;
 
   /* code */
   uint32_t *code, code_size;
@@ -1494,10 +1539,10 @@ static void duna_destroy_module(duna_Module *M)
 static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
 {
   duna_Env env;
-  duna_Object obj;
   duna_Env_Var *vars;
+  duna_Object obj, *tmp;
   uint32_t *code;
-  uint32_t i, j, dw, growth;
+  uint32_t i, j, dw, consts_base, code_base, growth;
 
   env.size = mod->nr_globals;
   env.vars = (duna_Env_Var*)malloc(env.size * sizeof(duna_Env_Var));
@@ -1545,8 +1590,19 @@ static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
     D->global_env.size = dw;
   }
 
+  /* enlarging constants */
+  consts_base = D->nr_consts;
+  dw = D->nr_consts + mod->nr_consts;
+  tmp = (duna_Object*)realloc(D->consts, dw * sizeof(duna_Object));
+  /* TODO: test return and throw error */
+  D->consts = tmp;
+  for(i = D->nr_consts; i < dw; i++) {
+    D->consts[i].type = DUNA_TYPE_UNDEF;
+  }
+  D->nr_consts = dw;
+
   /* enlarging code */
-  growth = D->code_size;
+  code_base = D->code_size;
   dw = D->code_size + mod->code_size;
   code = (uint32_t*)realloc(D->code, dw * sizeof(uint32_t));
   /* TODO: test return and throw error */
@@ -1563,7 +1619,14 @@ static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
 
     case DUNA_OP_FRAME:
       dw = EXTRACT_ARG(instr);
-      dw += growth;
+      dw += code_base;
+      instr = ((uint32_t)op) | dw << 8;
+      break;
+
+    case DUNA_OP_CONST:
+    case DUNA_OP_CONST_INIT:
+      dw = EXTRACT_ARG(instr);
+      dw += consts_base;
       instr = ((uint32_t)op) | dw << 8;
       break;
 
@@ -1687,14 +1750,7 @@ static int load_code_from_file(duna_Module *mod, const char* fname)
   /* reading globals */
   for(i = 0; i < mod->nr_globals; i++) {
 
-    /* read constant type */
-    ret = get_fixnum(f, &dw1);
-    if(!ret) {
-      fclose(f);
-      return 0;
-    }
-    
-    ret = get_string(f, mod->globals+i);
+    ret = get_string(f, &mod->globals[i]);
     if(!ret) {
       fclose(f);
       return 0;
@@ -1709,41 +1765,6 @@ static int load_code_from_file(duna_Module *mod, const char* fname)
   }
 
   mod->nr_consts = dw1;
-  mod->consts = (duna_Object*)malloc(dw1 * sizeof(duna_Object));
-  /* TODO: test return and throw error */
-
-  /* reading constants */
-  for(i = 0; i < dw1; i++) {
-
-    /* reading type */
-    ret = get_fixnum(f, &dw2);
-    if(!ret) {
-      fclose(f);
-      return 0;
-    }
-
-    mod->consts[i].type = dw2;
-
-    switch(dw2) {
-
-    case DUNA_TYPE_STRING:
-      ret = get_string(f, (duna_String**)&mod->consts[i].value.gc);
-      if(!ret) {
-	fclose(f);
-	return 0;
-      }
-      break;
-
-    case DUNA_TYPE_SYMBOL:
-      ret = get_string(f, (duna_String**)&mod->consts[i].value.gc);
-      if(!ret) {
-	fclose(f);
-	return 0;
-      }
-      break;
-    }
-
-  }
 
   /* reading code size */
   ret = get_fixnum(f, &dw1);

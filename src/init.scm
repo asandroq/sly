@@ -21,6 +21,11 @@
 ;;; THE SOFTWARE.
 ;;;
 
+;; R5RS 6.1
+
+(define (equal? x y)
+  (eqv? x y))
+
 ;; R5RS 6.3.2
 
 (define (caar x) (car (car x)))

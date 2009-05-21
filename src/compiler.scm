@@ -371,11 +371,7 @@
       (error "expression is not a procedure" e)))
 
 (define (meaning-define n e)
-  (vector 'assign
-          n
-          n
-          #f
-          (meaning e '() #f)))
+  (meaning-assignment n e '()))
 
 (define (meaning-alternative test then else r tail?)
   (vector 'alternative
@@ -390,11 +386,11 @@
                      (cons n (rename-var n)))
                    n*))
          (r2 (cons an* r))
-         (bound (map cdr an*))
          (m (meaning e r2 #t))
+         (bound (map cdr an*))
          (free (collect-free m bound))
          (sets (collect-sets m bound))
-         (m2 (flag-boxes  m sets))
+         (m2 (flag-boxes m sets))
          (m3 (calculate-addresses m2 bound free)))
     (vector 'lambda
             bound
@@ -639,9 +635,32 @@
 ;; this pass generates the code for the virtual machine
 (define (generate-toplevel-code cs m)
   (let ((c (collect-constants! cs m)))
+
+    ;; emit code to initialise constants before
+    ;; entering real code
+    (let loop ((i 0)
+               (consts (vector-ref cs 1)))
+      (if (not (null? consts))
+          (let ((const (car consts)))
+            (emit-constant cs const)
+            (instr1 cs 'CONST-INIT i)
+            (loop (+ i 1) (cdr consts)))))
+
+    ;; generate rest of code
     (generate-code cs c)))
 
-(define (collect-constants! cs m) m)
+(define (collect-constants! cs m)
+
+  (define (const-handler visitor m)
+    (let ((c (vector-ref m 1)))
+      (if (immediate? c)
+          (vector 'immed c)
+          (let ((index (install-constant! cs c)))
+            (vector 'const index)))))
+
+  (visit (list (cons 'const
+                     const-handler))
+         m))
 
 (define (generate-code cs m)
   (case (vector-ref m 0)
@@ -673,11 +692,8 @@
 (define (generate-undef cs)
   (instr cs 'LOAD-UNDEF))
 
-;(define (generate-constant cs m)
-;  (instr1 cs 'CONST (vector-ref m 1)))
-
 (define (generate-constant cs m)
-  (emit-immediate cs (vector-ref m 1)))
+  (instr1 cs 'CONST (vector-ref m 1)))
 
 (define (generate-immediate cs m)
   (emit-immediate cs (vector-ref m 1)))
@@ -967,6 +983,9 @@
     (CHECKED-GLOBAL-SET . 36)
     (LOAD-UNDEF         . 37)
     (CONST              . 38)
+    (CONST-INIT         . 39)
+    (STRING             . 40)
+    (STRING-TO-SYMBOL   . 41)
 
     ;; type predicates
     (NULL-P             . 81)
@@ -1031,6 +1050,51 @@
           (vector-set! cs 0 (append globals (list var)))
           new-index))))
 
+;; emit code for complex constants
+(define (emit-constant cs c)
+  (cond
+   ((string? c)
+    (emit-string cs c))
+   ((symbol? c)
+    (emit-string cs (symbol->string c))
+    (instr cs 'STRING-TO-SYMBOL))
+   (else
+    (error "unimplemented complex constant" c))))
+
+(define (emit-string cs str)
+  (let ((len (string-length str)))
+    (let loop ((i len))
+      (if (> i 0)
+          (begin 
+            (emit-immediate cs (string-ref str (- i 1)))
+            (instr cs 'PUSH)
+            (loop (- i 1)))
+          (begin
+            (emit-immediate cs len)
+            (instr cs 'STRING))))))
+
+;; emit code for immediate values
+(define (emit-immediate cs x)
+  (cond
+   ((null? x)
+    (instr cs 'LOAD-NIL))
+   ((boolean? x)
+    (if x
+        (instr cs 'LOAD-TRUE)
+        (instr cs 'LOAD-FALSE)))
+   ((char? x)
+    (instr1 cs 'LOAD-CHAR (char->integer x)))
+   ((integer? x)
+    (case x
+      ((0)
+       (instr cs 'LOAD-ZERO))
+      ((1)
+       (instr cs 'LOAD-ONE))
+      (else
+       (instr1 cs 'LOAD-FIXNUM x))))
+   (else
+    (error "unknown immediate"))))
+
 (define (write-code-vector cs)
   (display "#( ")
   (let ((globals (vector-ref cs 0))
@@ -1040,11 +1104,10 @@
     
     ;; globals
     (write-fixnum (length globals))
-    (for-each write-symbol globals)
+    (for-each write-global globals)
 
     ;; constants
     (write-fixnum (length consts))
-    (for-each write-constant consts)
 
     ;; code
     (write-fixnum code-size)
@@ -1059,29 +1122,9 @@
 	      (and arg1 (write-fixnum arg1)))
 	    (loop (+ i 1)))))))
 
-(define (write-constant c)
-  (cond
-   ((string? c)
-    (write-string c))
-   ((symbol? c)
-    (write-symbol c))
-   (else
-    (error "writing constant not implemented yet" c))))
-
-(define (write-string s)
-  (let ((len (string-length s)))
-    (write-fixnum (type-tag 'string))
-    (write-fixnum len)
-    (let loop ((i 0))
-      (if (< i len)
-          (begin
-            (write-fixnum (char->integer (string-ref s i)))
-            (loop (+ i 1)))))))
-
-(define (write-symbol s)
-  (let* ((str (symbol->string s))
+(define (write-global sym)
+  (let* ((str (symbol->string sym))
          (len (string-length str)))
-    (write-fixnum (type-tag 'symbol))
     (write-fixnum len)
     (let loop ((i 0))
       (if (< i len)
@@ -1105,14 +1148,6 @@
     (display b4)
     (display " ")))
 
-(define type-tag
-  (let ((types '((string . 11)
-                 (symbol .  6))))
-    (lambda (type)
-      (let ((tag (assq type types)))
-        (and tag
-             (cdr tag))))))
-  
 (define (extend-code-vector! cs)
   (let* ((len (vector-length (vector-ref cs 3)))
          (new-len (round (/ (* 3 len) 2)))
@@ -1130,28 +1165,6 @@
          (extend-code-vector! cs))
     (vector-set! cs 2 (+ i 1))
     (vector-set! (vector-ref cs 3) i instr)))
-
-;; emit code for immediate values
-(define (emit-immediate cs x)
-  (cond
-   ((null? x)
-    (instr cs 'LOAD-NIL))
-   ((boolean? x)
-    (if x
-        (instr cs 'LOAD-TRUE)
-        (instr cs 'LOAD-FALSE)))
-   ((char? x)
-    (instr1 cs 'LOAD-CHAR (char->integer x)))
-   ((integer? x)
-    (case x
-      ((0)
-       (instr cs 'LOAD-ZERO))
-      ((1)
-       (instr cs 'LOAD-ONE))
-      (else
-       (instr1 cs 'LOAD-FIXNUM x))))
-   (else
-    (error "unknown immediate"))))
 
 (define *primitives*
   '((add1 INC 1)

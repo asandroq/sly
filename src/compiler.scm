@@ -46,10 +46,8 @@
          (cs (make-compiler-state)))
     (set! *defined-globals*
           (append defs *defined-globals*))
-    (let* ((m (meaning-toplevel t+))
-           (b (flag-boxes m))
-           (u (update-lexical-addresses b)))
-      (generate-toplevel-code cs u)
+    (let  ((m (meaning-toplevel t+)))
+      (generate-toplevel-code cs m)
       (instr cs 'RETURN)
       cs)))
 
@@ -344,10 +342,12 @@
 
 ;; updates lexical address to 
 
-(define (meaning-reference e r)
-  (vector 'refer e
-                 (lookup e r)
-                 '()))
+(define (meaning-reference n r)
+  (vector 'refer
+          n
+          (lookup n r)
+          #f
+          '()))
 
 (define (meaning-quote e)
   (vector 'const e))
@@ -373,6 +373,7 @@
 (define (meaning-define n e)
   (vector 'assign
           n
+          n
           #f
           (meaning e '() #f)))
 
@@ -385,26 +386,34 @@
               (meaning else r tail?))))
 
 (define (meaning-lambda n* e r)
-  (let* ((r2 (cons n* r))
+  (let* ((an* (map (lambda (n)
+                     (cons n (rename-var n)))
+                   n*))
+         (r2 (cons an* r))
+         (bound (map cdr an*))
          (m (meaning e r2 #t))
-         (free (collect-free m 0)))
+         (free (collect-free m bound))
+         (sets (collect-sets m bound))
+         (m2 (flag-boxes  m sets))
+         (m3 (calculate-addresses m2 bound free)))
     (vector 'lambda
-            n*
-            (collect-sets m 0)
+            bound
+            sets
             (map (lambda (n)
                     (meaning-reference n r))
                  free)
-            m)))
+            m3)))
 
 (define (meaning-assignment n e r)
-  (let ((address (lookup n r))
+  (let ((n2 (lookup n r))
         (prim? (assq n *primitives*)))
     (if (and prim?
-             (not address))
+             (eq? n n2))
         (error "assignment to primitive not allowed" n)
         (vector 'assign
                 n
-                address
+                n2
+                #f
                 (meaning e r #f)))))
 
 (define (meaning-application e e* r tail?)
@@ -441,19 +450,25 @@
 
 (define (lookup n r)
   (if (null? r)
-      #f
-      (let loop ((i 0)
-                 (j 0)
-                 (s (car r))
+      n
+      (let loop ((s (car r))
                  (r (cdr r)))
         (if (null? s)
             (if (null? r)
-                #f
-                (loop 0 (+ j 1) (car r) (cdr r)))
+                n
+                (loop (car r) (cdr r)))
             (let ((v (car s)))
-              (if (eq? v n)
-                  (cons i j)
-                  (loop (+ i 1) j (cdr s) r)))))))
+              (if (eq? n (car v))
+                  (cdr v)
+                  (loop (cdr s) r)))))))
+
+(define rename-var
+  (let ((c 0))
+    (lambda (n)
+      (set! c (+ c 1))
+      (string->symbol
+       (string-append (symbol->string n)
+                      (number->string c))))))
 
 ;; tests is an expression is a valid lambda expression
 (define (lambda-exp? e)
@@ -473,138 +488,136 @@
        (symbol? (car e))
        (null? (cdr e))))
 
-(define (collect-free m level)
+(define (collect-free m bound)
   (case (vector-ref m 0)
     ((refer)
-     (set-if-test m > level))
+     (let ((n (vector-ref m 1))
+           (an (vector-ref m 2)))
+       (if (or (eq? n an)
+               (memq an bound))
+           '()
+           (list an))))
     ((sequence)
-     (set-union (collect-free (vector-ref m 1) level)
-                (collect-free (vector-ref m 2) level)))
+     (set-union (collect-free (vector-ref m 1) bound)
+                (collect-free (vector-ref m 2) bound)))
     ((call/cc)
-     (collect-free (vector-ref m 1) level))
+     (collect-free (vector-ref m 1) bound))
     ((alternative)
-     (set-union (collect-free (vector-ref m 1) level)
-                (set-union (collect-free (vector-ref m 2) level)
-                           (collect-free (vector-ref m 3) level))))
+     (set-union (collect-free (vector-ref m 1) bound)
+                (set-union (collect-free (vector-ref m 2) bound)
+                           (collect-free (vector-ref m 3) bound))))
     ((lambda)
-     (collect-free (vector-ref m 4) (+ level 1)))
+     (collect-free (vector-ref m 4)
+                   (append (vector-ref m 1) bound)))
     ((assign)
-     (set-union (set-if-test m > level)
-                (collect-free (vector-ref m 3) level)))
+     (set-union (let ((n (vector-ref m 1))
+                      (an (vector-ref m 2)))
+                  (if (or (eq? n an)
+                          (memq an bound))
+                      '()
+                      (list an)))
+                (collect-free (vector-ref m 4) bound)))
     ((apply)
-     (set-union (collect-free (vector-ref m 2) level)
-                (collect-free (vector-ref m 3) level)))
+     (set-union (collect-free (vector-ref m 2) bound)
+                (collect-free (vector-ref m 3) bound)))
     ((arg-list)
-     (set-union (collect-free (vector-ref m 1) level)
-                (collect-free (vector-ref m 2) level)))
+     (set-union (collect-free (vector-ref m 1) bound)
+                (collect-free (vector-ref m 2) bound)))
     (else
      '())))
 
-(define (collect-sets m level)
+(define (collect-sets m bound)
   (case (vector-ref m 0)
     ((sequence)
-     (set-union (collect-sets (vector-ref m 1) level)
-                (collect-sets (vector-ref m 2) level)))
+     (set-union (collect-sets (vector-ref m 1) bound)
+                (collect-sets (vector-ref m 2) bound)))
     ((call/cc)
-     (collect-sets (vector-ref m 1) level))
+     (collect-sets (vector-ref m 1) bound))
     ((alternative)
-     (set-union (collect-sets (vector-ref m 1) level)
-                (set-union (collect-sets (vector-ref m 2) level)
-                           (collect-sets (vector-ref m 3) level))))
+     (set-union (collect-sets (vector-ref m 1) bound)
+                (set-union (collect-sets (vector-ref m 2) bound)
+                           (collect-sets (vector-ref m 3) bound))))
     ((lambda)
-     (collect-sets (vector-ref m 4) (+ level 1)))
+     (collect-sets (vector-ref m 4) bound))
     ((assign)
-     (set-if-test m = level))
+     (let ((n (vector-ref m 1))
+           (an (vector-ref m 2)))
+       (if (and (not (eq? n an))
+                (memq an bound))
+           (list an)
+           '())))
     ((apply)
-     (set-union (collect-sets (vector-ref m 2) level)
-                (collect-sets (vector-ref m 3) level)))
+     (set-union (collect-sets (vector-ref m 2) bound)
+                (collect-sets (vector-ref m 3) bound)))
     ((arg-list)
-     (set-union (collect-sets (vector-ref m 1) level)
-                (collect-sets (vector-ref m 2) level)))
+     (set-union (collect-sets (vector-ref m 1) bound)
+                (collect-sets (vector-ref m 2) bound)))
     (else
      '())))
 
-(define (set-if-test m test level)
-  (let ((var     (vector-ref m 1))
-        (address (vector-ref m 2)))
-    (if (pair? address)
-        (let ((frame (cdr address)))
-          (if (test frame level)
-              (list var)
-              '()))
-        '())))
-
 ;; flags references to assigned variables as boxes
-(define (flag-boxes m)
+(define (flag-boxes m sets)
 
-  (define (internal-refer visitor m sets level)
-    (let ((address (vector-ref m 2)))
-      (if address
-          (let ((var (vector-ref m 1))
-                (frame (cdr address)))
-            (if (and (= frame level)
-                     (memq var sets))
-                (vector 'refer
-                        var
-                        address
-                        (cons 'box (vector-ref m 3)))
-                m))
-          m)))
+  (define (refer-handler visitor m sets)
+    (let ((an (vector-ref m 2))
+          (flags (vector-ref m 4)))
+      (vector 'refer
+              (vector-ref m 1)
+              an
+              (vector-ref m 3)
+              (if (memq an sets)
+                  (cons 'box flags)
+                  flags))))
 
-  (define (internal-lambda visitor m sets level)
+  (define (lambda-handler visitor m sets)
     (vector 'lambda
             (vector-ref m 1)
             (vector-ref m 2)
             (map (lambda (m)
-                   (visitor m sets level))
+                   (visitor m sets))
                  (vector-ref m 3))
-            (visitor (vector-ref m 4) sets (+ level 1))))
+            (visitor (vector-ref m 4) sets)))
 
-  (define (external-lambda visitor m)
-    (let* ((sets (vector-ref m 2))
-           (boxed (visit (list (cons 'refer
-                                     internal-refer)
-                               (cons 'lambda
-                                     internal-lambda))
-                         (vector-ref m 4) sets 0)))
-      (vector 'lambda
-              (vector-ref m 1)
-              sets
-              (vector-ref m 3)
-              (visitor boxed))))
+  (visit (list (cons 'refer
+                     refer-handler)
+               (cons 'lambda
+                     lambda-handler))
+         m
+         sets))
 
-  (visit (list (cons 'lambda external-lambda)) m))
+(define (calculate-addresses m bound free)
 
-;; updates lexical addresses to remove multi-frame references
-(define (update-lexical-addresses m)
-
-  (define (internal-refer visitor m bound free)
-    (let ((var (vector-ref m 1))
-          (address (vector-ref m 2)))
+  (define (refer-handler visitor m bound free)
+    (let ((an (vector-ref m 2)))
       (vector 'refer
-              var
-              (if address
-                  (let ((frame (cdr address)))
-                    (if (zero? frame)
-                        (cons 'bound (index-of var bound))
-                        (cons 'free (index-of var free))))
-                  #f)
-              (vector-ref m 3))))
+              (vector-ref m 1)
+              an
+              (cond
+               ((index-of an bound) =>
+                (lambda (i)
+                  (cons 'bound i)))
+               ((index-of an free) =>
+                (lambda (i)
+                  (cons 'free i)))
+               (else #f))
+              (vector-ref m 4))))
 
-  (define (internal-assign visitor m bound free)
-    (let ((var (vector-ref m 1))
-          (address (vector-ref m 2)))
+  (define (assign-handler visitor m bound free)
+    (let ((an (vector-ref m 2)))
       (vector 'assign
-              var
-              (if address
-                  (let ((frame (cdr address)))
-                    (if (zero? frame)
-                        (cons 'bound (index-of var bound))
-                        (cons 'free (index-of var free))))
-                  #f)
-              (visitor (vector-ref m 3) bound free))))
+              (vector-ref m 1)
+              an
+              (cond
+               ((index-of an bound) =>
+                (lambda (i)
+                  (cons 'bound i)))
+               ((index-of an free) =>
+                (lambda (i)
+                  (cons 'free i)))
+               (else #f))
+              (visitor (vector-ref m 4) bound free))))
 
-  (define (internal-lambda visitor m bound free)
+  (define (lambda-handler visitor m bound free)
     (vector 'lambda
             (vector-ref m 1)
             (vector-ref m 2)
@@ -613,25 +626,15 @@
                  (vector-ref m 3))
             (vector-ref m 4)))
 
-  (define (external-lambda visitor m)
-    (let ((bound (vector-ref m 1))
-          (free (map (lambda (m)
-                       (vector-ref m 1))
-                     (vector-ref m 3))))
-      (let ((updated (visit (list (cons 'refer
-                                        internal-refer)
-                                  (cons 'assign
-                                        internal-assign)
-                                  (cons 'lambda
-                                        internal-lambda))
-                            (vector-ref m 4) bound free)))
-        (vector 'lambda
-                bound
-                (vector-ref m 2)
-                (vector-ref m 3)
-                (visitor updated)))))
-
-  (visit (list (cons 'lambda external-lambda)) m))
+  (visit (list (cons 'refer
+                     refer-handler)
+               (cons 'assign
+                     assign-handler)
+               (cons 'lambda
+                     lambda-handler))
+         m
+         bound
+         free))
 
 ;; this pass generates the code for the virtual machine
 (define (generate-toplevel-code cs m)
@@ -680,7 +683,7 @@
   (emit-immediate cs (vector-ref m 1)))
 
 (define (generate-reference cs m unbox?)
-  (let ((address (vector-ref m 2)))
+  (let ((address (vector-ref m 3)))
     (if address
         (let ((kind (car address))
               (pos  (cdr address)))
@@ -702,7 +705,7 @@
             (else
              (error "unknown binding type" m)))
           (and unbox?
-               (memq 'box (vector-ref m 3))
+               (memq 'box (vector-ref m 4))
                (instr cs 'OPEN-BOX)))
         (let* ((var (vector-ref m 1))
                (index (install-global! cs var)))
@@ -792,8 +795,8 @@
           (loop (cdr f)))))))
 
 (define (generate-assignment cs m)
-  (generate-code cs (vector-ref m 3))
-  (let ((address (vector-ref m 2)))
+  (generate-code cs (vector-ref m 4))
+  (let ((address (vector-ref m 3)))
     (if address
         (let ((kind (car address))
               (pos  (cdr address)))
@@ -895,13 +898,16 @@
              (vector 'lambda
                      (vector-ref m 1)
                      (vector-ref m 2)
-                     (vector-ref m 3)
+                     (map (lambda (m)
+                            (apply visitor m args))
+                          (vector-ref m 3))
                      (apply visitor (vector-ref m 4) args)))
             ((assign)
              (vector 'assign
                      (vector-ref m 1)
                      (vector-ref m 2)
-                     (apply visitor (vector-ref m 3) args)))
+                     (vector-ref m 3)
+                     (apply visitor (vector-ref m 4) args)))
             ((apply)
              (vector 'apply
                      (vector-ref m 1)

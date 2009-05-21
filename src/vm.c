@@ -787,7 +787,7 @@ duna_State* duna_init(void)
     free(D);
     return NULL;
   }
-  /* instruction to halt the machine always at address 0 */
+  /* instruction to halt execution always at address 0 */
   D->code[0] = (uint32_t) DUNA_OP_HALT;
 
   /* stack */
@@ -800,16 +800,6 @@ duna_State* duna_init(void)
     free(D);
     return NULL;
   }
-  /* initial frame on stack with address of halt instruction */
-  (D->stack[0]).type = DUNA_TYPE_FIXNUM;
-  (D->stack[0]).value.fixnum = 0;
-  (D->stack[1]).type = DUNA_TYPE_UNDEF;
-  (D->stack[2]).type = DUNA_TYPE_FIXNUM;
-  (D->stack[2]).value.fixnum = 0;
-  (D->stack[3]).type = DUNA_TYPE_FIXNUM;
-  (D->stack[3]).value.fixnum = 0;
-  D->sp = 4;
-  D->fp = 3;
 
   D->symbol_table = NULL;
 
@@ -1106,7 +1096,7 @@ int duna_vm_run(duna_State* D)
     duna_Object tmp;
 
     /* debugging */
-    //duna_dump(D);
+    duna_dump(D);
     assert(D->pc < D->code_size);
 
     instr = D->code[D->pc++];
@@ -1613,19 +1603,19 @@ static int get_fixnum(FILE* f, uint32_t *num)
   uint32_t b1, b2, b3, b4;
 
   ret = get_next(f, &b1);
-  if(ret < 0) {
+  if(!ret) {
     return 0;
   }
   ret = get_next(f, &b2);
-  if(ret < 0) {
+  if(!ret) {
     return 0;
   }
   ret = get_next(f, &b3);
-  if(ret < 0) {
+  if(!ret) {
     return 0;
   }
   ret = get_next(f, &b4);
-  if(ret < 0) {
+  if(!ret) {
     return 0;
   }
 
@@ -1696,6 +1686,14 @@ static int load_code_from_file(duna_Module *mod, const char* fname)
 
   /* reading globals */
   for(i = 0; i < mod->nr_globals; i++) {
+
+    /* read constant type */
+    ret = get_fixnum(f, &dw1);
+    if(!ret) {
+      fclose(f);
+      return 0;
+    }
+    
     ret = get_string(f, mod->globals+i);
     if(!ret) {
       fclose(f);
@@ -1801,6 +1799,24 @@ int duna_load_file(duna_State* D, const char *fname)
   D->pc = duna_link_module(D, &mod);
   duna_destroy_module(&mod);
 
+  /* initial frame on stack with address of halt instruction */
+  /* return address */
+  (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
+  (D->stack[D->sp++]).value.fixnum = 0;
+
+  /* saved procedure */
+  D->stack[D->sp++] = D->proc;
+
+  /* saved frame pointer */
+  (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
+  (D->stack[D->sp++]).value.fixnum = D->fp;
+
+  /* number of arguments */
+  (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
+  (D->stack[D->sp++]).value.fixnum = 0;
+
+  D->fp = D->sp - 1;
+
   return duna_vm_run(D);
 }
 
@@ -1819,6 +1835,10 @@ int main(int argc, char *argv[])
   }
 
   D = duna_init();
+
+  /* tries to load initial environment */
+  duna_load_file(D, "init.fasl");
+
   if(!duna_load_file(D, argv[1])) {
     printf("Error!\n");
   }

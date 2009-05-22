@@ -91,8 +91,6 @@
 #define DUNA_OP_LOAD_UNDEF             37
 #define DUNA_OP_CONST                  38
 #define DUNA_OP_CONST_INIT             39
-#define DUNA_OP_STRING                 40
-#define DUNA_OP_STRING_TO_SYMBOL       41
 
 /* type predicates */
 #define DUNA_OP_NULL_P                 81
@@ -116,6 +114,8 @@
 #define DUNA_OP_NUM_EQ                113
 #define DUNA_OP_EQ                    114
 #define DUNA_OP_EQV                   115
+#define DUNA_OP_STRING                116
+#define DUNA_OP_STRING_TO_SYMBOL      117
 
 /*
  * data types tags
@@ -205,8 +205,6 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_LOAD_UNDEF,             "LOAD-UNDEF"},
   {DUNA_OP_CONST,                  "CONST"},
   {DUNA_OP_CONST_INIT,             "CONST-INIT"},
-  {DUNA_OP_STRING,                 "STRING"},
-  {DUNA_OP_STRING_TO_SYMBOL,       "STRING->SYMBOL"},
   {DUNA_OP_NULL_P,            "NULL?"},
   {DUNA_OP_BOOL_P,            "BOOL?"},
   {DUNA_OP_CHAR_P,            "CHAR?"},
@@ -226,6 +224,8 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_NUM_EQ,            "NUM-EQ"},
   {DUNA_OP_EQ,                "EQ?"},
   {DUNA_OP_EQV,               "EQV?"},
+  {DUNA_OP_STRING,                 "STRING"},
+  {DUNA_OP_STRING_TO_SYMBOL,       "STRING->SYMBOL"},
   {0, NULL}
 };
 
@@ -1445,26 +1445,6 @@ int duna_vm_run(duna_State* D)
       D->consts[EXTRACT_ARG(instr)] = D->accum;
       break;
 
-    case DUNA_OP_STRING:
-      /* string size */
-      dw1 = D->accum.value.fixnum;
-
-      tmp.type = DUNA_TYPE_STRING;
-      tmp.value.gc = (duna_GCObject*)alloc_string(&D->store, DUNA_SIZE_OF_STRING(dw1));
-      check_alloc(D, tmp.value.gc);
-
-      D->accum = tmp;
-      for(i = 0; i < dw1; i++) {
-	((duna_String*)D->accum.value.gc)->chars[i] =
-	  D->stack[--D->sp].value.fixnum;
-      }
-      break;
-
-    case DUNA_OP_STRING_TO_SYMBOL:
-      tmp = duna_make_symbol(D, (duna_String*)D->accum.value.gc);
-      D->accum = tmp;
-      break;
-
     case DUNA_OP_CONS:
       tmp.type = DUNA_TYPE_PAIR;
       tmp.value.gc = (duna_GCObject*) alloc_pair(&D->store);
@@ -1498,6 +1478,26 @@ int duna_vm_run(duna_State* D)
       DUNA_SET_BOOL(D->accum.type == D->stack[D->sp-1].type &&
 		    D->accum.value.symbol == D->stack[D->sp-1].value.symbol);
       --D->sp;
+      break;
+
+    case DUNA_OP_STRING:
+      /* string size */
+      dw1 = D->accum.value.fixnum;
+
+      tmp.type = DUNA_TYPE_STRING;
+      tmp.value.gc = (duna_GCObject*)alloc_string(&D->store, dw1);
+      check_alloc(D, tmp.value.gc);
+
+      D->accum = tmp;
+      for(i = 0; i < dw1; i++) {
+	((duna_String*)D->accum.value.gc)->chars[i] =
+	  D->stack[--D->sp].value.fixnum;
+      }
+      break;
+
+    case DUNA_OP_STRING_TO_SYMBOL:
+      tmp = duna_make_symbol(D, (duna_String*)D->accum.value.gc);
+      D->accum = tmp;
       break;
     }
   }
@@ -1640,12 +1640,12 @@ static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
       break;
     }
 
-    D->code[growth+i] = instr;
+    D->code[code_base+i] = instr;
   }
 
   free(env.vars);
 
-  return growth;
+  return code_base;
 }
 
 static int get_next(FILE* f, uint32_t *next)
@@ -1707,6 +1707,7 @@ static int get_string(FILE *f, duna_String **str)
     ret = get_fixnum(f, &dw2);
     if(!ret) {
       free(*str);
+      *str = NULL;
       return 0;
     }
     (*str)->chars[i] = dw2;

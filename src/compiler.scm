@@ -984,8 +984,6 @@
     (LOAD-UNDEF         . 37)
     (CONST              . 38)
     (CONST-INIT         . 39)
-    (STRING             . 40)
-    (STRING-TO-SYMBOL   . 41)
 
     ;; type predicates
     (NULL-P             . 81)
@@ -1008,7 +1006,9 @@
     (CDR                . 112)
     (NUM-EQ             . 113)
     (EQ                 . 114)
-    (EQV                . 115)))
+    (EQV                . 115)
+    (STRING             . 116)
+    (STRING-TO-SYMBOL   . 117)))
 
 (define (make-compiler-state)
   (vector

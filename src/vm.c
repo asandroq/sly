@@ -117,6 +117,8 @@
 #define DUNA_OP_MAKE_STRING           116
 #define DUNA_OP_STRING_SET            117
 #define DUNA_OP_STRING_TO_SYMBOL      118
+#define DUNA_OP_MAKE_VECTOR           119
+#define DUNA_OP_VECTOR_SET            120
 
 /*
  * data types tags
@@ -132,6 +134,7 @@
 #define DUNA_TYPE_CONTINUATION          9
 #define DUNA_TYPE_BOX                  10
 #define DUNA_TYPE_STRING               11
+#define DUNA_TYPE_VECTOR               12
 
 #define IS_TYPE_B(instr) \
    ((instr) == DUNA_OP_LOAD_FIXNUM ||            \
@@ -228,6 +231,8 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_MAKE_STRING,            "MAKE-STRING"},
   {DUNA_OP_STRING_SET,             "STRING-SET"},
   {DUNA_OP_STRING_TO_SYMBOL,       "STRING->SYMBOL"},
+  {DUNA_OP_MAKE_VECTOR,            "MAKE-VECTOR"},
+  {DUNA_OP_VECTOR_SET,             "VECTOR-SET"},
   {0, NULL}
 };
 
@@ -245,6 +250,8 @@ typedef struct duna_Closure_ duna_Closure;
 typedef struct duna_Pair_ duna_Pair;
 typedef struct duna_Continuation_ duna_Continuation;
 typedef struct duna_String_ duna_String;
+typedef struct duna_Vector_ duna_Vector;
+
 typedef struct duna_Symbol_ duna_Symbol;
 
 /* value types */
@@ -302,6 +309,12 @@ struct duna_String_ {
   duna_Char chars[0];
 };
 
+struct duna_Vector_ {
+  DUNA_GC_BASE;
+  uint32_t size;
+  duna_Object data[0];
+};
+
 /*
  * entry in the symbol table
  * symbols are not collected
@@ -334,6 +347,8 @@ struct duna_Symbol_ {
    (sizeof(duna_Continuation) + (n) * sizeof(duna_Object))
 #define DUNA_SIZE_OF_STRING(n) \
    (sizeof(duna_String) + (n) * sizeof(duna_Char))
+#define DUNA_SIZE_OF_VECTOR(n) \
+   (sizeof(duna_Vector) + (n) * sizeof(duna_Object))
 
 /*
  * this callback is called by the garbage collector
@@ -428,6 +443,10 @@ static uint32_t sizeof_gcobj(duna_GCObject* obj)
     size = DUNA_SIZE_OF_STRING(((duna_String*)obj)->size);
     break;
 
+  case DUNA_TYPE_VECTOR:
+    size = DUNA_SIZE_OF_VECTOR(((duna_Vector*)obj)->size);
+    break;
+
   default:
     size = 0;
   }
@@ -514,6 +533,12 @@ static void collect_garbage(duna_Store* S)
 
     case DUNA_TYPE_BOX:
       copy_object(S, &((duna_Box*)gcobj)->value);
+      break;
+
+    case DUNA_TYPE_VECTOR:
+      for(i = 0; i < ((duna_Vector*)gcobj)->size; i++) {
+	copy_object(S, &(((duna_Vector*)gcobj)->data[i]));
+      }
       break;
     }
 
@@ -639,6 +664,20 @@ static duna_String *alloc_string(duna_Store *S, uint32_t size)
 
   if(ret) {
     ret->type = DUNA_TYPE_STRING;
+    ret->size = size;
+  }
+
+  return ret;
+}
+
+static duna_Vector* alloc_vector(duna_Store *S, uint32_t size)
+{
+  duna_Vector* ret;
+
+  ret = (duna_Vector*)alloc_from_store(S, DUNA_SIZE_OF_VECTOR(size));
+
+  if(ret) {
+    ret->type = DUNA_TYPE_VECTOR;
     ret->size = size;
   }
 
@@ -946,6 +985,8 @@ static void write_string(duna_String* s, int quote)
 
 static void write_obj(duna_Object* obj)
 {
+  uint32_t i;
+
   switch(obj->type) {
 
   case DUNA_TYPE_UNDEF:
@@ -999,6 +1040,15 @@ static void write_obj(duna_Object* obj)
 
   case DUNA_TYPE_STRING:
     write_string((duna_String*)obj->value.gc, 1);
+    break;
+
+  case DUNA_TYPE_VECTOR:
+    printf("#(");
+    for(i = 0; i < ((duna_Vector*)obj->value.gc)->size; i++) {
+      printf(" ");
+      write_obj(((duna_Vector*)obj->value.gc)->data + i);
+    }
+    printf(")");
     break;
 
   default:
@@ -1523,6 +1573,30 @@ int duna_vm_run(duna_State* D)
     case DUNA_OP_STRING_TO_SYMBOL:
       tmp = duna_make_symbol(D, (duna_String*)D->accum.value.gc);
       D->accum = tmp;
+      break;
+
+    case DUNA_OP_MAKE_VECTOR:
+      /* vector size */
+      dw1 = D->accum.value.fixnum;
+
+      tmp.type = DUNA_TYPE_VECTOR;
+      tmp.value.gc = (duna_GCObject*)alloc_vector(&D->store, dw1);
+      check_alloc(D, tmp.value.gc);
+
+      D->accum = tmp;
+      break;
+
+    case DUNA_OP_VECTOR_SET:
+      /*
+       * this is an anomaly
+       * the index is in the accumulator,
+       * the value on the top of the stack,
+       * and the vector below it
+       */
+      dw1 = D->accum.value.fixnum;
+      tmp = D->stack[--D->sp];
+      D->accum = D->stack[--D->sp];
+      ((duna_Vector*)D->accum.value.gc)->data[dw1] = tmp;    
       break;
     }
   }

@@ -114,8 +114,9 @@
 #define DUNA_OP_NUM_EQ                113
 #define DUNA_OP_EQ                    114
 #define DUNA_OP_EQV                   115
-#define DUNA_OP_STRING                116
-#define DUNA_OP_STRING_TO_SYMBOL      117
+#define DUNA_OP_MAKE_STRING           116
+#define DUNA_OP_STRING_SET            117
+#define DUNA_OP_STRING_TO_SYMBOL      118
 
 /*
  * data types tags
@@ -224,7 +225,8 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_NUM_EQ,            "NUM-EQ"},
   {DUNA_OP_EQ,                "EQ?"},
   {DUNA_OP_EQV,               "EQV?"},
-  {DUNA_OP_STRING,                 "STRING"},
+  {DUNA_OP_MAKE_STRING,            "MAKE-STRING"},
+  {DUNA_OP_STRING_SET,             "STRING-SET"},
   {DUNA_OP_STRING_TO_SYMBOL,       "STRING->SYMBOL"},
   {0, NULL}
 };
@@ -1494,7 +1496,7 @@ int duna_vm_run(duna_State* D)
       --D->sp;
       break;
 
-    case DUNA_OP_STRING:
+    case DUNA_OP_MAKE_STRING:
       /* string size */
       dw1 = D->accum.value.fixnum;
 
@@ -1503,10 +1505,19 @@ int duna_vm_run(duna_State* D)
       check_alloc(D, tmp.value.gc);
 
       D->accum = tmp;
-      for(i = 0; i < dw1; i++) {
-	((duna_String*)D->accum.value.gc)->chars[i] =
-	  D->stack[--D->sp].value.fixnum;
-      }
+      break;
+
+    case DUNA_OP_STRING_SET:
+      /*
+       * this is an anomaly
+       * the index is in the accumulator,
+       * the character on the top of the stack,
+       * and the string below it
+       */
+      dw1 = D->accum.value.fixnum;
+      dw2 = D->stack[--D->sp].value.chr;
+      D->accum = D->stack[--D->sp];
+      ((duna_String*)D->accum.value.gc)->chars[dw1] = dw2;
       break;
 
     case DUNA_OP_STRING_TO_SYMBOL:

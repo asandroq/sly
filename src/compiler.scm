@@ -1007,8 +1007,9 @@
     (NUM-EQ             . 113)
     (EQ                 . 114)
     (EQV                . 115)
-    (STRING             . 116)
-    (STRING-TO-SYMBOL   . 117)))
+    (MAKE-STRING        . 116)
+    (STRING-SET         . 117)
+    (STRING-TO-SYMBOL   . 118)))
 
 (define (make-compiler-state)
   (vector
@@ -1063,15 +1064,17 @@
 
 (define (emit-string cs str)
   (let ((len (string-length str)))
-    (let loop ((i len))
-      (if (> i 0)
-          (begin 
-            (emit-immediate cs (string-ref str (- i 1)))
-            (instr cs 'PUSH)
-            (loop (- i 1)))
+    (emit-immediate cs len)
+    (instr cs 'MAKE-STRING)
+    (let loop ((i 0))
+      (if (< i len)
           (begin
-            (emit-immediate cs len)
-            (instr cs 'STRING))))))
+            (instr cs 'PUSH)
+            (emit-immediate cs (string-ref str i))
+            (instr cs 'PUSH)
+            (emit-immediate cs i)
+            (instr cs 'STRING-SET)
+            (loop (+ i 1)))))))
 
 ;; emit code for immediate values
 (define (emit-immediate cs x)
@@ -1185,7 +1188,8 @@
     (cdr CDR 1)
     (= NUM-EQ 2)
     (eq? EQ 2)
-    (eqv? EQV 2)))
+    (eqv? EQV 2)
+    (string->symbol STRING-TO-SYMBOL 1)))
 
 ;;
 ;; Utilities

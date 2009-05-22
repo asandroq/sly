@@ -1056,6 +1056,20 @@ void duna_dump(duna_State* D)
     printf(" ");
     write_obj(D->stack + i);
   }
+  /*printf("\n");
+
+  printf("Globals:\n\t");
+  for(i = 0; i < D->global_env.size; i++) {
+    duna_Env_Var var = D->global_env.vars[i];
+    printf(" [");
+    if(var.symbol) {
+      write_string(var.symbol->str, 0);
+    }
+    printf(" . ");
+    write_obj(&var.value);
+    printf("]");
+    }*/
+
   printf("\n\n");
 }
 
@@ -1582,7 +1596,7 @@ static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
 
     for(i = 0; i < env.size; i++) {
       j = env.vars[i].value.value.fixnum;
-      if(D->global_env.size < j) {
+      if(!(j < D->global_env.size)) {
 	D->global_env.vars[j].symbol = env.vars[i].symbol;
 	D->global_env.vars[j].value.type = DUNA_TYPE_UNDEF;
       }

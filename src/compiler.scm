@@ -843,9 +843,9 @@
             (generate-code cs (vector-ref args 1))
             (instr cs code))
            ((= arity 2)
-            (generate-code cs (vector-ref (vector-ref args 2) 1))
-            (instr cs 'PUSH)
             (generate-code cs (vector-ref args 1))
+            (instr cs 'PUSH)
+            (generate-code cs (vector-ref (vector-ref args 2) 1))
             (instr cs code))
            (else
             (error "Primitive with unknown arity"))))
@@ -1064,9 +1064,9 @@
       (if (< i len)
           (begin
             (instr cs 'PUSH)
-            (emit-immediate cs (string-ref str i))
-            (instr cs 'PUSH)
             (emit-immediate cs i)
+            (instr cs 'PUSH)
+            (emit-immediate cs (string-ref str i))
             (instr cs 'STRING-SET)
             (loop (+ i 1)))))))
 

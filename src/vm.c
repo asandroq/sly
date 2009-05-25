@@ -1218,7 +1218,7 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_LOAD_CHAR:
       D->accum.type = DUNA_TYPE_CHAR;
-      D->accum.value.chr = (uint8_t) EXTRACT_ARG(instr);
+      D->accum.value.chr = (duna_Char) EXTRACT_ARG(instr);
       break;
 
     case DUNA_OP_INC:
@@ -1231,7 +1231,7 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_FIXNUM_TO_CHAR:
       D->accum.type = DUNA_TYPE_CHAR;
-      D->accum.value.chr = (uint8_t) D->accum.value.fixnum;
+      D->accum.value.chr = (duna_Char) D->accum.value.fixnum;
       break;
 
     case DUNA_OP_CHAR_TO_FIXNUM:
@@ -1269,15 +1269,18 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_PLUS:
-      D->accum.value.fixnum += (D->stack[--D->sp]).value.fixnum;
+      D->accum.value.fixnum =
+	(D->stack[--D->sp]).value.fixnum + D->accum.value.fixnum;
       break;
 
     case DUNA_OP_MINUS:
-      D->accum.value.fixnum -= (D->stack[--D->sp]).value.fixnum;
+      D->accum.value.fixnum =
+	(D->stack[--D->sp]).value.fixnum - D->accum.value.fixnum;
       break;
 
     case DUNA_OP_MULT:
-      D->accum.value.fixnum *= (D->stack[--D->sp]).value.fixnum;
+      D->accum.value.fixnum =
+	(D->stack[--D->sp]).value.fixnum * D->accum.value.fixnum;
       break;
 
     case DUNA_OP_LOAD_0:
@@ -1516,8 +1519,8 @@ int duna_vm_run(duna_State* D)
       tmp.value.gc = (duna_GCObject*) alloc_pair(&D->store);
       check_alloc(D, tmp.value.gc);
 
-      ((duna_Pair*)tmp.value.gc)->car = D->accum;
-      ((duna_Pair*)tmp.value.gc)->cdr = D->stack[--D->sp];
+      ((duna_Pair*)tmp.value.gc)->car = D->stack[--D->sp];
+      ((duna_Pair*)tmp.value.gc)->cdr = D->accum;
       D->accum = tmp;
       break;
 
@@ -1558,16 +1561,10 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_STRING_SET:
-      /*
-       * this is an anomaly
-       * the index is in the accumulator,
-       * the character on the top of the stack,
-       * and the string below it
-       */
-      dw1 = D->accum.value.fixnum;
-      dw2 = D->stack[--D->sp].value.chr;
+      dw1 = D->accum.value.chr;
+      dw2 = D->stack[--D->sp].value.fixnum;
       D->accum = D->stack[--D->sp];
-      ((duna_String*)D->accum.value.gc)->chars[dw1] = dw2;
+      ((duna_String*)D->accum.value.gc)->chars[dw2] = dw1;
       break;
 
     case DUNA_OP_STRING_TO_SYMBOL:
@@ -1587,14 +1584,8 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_VECTOR_SET:
-      /*
-       * this is an anomaly
-       * the index is in the accumulator,
-       * the value on the top of the stack,
-       * and the vector below it
-       */
-      dw1 = D->accum.value.fixnum;
-      tmp = D->stack[--D->sp];
+      tmp = D->accum;
+      dw1 = D->stack[--D->sp].value.fixnum;
       D->accum = D->stack[--D->sp];
       ((duna_Vector*)D->accum.value.gc)->data[dw1] = tmp;    
       break;

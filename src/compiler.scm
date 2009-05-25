@@ -91,6 +91,8 @@
 	   (simplify-let* exp))
 	  ((letrec)
 	   (simplify-letrec exp))
+          ((quote)
+           exp)
 	  (else
 	   (map simplify exp))))
       exp))
@@ -692,7 +694,7 @@
   (instr1 cs 'CONST (vector-ref m 1)))
 
 (define (generate-immediate cs m)
-  (emit-immediate cs (vector-ref m 1)))
+  (emit-constant cs (vector-ref m 1)))
 
 (define (generate-reference cs m unbox?)
   (let ((address (vector-ref m 3)))
@@ -1003,7 +1005,9 @@
     (EQV                . 115)
     (MAKE-STRING        . 116)
     (STRING-SET         . 117)
-    (STRING-TO-SYMBOL   . 118)))
+    (STRING-TO-SYMBOL   . 118)
+    (MAKE-VECTOR        . 119)
+    (VECTOR-SET         . 120)))
 
 (define (make-compiler-state)
   (vector
@@ -1045,16 +1049,27 @@
           (vector-set! cs 0 (append globals (list var)))
           new-index))))
 
-;; emit code for complex constants
 (define (emit-constant cs c)
   (cond
+   ((immediate? c)
+    (emit-immediate cs c))
+   ((pair? c)
+    (emit-pair cs c))
    ((string? c)
     (emit-string cs c))
    ((symbol? c)
     (emit-string cs (symbol->string c))
     (instr cs 'STRING-TO-SYMBOL))
+   ((vector? c)
+    (emit-vector cs c))
    (else
     (error "unimplemented complex constant" c))))
+
+(define (emit-pair cs p)
+  (emit-constant cs (car p))
+  (instr cs 'PUSH)
+  (emit-constant cs (cdr p))
+  (instr cs 'CONS))
 
 (define (emit-string cs str)
   (let ((len (string-length str)))
@@ -1068,6 +1083,20 @@
             (instr cs 'PUSH)
             (emit-immediate cs (string-ref str i))
             (instr cs 'STRING-SET)
+            (loop (+ i 1)))))))
+
+(define (emit-vector cs vec)
+  (let ((len (vector-length vec)))
+    (emit-immediate cs len)
+    (instr cs 'MAKE-VECTOR)
+    (let loop ((i 0))
+      (if (< i len)
+          (begin
+            (instr cs 'PUSH)
+            (emit-immediate cs i)
+            (instr cs 'PUSH)
+            (emit-constant cs (vector-ref vec i))
+            (instr cs 'VECTOR-SET)
             (loop (+ i 1)))))))
 
 ;; emit code for immediate values

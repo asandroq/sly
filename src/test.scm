@@ -47,5 +47,9 @@
       (fact-iter n 1))
     (fact 12)))
 
+(define test4
+  '((define ugly-data '(0 (a . 34) #(1 2 "house" #\y casa #\z 3 4) "hah"))
+    ugly-data))
+
 (compile-to-file "test.fasl" test1)
 

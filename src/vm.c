@@ -663,8 +663,14 @@ static duna_String *alloc_string(duna_Store *S, uint32_t size)
   ret = (duna_String*)alloc_from_store(S, DUNA_SIZE_OF_STRING(size));
 
   if(ret) {
+    uint32_t i;
+
     ret->type = DUNA_TYPE_STRING;
     ret->size = size;
+
+    for(i = 0; i < size; i++) {
+      ret->chars[i] = (duna_Char)' ';
+    }
   }
 
   return ret;
@@ -677,8 +683,14 @@ static duna_Vector* alloc_vector(duna_Store *S, uint32_t size)
   ret = (duna_Vector*)alloc_from_store(S, DUNA_SIZE_OF_VECTOR(size));
 
   if(ret) {
+    uint32_t i;
+
     ret->type = DUNA_TYPE_VECTOR;
     ret->size = size;
+
+    for(i = 0; i < size; i++) {
+      ret->data[i].type = DUNA_TYPE_UNDEF;
+    }
   }
 
   return ret;
@@ -990,7 +1002,7 @@ static void write_obj(duna_Object* obj)
   switch(obj->type) {
 
   case DUNA_TYPE_UNDEF:
-    printf("<#undefined>");
+    printf("<#undef>");
     break;
 
   case DUNA_TYPE_NIL:

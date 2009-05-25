@@ -569,10 +569,8 @@
     (vector 'lambda
             (vector-ref m 1)
             (vector-ref m 2)
-            (map (lambda (m)
-                   (visitor m sets))
-                 (vector-ref m 3))
-            (visitor (vector-ref m 4) sets)))
+            (map visitor (vector-ref m 3))
+            (visitor (vector-ref m 4))))
 
   (visit (list (cons 'refer
                      refer-handler)
@@ -611,15 +609,13 @@
                 (lambda (i)
                   (cons 'free i)))
                (else #f))
-              (visitor (vector-ref m 4) bound free))))
+              (visitor (vector-ref m 4)))))
 
   (define (lambda-handler visitor m bound free)
     (vector 'lambda
             (vector-ref m 1)
             (vector-ref m 2)
-            (map (lambda (m)
-                   (visitor m bound free))
-                 (vector-ref m 3))
+            (map visitor (vector-ref m 3))
             (vector-ref m 4)))
 
   (visit (list (cons 'refer
@@ -891,7 +887,7 @@
 ;; to apply it again
 (define (visit procs m . args)
 
-  (define (visitor m . args)
+  (define (visitor m)
     (let* ((tag (vector-ref m 0))
            (tag-proc (assq tag procs)))
       (if tag-proc
@@ -899,44 +895,42 @@
           (case tag
             ((sequence)
              (vector 'sequence
-                     (apply visitor (vector-ref m 1) args)
-                     (apply visitor (vector-ref m 2) args)))
+                     (visitor (vector-ref m 1))
+                     (visitor (vector-ref m 2))))
             ((call/cc)
              (vector 'call/cc
-                     (apply visitor (vector-ref m 1) args)
+                     (visitor (vector-ref m 1))
                      (vector-ref m 2)))
             ((alternative)
              (vector 'alternative
-                     (apply visitor (vector-ref m 1) args)
-                     (apply visitor (vector-ref m 2) args)
-                     (apply visitor (vector-ref m 3) args)))
+                     (visitor (vector-ref m 1))
+                     (visitor (vector-ref m 2))
+                     (visitor (vector-ref m 3))))
             ((lambda)
              (vector 'lambda
                      (vector-ref m 1)
                      (vector-ref m 2)
-                     (map (lambda (m)
-                            (apply visitor m args))
-                          (vector-ref m 3))
-                     (apply visitor (vector-ref m 4) args)))
+                     (map visitor (vector-ref m 3))
+                     (visitor (vector-ref m 4))))
             ((assign)
              (vector 'assign
                      (vector-ref m 1)
                      (vector-ref m 2)
                      (vector-ref m 3)
-                     (apply visitor (vector-ref m 4) args)))
+                     (visitor (vector-ref m 4))))
             ((apply)
              (vector 'apply
                      (vector-ref m 1)
-                     (apply visitor (vector-ref m 2) args)
-                     (apply visitor (vector-ref m 3) args)))
+                     (visitor (vector-ref m 2))
+                     (visitor (vector-ref m 3))))
             ((arg-list)
              (vector 'arg-list
-                     (apply visitor (vector-ref m 1) args)
-                     (apply visitor (vector-ref m 2) args)))
+                     (visitor (vector-ref m 1))
+                     (visitor (vector-ref m 2))))
             (else
              m)))))
 
-  (apply visitor m args))
+  (visitor m))
 
 ;;
 ;; low-level code generation

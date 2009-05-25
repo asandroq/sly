@@ -129,6 +129,9 @@
       (error "empty 'begin'" exp)))
 
 ;; Transform 'cond' into nested 'ifs'
+;; a cond clause may use the symbol =>
+;; which indicates that the body is actually
+;; a lambda
 (define (simplify-cond exp)
   (let collect ((code '())
 		(clauses (reverse (cdr exp)))
@@ -139,21 +142,34 @@
 	    code)
 	(let ((clause (car clauses)))
 	  (if (pair? clause)
-	      (let ((test (simplify (car clause)))
-		    (body (simplify-sequence (cdr clause))))
-		(if (eqv? test 'else)
+	      (let ((test (simplify (car clause))))
+                (if (eqv? test 'else)
 		    (if last?
-			(collect body
+			(collect (simplify-sequence (cdr clause))
 				 (cdr clauses)
 				 #f)
 			(error "'else' must be last clause in 'cond'" exp))
-		    (collect (list 'if
-				   test
-                                   body
-				   code)
-			     (cdr clauses)
-			     #f)))
-	      (error "Ill-formed 'cond' clause" clause))))))
+                    (let ((rest (cdr clause)))
+                      (if (and (pair? rest)
+                               (eq? (car rest) '=>))
+                          (let ((proc (simplify-lambda (cadr rest)))
+                                (var (gensym)))
+                            (collect (simplify (list 'let
+                                                     (list (list var test))
+                                                     (list 'if
+                                                           var
+                                                           (list proc var)
+                                                           code)))
+                                     (cdr clauses)
+                                     #f))
+                          (let ((body (simplify-sequence (cdr clause))))
+                            (collect (list 'if
+                                           test
+                                           body
+                                           code)
+                                     (cdr clauses)
+                                     #f))))))
+              (error "Ill-formed 'cond' clause" clause))))))
 
 (define (simplify-define exp)
   (if (> (length exp) 2)

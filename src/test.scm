@@ -59,5 +59,15 @@
      (else
       'not-found!))))
 
+(define test5
+  '((case (+ 42 34)
+      ((0 alex "test")
+       'blah)
+      ((ramirez 76 a b c) =>
+       (lambda (p)
+         (- (car p) 34)))
+      (else
+       'bleh))))
+
 (compile-to-file "test.fasl" test1)
 

@@ -77,6 +77,8 @@
 	   (simplify-or exp))
           ((begin)
            (simplify-begin exp))
+          ((case)
+           (simplify-case exp))
 	  ((cond)
 	   (simplify-cond exp))
           ((define)
@@ -128,6 +130,62 @@
       (simplify-sequence (cdr exp))
       (error "empty 'begin'" exp)))
 
+(define (simplify-case exp)
+  (if (or (null? (cdr exp))
+          (null? (cddr exp)))
+      (error "invalid 'case' expression" exp)
+      (let ((key (simplify (cadr exp)))
+            (clauses (reverse (cddr exp)))
+            (key-var (gensym)))
+        (let collect ((code '())
+                      (clauses clauses)
+                      (last? #t))
+          (if (null? clauses)
+              (if (null? code)
+                  (error "empty 'case'" exp)
+                  (simplify (list 'let
+                                  (list (list key-var key))
+                                  code)))
+              (let ((clause (car clauses)))
+                (if (pair? clause)
+                    (let ((test (car clause))
+                          (rest (cdr clause)))
+                      (cond
+                      ((eq? test 'else)
+                       (if last?
+                           (collect (simplify-sequence rest)
+                                    (cdr clauses)
+                                    #f)
+                           (error "'else' must be last clause in 'case'" exp)))
+                      ((pair? test)
+                       (if (and (pair? rest)
+                                (eq? (car rest) '=>))
+                           (let ((proc (cadr rest))
+                                 (var (gensym)))
+                             (collect (simplify (list 'let
+                                                      (list (list var
+                                                                  (list 'memq
+                                                                        key-var
+                                                                        (list 'quote
+                                                                              test))))
+                                                      (list 'if
+                                                            var
+                                                            (list proc var)
+                                                            code)))
+                                      (cdr clauses)
+                                      #f))
+                           (let ((body (simplify-sequence rest)))
+                             (collect (list 'if
+                                            (list 'memq key-var
+                                                  (list 'quote test))
+                                            body
+                                            code)
+                                      (cdr clauses)
+                                      #f))))
+                      (else
+                       (error "ill-formed 'case' clause" clause))))
+                    (error "ill-formed 'case' clause" clause))))))))
+
 ;; Transform 'cond' into nested 'ifs'
 ;; a cond clause may use the symbol =>
 ;; which indicates that the body is actually
@@ -142,33 +200,33 @@
 	    code)
 	(let ((clause (car clauses)))
 	  (if (pair? clause)
-	      (let ((test (simplify (car clause))))
+	      (let ((test (simplify (car clause)))
+                    (rest (cdr clause)))
                 (if (eqv? test 'else)
 		    (if last?
-			(collect (simplify-sequence (cdr clause))
+			(collect (simplify-sequence rest)
 				 (cdr clauses)
 				 #f)
 			(error "'else' must be last clause in 'cond'" exp))
-                    (let ((rest (cdr clause)))
-                      (if (and (pair? rest)
-                               (eq? (car rest) '=>))
-                          (let ((proc (simplify-lambda (cadr rest)))
-                                (var (gensym)))
-                            (collect (simplify (list 'let
-                                                     (list (list var test))
-                                                     (list 'if
-                                                           var
-                                                           (list proc var)
-                                                           code)))
-                                     (cdr clauses)
-                                     #f))
-                          (let ((body (simplify-sequence (cdr clause))))
-                            (collect (list 'if
-                                           test
-                                           body
-                                           code)
-                                     (cdr clauses)
-                                     #f))))))
+                    (if (and (pair? rest)
+                             (eq? (car rest) '=>))
+                        (let ((proc (simplify (cadr rest)))
+                              (var (gensym)))
+                          (collect (simplify (list 'let
+                                                   (list (list var test))
+                                                   (list 'if
+                                                         var
+                                                         (list proc var)
+                                                         code)))
+                                   (cdr clauses)
+                                   #f))
+                        (let ((body (simplify-sequence rest)))
+                          (collect (list 'if
+                                         test
+                                         body
+                                         code)
+                                   (cdr clauses)
+                                   #f)))))
               (error "Ill-formed 'cond' clause" clause))))))
 
 (define (simplify-define exp)

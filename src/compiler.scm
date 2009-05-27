@@ -471,12 +471,15 @@
      (else
       (error "ill-formed 'lambda' arguments" n*))))
 
+  ;; the 'reverse' is here to account for the order
+  ;; the arguments are pushed on the stack, moving
+  ;; the responsibility to the VM would slow us down
   (define (meaning-internal n* n e r)
-    (let* ((an* (map (lambda (n)
-                       (cons n (rename-var n)))
-                     (if n
-                         (append n* (list n))
-                         n*)))
+    (let* ((an* (reverse (map (lambda (n)
+                                (cons n (rename-var n)))
+                              (if n
+                                  (append n* (list n))
+                                  n*))))
            (r2 (cons an* r))
            (m (meaning e r2 #t))
            (bound (map cdr an*))
@@ -888,12 +891,6 @@
         (bound (vector-ref m 2))
         (sets  (vector-ref m 3))
         (free  (vector-ref m 4)))
-    (case (car arity)
-      ((=)
-       (instr1 cs 'ARITY= (cdr arity)))
-      ((>=)
-       (instr1 cs 'ARITY>= (cdr arity))
-       (instr1 cs 'LISTIFY (cdr arity))))
     (let loop ((f (reverse free)))
       (if (null? f)
           (let ((len (length free)))
@@ -901,6 +898,12 @@
             (let ((i (code-size cs)))
               ;; this will be back-patched later
               (instr1 cs 'JMP 0)
+              (case (car arity)
+                ((=)
+                 (instr1 cs 'ARITY= (cdr arity)))
+                ((>=)
+                 (instr1 cs 'ARITY>= (cdr arity))
+                 (instr1 cs 'LISTIFY (cdr arity))))
               (make-boxes cs bound sets)
               (generate-code cs (vector-ref m 5))
               (instr cs 'RETURN)
@@ -972,13 +975,15 @@
       (or tail? (patch-instr! cs i (code-size cs))))))
 
 (define (generate-push-arguments cs m)
-  (let ((kind (vector-ref m 0)))
-    (if (eq? kind 'arg-null)
-        0
-        (let ((len (generate-push-arguments cs (vector-ref m 2))))
-          (generate-code cs (vector-ref m 1))
-          (instr cs 'PUSH)
-          (+ len 1)))))
+  (let loop ((len 0)
+             (m m))
+    (let ((kind (vector-ref m 0)))
+      (if (eq? kind 'arg-null)
+          len
+          (let ((arg (vector-ref m 1)))
+            (generate-code cs arg)
+            (instr cs 'PUSH)
+            (loop (+ len 1) (vector-ref m 2)))))))
 
 ;; Create instructions to box arguments to closure
 ;; that are assigned somewhere in the code

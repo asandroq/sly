@@ -1550,7 +1550,31 @@ int duna_vm_run(duna_State* D)
       break;
 
     case DUNA_OP_LISTIFY:
-      /* transforms excess arguments to procedure into a list */
+      /* number of fixed arguments */
+      dw1 = EXTRACT_ARG(instr);
+
+      /* number of variables arguments */
+      dw2 = D->stack[D->fp].value.fixnum - dw1;
+
+      /* consing */
+      D->accum.type = DUNA_TYPE_NIL;
+      for(i = D->fp - 1; i > D->fp - (dw2 + 1); i--) {
+	tmp.type = DUNA_TYPE_PAIR;
+	tmp.value.gc = (duna_GCObject*)alloc_pair(&D->store);
+	check_alloc(D, tmp.value.gc);
+
+	((duna_Pair*)tmp.value.gc)->car = D->stack[i];
+	((duna_Pair*)tmp.value.gc)->cdr = D->accum;
+
+	D->accum = tmp;
+      }
+
+      /* adjusting stack */
+      D->stack[D->fp - dw2] = D->accum;
+      D->fp -= dw2 - 1;
+      D->stack[D->fp].type = DUNA_TYPE_FIXNUM;
+      D->stack[D->fp].value.fixnum = dw1 + 1;
+      D->sp = D->fp + 1;
       break;
 
     case DUNA_OP_CONS:

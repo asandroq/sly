@@ -60,14 +60,16 @@
       'not-found!))))
 
 (define test5
-  '((case (+ 42 34)
-      ((0 alex "test")
-       'blah)
-      ((ramirez 76 a b c) =>
-       (lambda (p)
-         (- (car p) 34)))
-      (else
-       'bleh))))
+  '((define (proc a b . c)
+      (case (+ a b)
+        ((0 alex "test")
+         (car c))
+        ((ramirez 76 a b c) =>
+         (lambda (p)
+           (- (car p) 34)))
+        (else
+         (cdr c))))
+    (proc 34 42 'blah 'bleh)))
 
 (compile-to-file "test.fasl" test1)
 

@@ -1507,6 +1507,9 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_CHECKED_GLOBAL_REF:
       if(D->global_env.vars[EXTRACT_ARG(instr)].value.type == DUNA_TYPE_UNDEF) {
+	printf("Undefined global referenced: ");
+	write_string(D->global_env.vars[EXTRACT_ARG(instr)].symbol->str, 0);
+	printf("\n");
 	/* throw error */
       }
       /* fall through */
@@ -1517,6 +1520,9 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_CHECKED_GLOBAL_SET:
       if(D->global_env.vars[EXTRACT_ARG(instr)].value.type == DUNA_TYPE_UNDEF) {
+	printf("Undefined global assigned: ");
+	write_string(D->global_env.vars[EXTRACT_ARG(instr)].symbol->str, 0);
+	printf("\n");
 	/* throw error */
       }
       /* fall through */

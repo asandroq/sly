@@ -28,6 +28,8 @@
 
 ;; R5RS 6.3.2
 
+(define list (lambda args args))
+
 (define (caar x) (car (car x)))
 (define (cadr x) (car (cdr x)))
 (define (cdar x) (cdr (car x)))

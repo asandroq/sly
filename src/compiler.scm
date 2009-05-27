@@ -240,7 +240,7 @@
                       (simplify body))))
          ((pair? definee)
           (if (and (not (null? definee))
-                   (all? symbol? definee))
+                   (symbol-exp? definee))
               (let ((name (car definee))
                     (args (cdr definee)))
                 (list 'define
@@ -255,15 +255,16 @@
       (error "ill-formed 'define'" exp)))
 
 (define (simplify-lambda exp)
-  (if (> (length exp) 2)
+  (if (or (null? (cdr exp))
+          (null? (cddr exp)))
+      (error "ill-formed 'lambda'" exp)
       (let ((args (cadr exp))
             (body (cddr exp)))
         (if (symbol-exp? args)
             (cons 'lambda
                   (list args
                         (simplify-sequence body)))
-            (error "ill-formed 'lambda'" exp)))
-      (error "ill-formed 'lambda'" exp)))
+            (error "ill-formed 'lambda'" exp)))))
 
 ;; Transform 'let' into immediate lambda application
 (define (simplify-let exp)
@@ -458,23 +459,42 @@
               (meaning else r tail?))))
 
 (define (meaning-lambda n* e r)
-  (let* ((an* (map (lambda (n)
-                     (cons n (rename-var n)))
-                   n*))
-         (r2 (cons an* r))
-         (m (meaning e r2 #t))
-         (bound (map cdr an*))
-         (free (collect-free m bound))
-         (sets (collect-sets m bound))
-         (m2 (flag-boxes m sets))
-         (m3 (calculate-addresses m2 bound free)))
-    (vector 'lambda
-            bound
-            sets
-            (map (lambda (n)
-                    (meaning-reference n r))
-                 free)
-            m3)))
+
+  (define (parse n* regular)
+    (cond
+     ((null? n*)
+      (meaning-internal (reverse regular) #f e r))
+     ((symbol? n*)
+      (meaning-internal (reverse regular) n* e r))
+     ((pair? n*)
+      (parse (cdr n*) (cons (car n*) regular)))
+     (else
+      (error "ill-formed 'lambda' arguments" n*))))
+
+  (define (meaning-internal n* n e r)
+    (let* ((an* (map (lambda (n)
+                       (cons n (rename-var n)))
+                     (if n
+                         (append n* (list n))
+                         n*)))
+           (r2 (cons an* r))
+           (m (meaning e r2 #t))
+           (bound (map cdr an*))
+           (free (collect-free m bound))
+           (sets (collect-sets m bound))
+           (m2 (flag-boxes m sets))
+           (m3 (calculate-addresses m2 bound free)))
+      (vector 'lambda
+              (cons (if n '>= '=)
+                    (length n*))
+              bound
+              sets
+              (map (lambda (n)
+                     (meaning-reference n r))
+                   free)
+              m3)))
+
+  (parse n* '()))
 
 (define (meaning-assignment n e r)
   (let ((n2 (lookup n r))
@@ -553,7 +573,8 @@
   (or (symbol? e)
       (null? e)
       (and (pair? e)
-           (all? symbol? e))))
+           (symbol? (car e))
+           (symbol-exp? (cdr e)))))
 
 (define (one-symbol-list? e)
   (and (pair? e)
@@ -579,8 +600,8 @@
                 (set-union (collect-free (vector-ref m 2) bound)
                            (collect-free (vector-ref m 3) bound))))
     ((lambda)
-     (collect-free (vector-ref m 4)
-                   (append (vector-ref m 1) bound)))
+     (collect-free (vector-ref m 5)
+                   (append (vector-ref m 2) bound)))
     ((assign)
      (set-union (let ((n (vector-ref m 1))
                       (an (vector-ref m 2)))
@@ -610,7 +631,7 @@
                 (set-union (collect-sets (vector-ref m 2) bound)
                            (collect-sets (vector-ref m 3) bound))))
     ((lambda)
-     (collect-sets (vector-ref m 4) bound))
+     (collect-sets (vector-ref m 5) bound))
     ((assign)
      (let ((n (vector-ref m 1))
            (an (vector-ref m 2)))
@@ -645,8 +666,9 @@
     (vector 'lambda
             (vector-ref m 1)
             (vector-ref m 2)
-            (map visitor (vector-ref m 3))
-            (visitor (vector-ref m 4))))
+            (vector-ref m 3)
+            (map visitor (vector-ref m 4))
+            (visitor (vector-ref m 5))))
 
   (visit (list (cons 'refer
                      refer-handler)
@@ -691,8 +713,9 @@
     (vector 'lambda
             (vector-ref m 1)
             (vector-ref m 2)
-            (map visitor (vector-ref m 3))
-            (vector-ref m 4)))
+            (vector-ref m 3)
+            (map visitor (vector-ref m 4))
+            (vector-ref m 5)))
 
   (visit (list (cons 'refer
                      refer-handler)
@@ -861,26 +884,33 @@
             (patch-instr! cs j (- m j 1))))))))
 
 (define (generate-lambda cs m)
-  (let ((bound (vector-ref m 1))
-        (sets  (vector-ref m 2))
-        (free  (vector-ref m 3)))
+  (let ((arity (vector-ref m 1))
+        (bound (vector-ref m 2))
+        (sets  (vector-ref m 3))
+        (free  (vector-ref m 4)))
+    (case (car arity)
+      ((=)
+       (instr1 cs 'ARITY= (cdr arity)))
+      ((>=)
+       (instr1 cs 'ARITY>= (cdr arity))
+       (instr1 cs 'LISTIFY (cdr arity))))
     (let loop ((f (reverse free)))
       (if (null? f)
-        (let ((len (length free)))
-          (instr1 cs 'MAKE-CLOSURE len)
-          (let ((i (code-size cs)))
-            ;; this will be back-patched later
-            (instr1 cs 'JMP 0)
-            (make-boxes cs bound sets)
-            (generate-code cs (vector-ref m 4))
-            (instr cs 'RETURN)
-            (let ((j (code-size cs)))
-              ;; back-patching jump over closure code
-              (patch-instr! cs i (- j i 1)))))
-        (let ((ref (car f)))
-          (generate-reference cs ref #f)
-          (instr cs 'PUSH)
-          (loop (cdr f)))))))
+          (let ((len (length free)))
+            (instr1 cs 'MAKE-CLOSURE len)
+            (let ((i (code-size cs)))
+              ;; this will be back-patched later
+              (instr1 cs 'JMP 0)
+              (make-boxes cs bound sets)
+              (generate-code cs (vector-ref m 5))
+              (instr cs 'RETURN)
+              (let ((j (code-size cs)))
+                ;; back-patching jump over closure code
+                (patch-instr! cs i (- j i 1)))))
+          (let ((ref (car f)))
+            (generate-reference cs ref #f)
+            (instr cs 'PUSH)
+            (loop (cdr f)))))))
 
 (define (generate-assignment cs m)
   (generate-code cs (vector-ref m 4))
@@ -986,8 +1016,9 @@
              (vector 'lambda
                      (vector-ref m 1)
                      (vector-ref m 2)
-                     (map visitor (vector-ref m 3))
-                     (visitor (vector-ref m 4))))
+                     (vector-ref m 3)
+                     (map visitor (vector-ref m 4))
+                     (visitor (vector-ref m 5))))
             ((assign)
              (vector 'assign
                      (vector-ref m 1)
@@ -1054,6 +1085,9 @@
     (LOAD-UNDEF         . 37)
     (CONST              . 38)
     (CONST-INIT         . 39)
+    (ARITY=             . 40)
+    (ARITY>=            . 41)
+    (LISTIFY            . 42)
 
     ;; type predicates
     (NULL-P             . 81)

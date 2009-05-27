@@ -91,6 +91,9 @@
 #define DUNA_OP_LOAD_UNDEF             37
 #define DUNA_OP_CONST                  38
 #define DUNA_OP_CONST_INIT             39
+#define DUNA_OP_ARITY_EQ               40
+#define DUNA_OP_ARITY_GE               41
+#define DUNA_OP_LISTIFY                42
 
 /* type predicates */
 #define DUNA_OP_NULL_P                 81
@@ -156,7 +159,10 @@
     (instr) == DUNA_OP_GLOBAL_SET ||             \
     (instr) == DUNA_OP_CHECKED_GLOBAL_SET ||     \
     (instr) == DUNA_OP_CONST ||                  \
-    (instr) == DUNA_OP_CONST_INIT)
+    (instr) == DUNA_OP_CONST_INIT ||             \
+    (instr) == DUNA_OP_ARITY_EQ ||               \
+    (instr) == DUNA_OP_ARITY_GE ||               \
+    (instr) == DUNA_OP_LISTIFY)
 
 #define EXTRACT_OP(instr)   ((uint8_t)((instr) & 0x000000ff))
 #define EXTRACT_ARG(instr)  ((uint32_t)((instr) >> 8))
@@ -209,6 +215,9 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_LOAD_UNDEF,             "LOAD-UNDEF"},
   {DUNA_OP_CONST,                  "CONST"},
   {DUNA_OP_CONST_INIT,             "CONST-INIT"},
+  {DUNA_OP_ARITY_EQ,               "ARITY="},
+  {DUNA_OP_ARITY_GE,               "ARITY>="},
+  {DUNA_OP_LISTIFY,                "LISTIFY"},
   {DUNA_OP_NULL_P,            "NULL?"},
   {DUNA_OP_BOOL_P,            "BOOL?"},
   {DUNA_OP_CHAR_P,            "CHAR?"},
@@ -1526,6 +1535,22 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_CONST_INIT:
       D->consts[EXTRACT_ARG(instr)] = D->accum;
+      break;
+
+    case DUNA_OP_ARITY_EQ:
+      if(D->stack[D->fp].value.fixnum != EXTRACT_ARG(instr)) {
+	/* throw arity mismatch error */
+      }
+      break;
+
+    case DUNA_OP_ARITY_GE:
+      if(D->stack[D->fp].value.fixnum < EXTRACT_ARG(instr)) {
+	/* throw arity mismatch error */
+      }
+      break;
+
+    case DUNA_OP_LISTIFY:
+      /* transforms excess arguments to procedure into a list */
       break;
 
     case DUNA_OP_CONS:

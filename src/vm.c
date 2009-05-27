@@ -522,7 +522,7 @@ static void collect_garbage(duna_Store* S)
 
     case DUNA_TYPE_PAIR:
       copy_object(S, &((duna_Pair*)gcobj)->car);
-      copy_object(S, &((duna_Pair*)gcobj)->car);
+      copy_object(S, &((duna_Pair*)gcobj)->cdr);
       break;
 
     case DUNA_TYPE_CONTINUATION:
@@ -663,14 +663,8 @@ static duna_String *alloc_string(duna_Store *S, uint32_t size)
   ret = (duna_String*)alloc_from_store(S, DUNA_SIZE_OF_STRING(size));
 
   if(ret) {
-    uint32_t i;
-
     ret->type = DUNA_TYPE_STRING;
     ret->size = size;
-
-    for(i = 0; i < size; i++) {
-      ret->chars[i] = (duna_Char)' ';
-    }
   }
 
   return ret;
@@ -980,14 +974,15 @@ static duna_Object duna_make_symbol(duna_State* D, duna_String *str)
 
 static void write_string(duna_String* s, int quote)
 {
-  uint32_t i;
+  uint32_t i, c;
 
   if(quote) {
     printf("\"");
   }
 
   for(i = 0; i < s->size; i++) {
-    printf("%c", s->chars[i]);
+    c = s->chars[i];
+    printf("%c", c > 32 && c < 128 ? c : '#');
   }
 
   if(quote) {
@@ -1120,8 +1115,8 @@ void duna_dump(duna_State* D)
     printf(" ");
     write_obj(D->stack + i);
   }
-  /*printf("\n");
 
+  /*printf("\n");
   printf("Globals:\n\t");
   for(i = 0; i < D->global_env.size; i++) {
     duna_Env_Var var = D->global_env.vars[i];
@@ -1132,6 +1127,13 @@ void duna_dump(duna_State* D)
     printf(" . ");
     write_obj(&var.value);
     printf("]");
+    }*/
+
+  /*printf("\n");
+  printf("Constants:");
+  for(i = 0; i < D->nr_consts; i++) {
+    printf(" ");
+    write_obj(D->consts + i);
     }*/
 
   printf("\n\n");

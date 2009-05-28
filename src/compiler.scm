@@ -947,17 +947,19 @@
     (if prim-rec
         (let ((code (cadr prim-rec))
               (arity (caddr prim-rec)))
-          (cond
-           ((= arity 1)
-            (generate-code cs (vector-ref args 1))
-            (instr cs code))
-           ((= arity 2)
-            (generate-code cs (vector-ref args 1))
-            (instr cs 'PUSH)
-            (generate-code cs (vector-ref (vector-ref args 2) 1))
-            (instr cs code))
-           (else
-            (error "Primitive with unknown arity"))))
+          (case arity
+            ((0)
+             (instr cs code))
+            ((1)
+             (generate-code cs (vector-ref args 1))
+             (instr cs code))
+            ((2)
+             (generate-code cs (vector-ref args 1))
+             (instr cs 'PUSH)
+             (generate-code cs (vector-ref (vector-ref args 2) 1))
+             (instr cs code))
+            (else
+             (error "Primitive with unknown arity"))))
         (error "Unknown primitive"))))
 
 (define (generate-common-apply cs m)
@@ -1093,6 +1095,7 @@
     (ARITY=             . 40)
     (ARITY>=            . 41)
     (LISTIFY            . 42)
+    (ABORT              . 43)
 
     ;; type predicates
     (NULL-P             . 81)
@@ -1121,7 +1124,9 @@
     (STRING-SET         . 117)
     (STRING-TO-SYMBOL   . 118)
     (MAKE-VECTOR        . 119)
-    (VECTOR-SET         . 120)))
+    (VECTOR-SET         . 120)
+    (WRITE              . 121)
+    (DEBUG              . 122)))
 
 (define (make-compiler-state)
   (vector
@@ -1327,7 +1332,10 @@
     (eq? EQ 2)
     (eqv? EQV 2)
     (string->symbol STRING-TO-SYMBOL 1)
-    (pair? PAIR-P 1)))
+    (pair? PAIR-P 1)
+    (write WRITE 1)
+    (abort ABORT 0)
+    (debug DEBUG 1)))
 
 ;;
 ;; Utilities

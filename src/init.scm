@@ -67,21 +67,21 @@
 
 (define list (lambda args args))
 
-(define (length l)
-  (let loop ((l l)
+(define (length lst)
+  (let loop ((l lst)
              (i 0))
     (cond
      ((null? l) i)
      ((pair? l) (loop (cdr l) (+ i 1)))
-     (else (error "length applied to non-list")))))
+     (else (error "length applied to non-list" lst l)))))
 
-(define (reverse l)
-  (let loop ((l l)
+(define (reverse lst)
+  (let loop ((l lst)
              (res '()))
     (cond
      ((null? l) res)
      ((pair? l) (loop (cdr l) (cons (car l) res)))
-     (else (error "reverse applied to non-list")))))
+     (else (error "reverse applied to non-list" lst)))))
 
 (define (list-tail ls k)
   (if (= k 0)
@@ -121,4 +121,16 @@
                       (cons (proc (car l))
                             res)))
      (else (error "map applied to non-list")))))
+
+;; Error handling
+
+(define error
+  (lambda args
+    (let loop ((l args))
+      (if (null? l)
+          (abort)
+          (begin
+            (write (car l))
+            (write " ")
+            (loop (cdr l)))))))
 

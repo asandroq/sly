@@ -94,6 +94,7 @@
 #define DUNA_OP_ARITY_EQ               40
 #define DUNA_OP_ARITY_GE               41
 #define DUNA_OP_LISTIFY                42
+#define DUNA_OP_ABORT                  43
 
 /* type predicates */
 #define DUNA_OP_NULL_P                 81
@@ -123,6 +124,8 @@
 #define DUNA_OP_STRING_TO_SYMBOL      118
 #define DUNA_OP_MAKE_VECTOR           119
 #define DUNA_OP_VECTOR_SET            120
+#define DUNA_OP_WRITE                 121
+#define DUNA_OP_DEBUG                 122
 
 /*
  * data types tags
@@ -219,6 +222,7 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_ARITY_EQ,               "ARITY="},
   {DUNA_OP_ARITY_GE,               "ARITY>="},
   {DUNA_OP_LISTIFY,                "LISTIFY"},
+  {DUNA_OP_ABORT,                  "ABORT"},
   {DUNA_OP_NULL_P,                 "NULL?"},
   {DUNA_OP_BOOL_P,                 "BOOL?"},
   {DUNA_OP_CHAR_P,                 "CHAR?"},
@@ -244,6 +248,8 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_STRING_TO_SYMBOL,       "STRING->SYMBOL"},
   {DUNA_OP_MAKE_VECTOR,            "MAKE-VECTOR"},
   {DUNA_OP_VECTOR_SET,             "VECTOR-SET"},
+  {DUNA_OP_WRITE,                  "WRITE"},
+  {DUNA_OP_DEBUG,                  "DEBUG"},
   {0, NULL}
 };
 
@@ -993,7 +999,7 @@ static void write_string(duna_String* s, int quote)
 
   for(i = 0; i < s->size; i++) {
     c = s->chars[i];
-    printf("%c", c > 32 && c < 128 ? c : '#');
+    printf("%c", c > 31 && c < 128 ? c : '#');
   }
 
   if(quote) {
@@ -1126,9 +1132,10 @@ void duna_dump(duna_State* D)
     printf(" ");
     write_obj(D->stack + i);
   }
+#if 0
+  printf("\n\n");
 
-  /*printf("\n");
-  printf("Globals:\n\t");
+  printf("Globals:");
   for(i = 0; i < D->global_env.size; i++) {
     duna_Env_Var var = D->global_env.vars[i];
     printf(" [");
@@ -1138,24 +1145,31 @@ void duna_dump(duna_State* D)
     printf(" . ");
     write_obj(&var.value);
     printf("]");
-    }*/
+  }
+  printf("\n\n");
 
-  /*printf("\n");
   printf("Constants:");
   for(i = 0; i < D->nr_consts; i++) {
     printf(" ");
     write_obj(D->consts + i);
-    }*/
-
+  }
+#endif
   printf("\n\n");
+}
+
+static void duna_abort(duna_State *D)
+{
+  duna_dump(D);
+
+  duna_close(D);
+  exit(13);
 }
 
 static void check_alloc(duna_State *D, void* ptr)
 {
   if(ptr == NULL) {
     fprintf(stderr, "duna: Out of memory!\n");
-    duna_close(D);
-    exit(13);
+    duna_abort(D);
   }
 }
 
@@ -1194,7 +1208,7 @@ static void check_alloc(duna_State *D, void* ptr)
  */
 int duna_vm_run(duna_State* D)
 {
-  int go_on = 1;
+  int go_on = 1, debug = 0;
 
   /*disassemble(D);*/
 
@@ -1203,8 +1217,10 @@ int duna_vm_run(duna_State* D)
     register uint32_t instr;
     uint32_t i, j, dw1, dw2;
 
-    /* debugging */
-    /*duna_dump(D);*/
+    if(debug) {
+      duna_dump(D);
+      getchar();
+    }
     assert(D->pc < D->code_size);
 
     instr = D->code[D->pc++];
@@ -1376,6 +1392,10 @@ int duna_vm_run(duna_State* D)
       /* fall through */
 
     case DUNA_OP_CALL:
+      if(D->accum.type != DUNA_TYPE_CLOSURE) {
+	duna_abort(D);
+      }
+
       /* frame pointer */
       D->fp = D->sp - 1;
 
@@ -1515,7 +1535,7 @@ int duna_vm_run(duna_State* D)
 	printf("Undefined global referenced: ");
 	write_string(D->global_env.vars[EXTRACT_ARG(instr)].symbol->str, 0);
 	printf("\n");
-	/* throw error */
+	duna_abort(D);
       }
       /* fall through */
 
@@ -1528,7 +1548,7 @@ int duna_vm_run(duna_State* D)
 	printf("Undefined global assigned: ");
 	write_string(D->global_env.vars[EXTRACT_ARG(instr)].symbol->str, 0);
 	printf("\n");
-	/* throw error */
+	duna_abort(D);
       }
       /* fall through */
 
@@ -1550,13 +1570,15 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_ARITY_EQ:
       if(D->stack[D->fp].value.fixnum != EXTRACT_ARG(instr)) {
-	/* throw arity mismatch error */
+	printf("Arity mismatch!\n");
+	duna_abort(D);
       }
       break;
 
     case DUNA_OP_ARITY_GE:
       if(D->stack[D->fp].value.fixnum < EXTRACT_ARG(instr)) {
-	/* throw arity mismatch error */
+	printf("Variable arity mismatch!\n");
+	duna_abort(D);
       }
       break;
 
@@ -1586,6 +1608,10 @@ int duna_vm_run(duna_State* D)
       D->stack[D->fp].type = DUNA_TYPE_FIXNUM;
       D->stack[D->fp].value.fixnum = dw1 + 1;
       D->sp = D->fp + 1;
+      break;
+
+    case DUNA_OP_ABORT:
+      duna_abort(D);
       break;
 
     case DUNA_OP_CONS:
@@ -1663,6 +1689,17 @@ int duna_vm_run(duna_State* D)
       D->accum = D->stack[--D->sp];
       ((duna_Vector*)D->accum.value.gc)->data[dw1] = tmp;    
       break;
+
+    case DUNA_OP_WRITE:
+      write_obj(&D->accum);
+      break;
+
+    case DUNA_OP_DEBUG:
+      if(D->accum.value.bool == 0) {
+	debug = 0;
+      } else {
+	debug = 1;
+      }
     }
   }
 

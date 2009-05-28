@@ -331,8 +331,9 @@
 	  (simplify
 	   (list 'letrec (list (list name
 				     (cons 'lambda
-					   (cons vars body))))
-		 (cons name exps)))
+                                           (cons (reverse vars)
+                                                 body))))
+		 (cons name (reverse exps))))
 	  (let ((binding (car bindings)))
 	    (let ((var (car binding))
 		  (exp (cadr binding)))

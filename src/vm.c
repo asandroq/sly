@@ -51,81 +51,82 @@
  *         are used for single operand.
  */
 
-/* basic VM instructions */
+/* instructions without operands */
 #define DUNA_OP_LOAD_NIL                1
 #define DUNA_OP_LOAD_FALSE              2
 #define DUNA_OP_LOAD_TRUE               3
-#define DUNA_OP_LOAD_ZERO               4
-#define DUNA_OP_LOAD_ONE                5
-#define DUNA_OP_LOAD_FIXNUM             6
-#define DUNA_OP_LOAD_CHAR               7
-#define DUNA_OP_PUSH                    8
-#define DUNA_OP_LOAD_0                  9
-#define DUNA_OP_LOAD_1                 10
-#define DUNA_OP_LOAD_2                 11
-#define DUNA_OP_LOAD_3                 12
-#define DUNA_OP_LOAD                   13
-#define DUNA_OP_MAKE_CLOSURE           14
-#define DUNA_OP_CALL                   15
-#define DUNA_OP_RETURN                 16
-#define DUNA_OP_JMP_IF                 17
-#define DUNA_OP_JMP                    18
-#define DUNA_OP_LOAD_FREE              19
-#define DUNA_OP_SAVE_CONT              20
-#define DUNA_OP_REST_CONT              21
-#define DUNA_OP_ASSIGN                 22
-#define DUNA_OP_ASSIGN_FREE            23
-#define DUNA_OP_BOX                    24
-#define DUNA_OP_OPEN_BOX               25
-#define DUNA_OP_FRAME                  26
-#define DUNA_OP_TAIL_CALL              27
-#define DUNA_OP_HALT                   28
-#define DUNA_OP_LOAD_LOCAL             29
-#define DUNA_OP_INSERT_BOX             30
-#define DUNA_OP_ASSIGN_LOCAL           31
-#define DUNA_OP_POP                    32
-#define DUNA_OP_GLOBAL_REF             33
-#define DUNA_OP_CHECKED_GLOBAL_REF     34
-#define DUNA_OP_GLOBAL_SET             35
-#define DUNA_OP_CHECKED_GLOBAL_SET     36
-#define DUNA_OP_LOAD_UNDEF             37
-#define DUNA_OP_CONST                  38
-#define DUNA_OP_CONST_INIT             39
-#define DUNA_OP_ARITY_EQ               40
-#define DUNA_OP_ARITY_GE               41
-#define DUNA_OP_LISTIFY                42
-#define DUNA_OP_ABORT                  43
+#define DUNA_OP_LOAD_UNDEF              4
+#define DUNA_OP_LOAD_ZERO               5
+#define DUNA_OP_LOAD_ONE                6
+#define DUNA_OP_PUSH                    7
+#define DUNA_OP_LOAD_0                  8
+#define DUNA_OP_LOAD_1                  9
+#define DUNA_OP_LOAD_2                 10
+#define DUNA_OP_LOAD_3                 11
+#define DUNA_OP_CALL                   12
+#define DUNA_OP_RETURN                 13
+#define DUNA_OP_SAVE_CONT              14
+#define DUNA_OP_REST_CONT              15
+#define DUNA_OP_BOX                    16
+#define DUNA_OP_OPEN_BOX               17
+#define DUNA_OP_TAIL_CALL              18
+#define DUNA_OP_HALT                   19
+#define DUNA_OP_ABORT                  20
 
-/* type predicates */
-#define DUNA_OP_NULL_P                 81
-#define DUNA_OP_BOOL_P                 82
-#define DUNA_OP_CHAR_P                 83
-#define DUNA_OP_FIXNUM_P               84
-#define DUNA_OP_PAIR_P                 85
+#define DUNA_OP_NULL_P                 40
+#define DUNA_OP_BOOL_P                 41
+#define DUNA_OP_CHAR_P                 42
+#define DUNA_OP_FIXNUM_P               43
+#define DUNA_OP_PAIR_P                 44
 
 /* primitives optimised as instructions */
-#define DUNA_OP_INC                   101
-#define DUNA_OP_DEC                   102
-#define DUNA_OP_FIXNUM_TO_CHAR        103
-#define DUNA_OP_CHAR_TO_FIXNUM        104
-#define DUNA_OP_ZERO_P                105
-#define DUNA_OP_NOT                   106
-#define DUNA_OP_PLUS                  107
-#define DUNA_OP_MINUS                 108
-#define DUNA_OP_MULT                  109
-#define DUNA_OP_CONS                  110
-#define DUNA_OP_CAR                   111
-#define DUNA_OP_CDR                   112
-#define DUNA_OP_NUM_EQ                113
-#define DUNA_OP_EQ                    114
-#define DUNA_OP_EQV                   115
-#define DUNA_OP_MAKE_STRING           116
-#define DUNA_OP_STRING_SET            117
-#define DUNA_OP_STRING_TO_SYMBOL      118
-#define DUNA_OP_MAKE_VECTOR           119
-#define DUNA_OP_VECTOR_SET            120
-#define DUNA_OP_WRITE                 121
-#define DUNA_OP_DEBUG                 122
+#define DUNA_OP_INC                    60
+#define DUNA_OP_DEC                    61
+#define DUNA_OP_FIXNUM_TO_CHAR         62
+#define DUNA_OP_CHAR_TO_FIXNUM         63
+#define DUNA_OP_ZERO_P                 64
+#define DUNA_OP_NOT                    65
+#define DUNA_OP_PLUS                   66
+#define DUNA_OP_MINUS                  67
+#define DUNA_OP_MULT                   68
+#define DUNA_OP_CONS                   69
+#define DUNA_OP_CAR                    70
+#define DUNA_OP_CDR                    71
+#define DUNA_OP_NUM_EQ                 72
+#define DUNA_OP_EQ                     73
+#define DUNA_OP_EQV                    74
+#define DUNA_OP_MAKE_STRING            75
+#define DUNA_OP_STRING_SET             76
+#define DUNA_OP_STRING_TO_SYMBOL       77
+#define DUNA_OP_MAKE_VECTOR            78
+#define DUNA_OP_VECTOR_SET             79
+#define DUNA_OP_WRITE                  80
+#define DUNA_OP_DEBUG                  81
+
+/* instructions with one operand */
+#define DUNA_OP_LOAD_FIXNUM           120
+#define DUNA_OP_LOAD_CHAR             121
+#define DUNA_OP_LOAD                  122
+#define DUNA_OP_MAKE_CLOSURE          123
+#define DUNA_OP_JMP_IF                124
+#define DUNA_OP_JMP                   125
+#define DUNA_OP_LOAD_FREE             126
+#define DUNA_OP_ASSIGN                127
+#define DUNA_OP_ASSIGN_FREE           128
+#define DUNA_OP_FRAME                 129
+#define DUNA_OP_LOAD_LOCAL            130
+#define DUNA_OP_INSERT_BOX            131
+#define DUNA_OP_ASSIGN_LOCAL          132
+#define DUNA_OP_POP                   133
+#define DUNA_OP_GLOBAL_REF            134
+#define DUNA_OP_CHECKED_GLOBAL_REF    135
+#define DUNA_OP_GLOBAL_SET            136
+#define DUNA_OP_CHECKED_GLOBAL_SET    137
+#define DUNA_OP_CONST                 138
+#define DUNA_OP_CONST_INIT            139
+#define DUNA_OP_ARITY_EQ              140
+#define DUNA_OP_ARITY_GE              141
+#define DUNA_OP_LISTIFY               142
 
 /*
  * data types tags
@@ -143,30 +144,7 @@
 #define DUNA_TYPE_STRING               11
 #define DUNA_TYPE_VECTOR               12
 
-#define IS_TYPE_B(instr) \
-   ((instr) == DUNA_OP_LOAD_FIXNUM ||            \
-    (instr) == DUNA_OP_LOAD_CHAR ||              \
-    (instr) == DUNA_OP_MAKE_CLOSURE ||           \
-    (instr) == DUNA_OP_JMP_IF ||                 \
-    (instr) == DUNA_OP_JMP ||                    \
-    (instr) == DUNA_OP_LOAD_FREE ||              \
-    (instr) == DUNA_OP_ASSIGN_FREE ||            \
-    (instr) == DUNA_OP_FRAME ||                  \
-    (instr) == DUNA_OP_INSERT_BOX ||             \
-    (instr) == DUNA_OP_ASSIGN_LOCAL ||           \
-    (instr) == DUNA_OP_LOAD ||                   \
-    (instr) == DUNA_OP_ASSIGN ||                 \
-    (instr) == DUNA_OP_LOAD_LOCAL ||             \
-    (instr) == DUNA_OP_POP ||                    \
-    (instr) == DUNA_OP_GLOBAL_REF ||             \
-    (instr) == DUNA_OP_CHECKED_GLOBAL_REF ||     \
-    (instr) == DUNA_OP_GLOBAL_SET ||             \
-    (instr) == DUNA_OP_CHECKED_GLOBAL_SET ||     \
-    (instr) == DUNA_OP_CONST ||                  \
-    (instr) == DUNA_OP_CONST_INIT ||             \
-    (instr) == DUNA_OP_ARITY_EQ ||               \
-    (instr) == DUNA_OP_ARITY_GE ||               \
-    (instr) == DUNA_OP_LISTIFY)
+#define IS_TYPE_B(instr) ((instr) > 119)
 
 #define EXTRACT_OP(instr)   ((uint8_t)((instr) & 0x000000ff))
 #define EXTRACT_ARG(instr)  ((uint32_t)((instr) >> 8))
@@ -1162,7 +1140,7 @@ static void duna_abort(duna_State *D)
   duna_dump(D);
 
   duna_close(D);
-  exit(13);
+  abort();
 }
 
 static void check_alloc(duna_State *D, void* ptr)

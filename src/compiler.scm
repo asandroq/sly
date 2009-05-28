@@ -1099,6 +1099,7 @@
     (BOOL-P             . 82)
     (CHAR-P             . 83)
     (FIXNUM-P           . 84)
+    (PAIR-P             . 85)
 
     ;; primitives optimised as instructions
     (INC                . 101)
@@ -1325,7 +1326,8 @@
     (= NUM-EQ 2)
     (eq? EQ 2)
     (eqv? EQV 2)
-    (string->symbol STRING-TO-SYMBOL 1)))
+    (string->symbol STRING-TO-SYMBOL 1)
+    (pair? PAIR-P 1)))
 
 ;;
 ;; Utilities

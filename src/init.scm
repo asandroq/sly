@@ -24,11 +24,17 @@
 ;; R5RS 6.1
 
 (define (equal? x y)
-  (eqv? x y))
+  (cond
+   ((and (pair? x)
+         (pair? y))
+    (and (eq? (car x)
+              (car y))
+         (equal? (cdr x)
+                 (cdr y))))
+   (else
+    (eq? x y))))
 
 ;; R5RS 6.3.2
-
-(define list (lambda args args))
 
 (define (caar x) (car (car x)))
 (define (cadr x) (car (cdr x)))
@@ -59,6 +65,24 @@
 (define (cdddar x) (cdr (cdr (cdr (car x)))))
 (define (cddddr x) (cdr (cdr (cdr (cdr x)))))
 
+(define list (lambda args args))
+
+(define (length l)
+  (let loop ((l l)
+             (i 0))
+    (cond
+     ((null? l) i)
+     ((pair? l) (loop (cdr l) (+ i 1)))
+     (else (error "length applied to non-list")))))
+
+(define (reverse l)
+  (let loop ((l l)
+             (res '()))
+    (cond
+     ((null? l) res)
+     ((pair? l) (loop (cdr l) (cons (car l) res)))
+     (else (error "reverse applied to non-list")))))
+
 (define (list-tail ls k)
   (if (= k 0)
       ls
@@ -78,4 +102,23 @@
    ((null? lst) #f)
    ((eqv? x (car lst)) lst)
    (else (memq x (cdr lst)))))
+
+(define (member x lst)
+  (cond
+   ((null? lst) #f)
+   ((equal? x (car lst)) lst)
+   (else (member x (cdr lst)))))
+
+;; R5RS 6.4
+
+;; this is not a complete map implementation
+(define (map proc l)
+  (let loop ((l l)
+             (res '()))
+    (cond
+     ((null? l) res)
+     ((pair? l) (loop (cdr l)
+                      (cons (proc (car l))
+                            res)))
+     (else (error "map applied to non-list")))))
 

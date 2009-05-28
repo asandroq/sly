@@ -100,6 +100,7 @@
 #define DUNA_OP_BOOL_P                 82
 #define DUNA_OP_CHAR_P                 83
 #define DUNA_OP_FIXNUM_P               84
+#define DUNA_OP_PAIR_P                 85
 
 /* primitives optimised as instructions */
 #define DUNA_OP_INC                   101
@@ -218,25 +219,26 @@ static opcode_t global_opcodes[] = {
   {DUNA_OP_ARITY_EQ,               "ARITY="},
   {DUNA_OP_ARITY_GE,               "ARITY>="},
   {DUNA_OP_LISTIFY,                "LISTIFY"},
-  {DUNA_OP_NULL_P,            "NULL?"},
-  {DUNA_OP_BOOL_P,            "BOOL?"},
-  {DUNA_OP_CHAR_P,            "CHAR?"},
-  {DUNA_OP_FIXNUM_P,          "FIXNUM?"},
-  {DUNA_OP_INC,               "INC"},
-  {DUNA_OP_DEC,               "DEC"},
-  {DUNA_OP_FIXNUM_TO_CHAR,    "FIXNUM->CHAR"},
-  {DUNA_OP_CHAR_TO_FIXNUM,    "CHAR->FIXNUM"},
-  {DUNA_OP_ZERO_P,            "ZERO?"},
-  {DUNA_OP_NOT,               "NOT"},
-  {DUNA_OP_PLUS,              "PLUS"},
-  {DUNA_OP_MINUS,             "MINUS"},
-  {DUNA_OP_MULT,              "MULT"},
-  {DUNA_OP_CONS,              "CONS"},
-  {DUNA_OP_CAR,               "CAR"},
-  {DUNA_OP_CDR,               "CDR"},
-  {DUNA_OP_NUM_EQ,            "NUM-EQ"},
-  {DUNA_OP_EQ,                "EQ?"},
-  {DUNA_OP_EQV,               "EQV?"},
+  {DUNA_OP_NULL_P,                 "NULL?"},
+  {DUNA_OP_BOOL_P,                 "BOOL?"},
+  {DUNA_OP_CHAR_P,                 "CHAR?"},
+  {DUNA_OP_FIXNUM_P,               "FIXNUM?"},
+  {DUNA_OP_PAIR_P,                 "PAIR?"},
+  {DUNA_OP_INC,                    "INC"},
+  {DUNA_OP_DEC,                    "DEC"},
+  {DUNA_OP_FIXNUM_TO_CHAR,         "FIXNUM->CHAR"},
+  {DUNA_OP_CHAR_TO_FIXNUM,         "CHAR->FIXNUM"},
+  {DUNA_OP_ZERO_P,                 "ZERO?"},
+  {DUNA_OP_NOT,                    "NOT"},
+  {DUNA_OP_PLUS,                   "PLUS"},
+  {DUNA_OP_MINUS,                  "MINUS"},
+  {DUNA_OP_MULT,                   "MULT"},
+  {DUNA_OP_CONS,                   "CONS"},
+  {DUNA_OP_CAR,                    "CAR"},
+  {DUNA_OP_CDR,                    "CDR"},
+  {DUNA_OP_NUM_EQ,                 "NUM-EQ"},
+  {DUNA_OP_EQ,                     "EQ?"},
+  {DUNA_OP_EQV,                    "EQV?"},
   {DUNA_OP_MAKE_STRING,            "MAKE-STRING"},
   {DUNA_OP_STRING_SET,             "STRING-SET"},
   {DUNA_OP_STRING_TO_SYMBOL,       "STRING->SYMBOL"},
@@ -1194,16 +1196,15 @@ int duna_vm_run(duna_State* D)
 {
   int go_on = 1;
 
-  disassemble(D);
+  /*disassemble(D);*/
 
   while(go_on) {
+    duna_Object tmp;
     register uint32_t instr;
     uint32_t i, j, dw1, dw2;
-    /* still unsure about this, should be a register? */
-    duna_Object tmp;
 
     /* debugging */
-    duna_dump(D);
+    /*duna_dump(D);*/
     assert(D->pc < D->code_size);
 
     instr = D->code[D->pc++];
@@ -1285,6 +1286,10 @@ int duna_vm_run(duna_State* D)
 
     case DUNA_OP_FIXNUM_P:
       DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_FIXNUM);
+      break;
+
+    case DUNA_OP_PAIR_P:
+      DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_PAIR);
       break;
 
     case DUNA_OP_PUSH:
@@ -2019,6 +2024,9 @@ int main(int argc, char *argv[])
 
   /* tries to load initial environment */
   duna_load_file(D, "init.fasl");
+
+  /* tries to load compiler */
+  duna_load_file(D, "compiler.fasl");
 
   if(!duna_load_file(D, argv[1])) {
     printf("Error!\n");

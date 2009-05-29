@@ -22,22 +22,32 @@
 ##
 
 CC = gcc
+
+# GCC 2.x has different warning options
+ifeq ($(GCC),2)
+CFLAGS = -g3 -O0 -Wall -W
+else
 CFLAGS = -g3 -O0 -Wall -Wextra
+endif
+
 LD = gcc
 LDFLAGS =
- 
+
 TARGET = sly
 
 SOURCES = \
-	vm.c
+	gc.c \
+	io.c \
+	vm.c \
+	sly.c
 
 OBJECTS = $(SOURCES:.c=.o)
 
 $(TARGET): $(OBJECTS)
 	$(LD) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
 
-vm.o: vm.c
-	$(CC) $(CFLAGS) -c vm.c -o vm.o
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 .PHONY: clean
 

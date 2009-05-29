@@ -1,5 +1,5 @@
 /*
- * The Duna Scheme compiler
+ * The Sly Scheme compiler
  * Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -33,7 +33,7 @@
 #endif
 
 /*
- * Duna bytecode is an array of 32-bit values for
+ * Sly bytecode is an array of 32-bit values for
  * efficiency (data alignment), but wasteful because
  * most instructions do not have operands. It is
  * therefore hostile for embedded systems but optimised
@@ -52,97 +52,97 @@
  */
 
 /* instructions without operands */
-#define DUNA_OP_LOAD_NIL                1
-#define DUNA_OP_LOAD_FALSE              2
-#define DUNA_OP_LOAD_TRUE               3
-#define DUNA_OP_LOAD_UNDEF              4
-#define DUNA_OP_LOAD_ZERO               5
-#define DUNA_OP_LOAD_ONE                6
-#define DUNA_OP_PUSH                    7
-#define DUNA_OP_LOAD_0                  8
-#define DUNA_OP_LOAD_1                  9
-#define DUNA_OP_LOAD_2                 10
-#define DUNA_OP_LOAD_3                 11
-#define DUNA_OP_CALL                   12
-#define DUNA_OP_RETURN                 13
-#define DUNA_OP_SAVE_CONT              14
-#define DUNA_OP_REST_CONT              15
-#define DUNA_OP_BOX                    16
-#define DUNA_OP_OPEN_BOX               17
-#define DUNA_OP_TAIL_CALL              18
-#define DUNA_OP_HALT                   19
-#define DUNA_OP_ABORT                  20
+#define SLY_OP_LOAD_NIL                1
+#define SLY_OP_LOAD_FALSE              2
+#define SLY_OP_LOAD_TRUE               3
+#define SLY_OP_LOAD_UNDEF              4
+#define SLY_OP_LOAD_ZERO               5
+#define SLY_OP_LOAD_ONE                6
+#define SLY_OP_PUSH                    7
+#define SLY_OP_LOAD_0                  8
+#define SLY_OP_LOAD_1                  9
+#define SLY_OP_LOAD_2                 10
+#define SLY_OP_LOAD_3                 11
+#define SLY_OP_CALL                   12
+#define SLY_OP_RETURN                 13
+#define SLY_OP_SAVE_CONT              14
+#define SLY_OP_REST_CONT              15
+#define SLY_OP_BOX                    16
+#define SLY_OP_OPEN_BOX               17
+#define SLY_OP_TAIL_CALL              18
+#define SLY_OP_HALT                   19
+#define SLY_OP_ABORT                  20
 
-#define DUNA_OP_NULL_P                 40
-#define DUNA_OP_BOOL_P                 41
-#define DUNA_OP_CHAR_P                 42
-#define DUNA_OP_FIXNUM_P               43
-#define DUNA_OP_PAIR_P                 44
+#define SLY_OP_NULL_P                 40
+#define SLY_OP_BOOL_P                 41
+#define SLY_OP_CHAR_P                 42
+#define SLY_OP_FIXNUM_P               43
+#define SLY_OP_PAIR_P                 44
 
 /* primitives optimised as instructions */
-#define DUNA_OP_INC                    60
-#define DUNA_OP_DEC                    61
-#define DUNA_OP_FIXNUM_TO_CHAR         62
-#define DUNA_OP_CHAR_TO_FIXNUM         63
-#define DUNA_OP_ZERO_P                 64
-#define DUNA_OP_NOT                    65
-#define DUNA_OP_PLUS                   66
-#define DUNA_OP_MINUS                  67
-#define DUNA_OP_MULT                   68
-#define DUNA_OP_CONS                   69
-#define DUNA_OP_CAR                    70
-#define DUNA_OP_CDR                    71
-#define DUNA_OP_NUM_EQ                 72
-#define DUNA_OP_EQ                     73
-#define DUNA_OP_EQV                    74
-#define DUNA_OP_MAKE_STRING            75
-#define DUNA_OP_STRING_SET             76
-#define DUNA_OP_STRING_TO_SYMBOL       77
-#define DUNA_OP_MAKE_VECTOR            78
-#define DUNA_OP_VECTOR_SET             79
-#define DUNA_OP_WRITE                  80
-#define DUNA_OP_DEBUG                  81
+#define SLY_OP_INC                    60
+#define SLY_OP_DEC                    61
+#define SLY_OP_FIXNUM_TO_CHAR         62
+#define SLY_OP_CHAR_TO_FIXNUM         63
+#define SLY_OP_ZERO_P                 64
+#define SLY_OP_NOT                    65
+#define SLY_OP_PLUS                   66
+#define SLY_OP_MINUS                  67
+#define SLY_OP_MULT                   68
+#define SLY_OP_CONS                   69
+#define SLY_OP_CAR                    70
+#define SLY_OP_CDR                    71
+#define SLY_OP_NUM_EQ                 72
+#define SLY_OP_EQ                     73
+#define SLY_OP_EQV                    74
+#define SLY_OP_MAKE_STRING            75
+#define SLY_OP_STRING_SET             76
+#define SLY_OP_STRING_TO_SYMBOL       77
+#define SLY_OP_MAKE_VECTOR            78
+#define SLY_OP_VECTOR_SET             79
+#define SLY_OP_WRITE                  80
+#define SLY_OP_DEBUG                  81
 
 /* instructions with one operand */
-#define DUNA_OP_LOAD_FIXNUM           120
-#define DUNA_OP_LOAD_CHAR             121
-#define DUNA_OP_LOAD                  122
-#define DUNA_OP_MAKE_CLOSURE          123
-#define DUNA_OP_JMP_IF                124
-#define DUNA_OP_JMP                   125
-#define DUNA_OP_LOAD_FREE             126
-#define DUNA_OP_ASSIGN                127
-#define DUNA_OP_ASSIGN_FREE           128
-#define DUNA_OP_FRAME                 129
-#define DUNA_OP_LOAD_LOCAL            130
-#define DUNA_OP_INSERT_BOX            131
-#define DUNA_OP_ASSIGN_LOCAL          132
-#define DUNA_OP_POP                   133
-#define DUNA_OP_GLOBAL_REF            134
-#define DUNA_OP_CHECKED_GLOBAL_REF    135
-#define DUNA_OP_GLOBAL_SET            136
-#define DUNA_OP_CHECKED_GLOBAL_SET    137
-#define DUNA_OP_CONST                 138
-#define DUNA_OP_CONST_INIT            139
-#define DUNA_OP_ARITY_EQ              140
-#define DUNA_OP_ARITY_GE              141
-#define DUNA_OP_LISTIFY               142
+#define SLY_OP_LOAD_FIXNUM           120
+#define SLY_OP_LOAD_CHAR             121
+#define SLY_OP_LOAD                  122
+#define SLY_OP_MAKE_CLOSURE          123
+#define SLY_OP_JMP_IF                124
+#define SLY_OP_JMP                   125
+#define SLY_OP_LOAD_FREE             126
+#define SLY_OP_ASSIGN                127
+#define SLY_OP_ASSIGN_FREE           128
+#define SLY_OP_FRAME                 129
+#define SLY_OP_LOAD_LOCAL            130
+#define SLY_OP_INSERT_BOX            131
+#define SLY_OP_ASSIGN_LOCAL          132
+#define SLY_OP_POP                   133
+#define SLY_OP_GLOBAL_REF            134
+#define SLY_OP_CHECKED_GLOBAL_REF    135
+#define SLY_OP_GLOBAL_SET            136
+#define SLY_OP_CHECKED_GLOBAL_SET    137
+#define SLY_OP_CONST                 138
+#define SLY_OP_CONST_INIT            139
+#define SLY_OP_ARITY_EQ              140
+#define SLY_OP_ARITY_GE              141
+#define SLY_OP_LISTIFY               142
 
 /*
  * data types tags
  */
-#define DUNA_TYPE_UNDEF                 1
-#define DUNA_TYPE_NIL                   2
-#define DUNA_TYPE_BOOL                  3
-#define DUNA_TYPE_FIXNUM                4
-#define DUNA_TYPE_CHAR                  5
-#define DUNA_TYPE_SYMBOL                6
-#define DUNA_TYPE_CLOSURE               7
-#define DUNA_TYPE_PAIR                  8
-#define DUNA_TYPE_CONTINUATION          9
-#define DUNA_TYPE_BOX                  10
-#define DUNA_TYPE_STRING               11
-#define DUNA_TYPE_VECTOR               12
+#define SLY_TYPE_UNDEF                 1
+#define SLY_TYPE_NIL                   2
+#define SLY_TYPE_BOOL                  3
+#define SLY_TYPE_FIXNUM                4
+#define SLY_TYPE_CHAR                  5
+#define SLY_TYPE_SYMBOL                6
+#define SLY_TYPE_CLOSURE               7
+#define SLY_TYPE_PAIR                  8
+#define SLY_TYPE_CONTINUATION          9
+#define SLY_TYPE_BOX                  10
+#define SLY_TYPE_STRING               11
+#define SLY_TYPE_VECTOR               12
 
 #define IS_TYPE_B(instr) ((instr) > 119)
 
@@ -158,76 +158,76 @@ struct  opcode_ {
 typedef struct opcode_ opcode_t;
 
 static opcode_t global_opcodes[] = {
-  {DUNA_OP_LOAD_NIL,          "LOAD-NIL"},
-  {DUNA_OP_LOAD_FALSE,        "LOAD-FALSE"},
-  {DUNA_OP_LOAD_TRUE,         "LOAD-TRUE"},
-  {DUNA_OP_LOAD_ZERO,         "LOAD-ZERO"},
-  {DUNA_OP_LOAD_ONE,          "LOAD-ONE"},
-  {DUNA_OP_LOAD_FIXNUM,       "LOAD-FIXNUM"},
-  {DUNA_OP_LOAD_CHAR,         "LOAD-CHAR"},
-  {DUNA_OP_PUSH,              "PUSH"},
-  {DUNA_OP_LOAD_0,            "LOAD0"},
-  {DUNA_OP_LOAD_1,            "LOAD1"},
-  {DUNA_OP_LOAD_2,            "LOAD2"},
-  {DUNA_OP_LOAD_3,            "LOAD3"},
-  {DUNA_OP_LOAD,              "LOAD"},
-  {DUNA_OP_MAKE_CLOSURE,      "MAKE-CLOSURE"},
-  {DUNA_OP_CALL,              "CALL"},
-  {DUNA_OP_RETURN,            "RETURN"},
-  {DUNA_OP_JMP_IF,            "JMP-IF"},
-  {DUNA_OP_JMP,               "JMP"},
-  {DUNA_OP_LOAD_FREE,         "LOAD-FREE"},
-  {DUNA_OP_SAVE_CONT,         "SAVE-CONT"},
-  {DUNA_OP_REST_CONT,         "REST-CONT"},
-  {DUNA_OP_ASSIGN,            "ASSIGN"},
-  {DUNA_OP_ASSIGN_FREE,       "ASSIGN-FREE"},
-  {DUNA_OP_BOX,               "BOX"},
-  {DUNA_OP_OPEN_BOX,          "OPEN-BOX"},
-  {DUNA_OP_FRAME,             "FRAME"},
-  {DUNA_OP_TAIL_CALL,         "TAIL-CALL"},
-  {DUNA_OP_HALT,              "HALT"},
-  {DUNA_OP_LOAD_LOCAL,        "LOAD-LOCAL"},
-  {DUNA_OP_INSERT_BOX,        "INSERT-BOX"},
-  {DUNA_OP_ASSIGN_LOCAL,      "ASSIGN-LOCAL"},
-  {DUNA_OP_POP,               "POP"},
-  {DUNA_OP_GLOBAL_REF,             "GLOBAL-REF"},
-  {DUNA_OP_CHECKED_GLOBAL_REF,     "CHECKED-GLOBAL-REF"},
-  {DUNA_OP_GLOBAL_SET,             "GLOBAL-SET"},
-  {DUNA_OP_CHECKED_GLOBAL_SET,     "CHECKED-GLOBAL-SET"},
-  {DUNA_OP_LOAD_UNDEF,             "LOAD-UNDEF"},
-  {DUNA_OP_CONST,                  "CONST"},
-  {DUNA_OP_CONST_INIT,             "CONST-INIT"},
-  {DUNA_OP_ARITY_EQ,               "ARITY="},
-  {DUNA_OP_ARITY_GE,               "ARITY>="},
-  {DUNA_OP_LISTIFY,                "LISTIFY"},
-  {DUNA_OP_ABORT,                  "ABORT"},
-  {DUNA_OP_NULL_P,                 "NULL?"},
-  {DUNA_OP_BOOL_P,                 "BOOL?"},
-  {DUNA_OP_CHAR_P,                 "CHAR?"},
-  {DUNA_OP_FIXNUM_P,               "FIXNUM?"},
-  {DUNA_OP_PAIR_P,                 "PAIR?"},
-  {DUNA_OP_INC,                    "INC"},
-  {DUNA_OP_DEC,                    "DEC"},
-  {DUNA_OP_FIXNUM_TO_CHAR,         "FIXNUM->CHAR"},
-  {DUNA_OP_CHAR_TO_FIXNUM,         "CHAR->FIXNUM"},
-  {DUNA_OP_ZERO_P,                 "ZERO?"},
-  {DUNA_OP_NOT,                    "NOT"},
-  {DUNA_OP_PLUS,                   "PLUS"},
-  {DUNA_OP_MINUS,                  "MINUS"},
-  {DUNA_OP_MULT,                   "MULT"},
-  {DUNA_OP_CONS,                   "CONS"},
-  {DUNA_OP_CAR,                    "CAR"},
-  {DUNA_OP_CDR,                    "CDR"},
-  {DUNA_OP_NUM_EQ,                 "NUM-EQ"},
-  {DUNA_OP_EQ,                     "EQ?"},
-  {DUNA_OP_EQV,                    "EQV?"},
-  {DUNA_OP_MAKE_STRING,            "MAKE-STRING"},
-  {DUNA_OP_STRING_SET,             "STRING-SET"},
-  {DUNA_OP_STRING_TO_SYMBOL,       "STRING->SYMBOL"},
-  {DUNA_OP_MAKE_VECTOR,            "MAKE-VECTOR"},
-  {DUNA_OP_VECTOR_SET,             "VECTOR-SET"},
-  {DUNA_OP_WRITE,                  "WRITE"},
-  {DUNA_OP_DEBUG,                  "DEBUG"},
+  {SLY_OP_LOAD_NIL,          "LOAD-NIL"},
+  {SLY_OP_LOAD_FALSE,        "LOAD-FALSE"},
+  {SLY_OP_LOAD_TRUE,         "LOAD-TRUE"},
+  {SLY_OP_LOAD_ZERO,         "LOAD-ZERO"},
+  {SLY_OP_LOAD_ONE,          "LOAD-ONE"},
+  {SLY_OP_LOAD_FIXNUM,       "LOAD-FIXNUM"},
+  {SLY_OP_LOAD_CHAR,         "LOAD-CHAR"},
+  {SLY_OP_PUSH,              "PUSH"},
+  {SLY_OP_LOAD_0,            "LOAD0"},
+  {SLY_OP_LOAD_1,            "LOAD1"},
+  {SLY_OP_LOAD_2,            "LOAD2"},
+  {SLY_OP_LOAD_3,            "LOAD3"},
+  {SLY_OP_LOAD,              "LOAD"},
+  {SLY_OP_MAKE_CLOSURE,      "MAKE-CLOSURE"},
+  {SLY_OP_CALL,              "CALL"},
+  {SLY_OP_RETURN,            "RETURN"},
+  {SLY_OP_JMP_IF,            "JMP-IF"},
+  {SLY_OP_JMP,               "JMP"},
+  {SLY_OP_LOAD_FREE,         "LOAD-FREE"},
+  {SLY_OP_SAVE_CONT,         "SAVE-CONT"},
+  {SLY_OP_REST_CONT,         "REST-CONT"},
+  {SLY_OP_ASSIGN,            "ASSIGN"},
+  {SLY_OP_ASSIGN_FREE,       "ASSIGN-FREE"},
+  {SLY_OP_BOX,               "BOX"},
+  {SLY_OP_OPEN_BOX,          "OPEN-BOX"},
+  {SLY_OP_FRAME,             "FRAME"},
+  {SLY_OP_TAIL_CALL,         "TAIL-CALL"},
+  {SLY_OP_HALT,              "HALT"},
+  {SLY_OP_LOAD_LOCAL,        "LOAD-LOCAL"},
+  {SLY_OP_INSERT_BOX,        "INSERT-BOX"},
+  {SLY_OP_ASSIGN_LOCAL,      "ASSIGN-LOCAL"},
+  {SLY_OP_POP,               "POP"},
+  {SLY_OP_GLOBAL_REF,             "GLOBAL-REF"},
+  {SLY_OP_CHECKED_GLOBAL_REF,     "CHECKED-GLOBAL-REF"},
+  {SLY_OP_GLOBAL_SET,             "GLOBAL-SET"},
+  {SLY_OP_CHECKED_GLOBAL_SET,     "CHECKED-GLOBAL-SET"},
+  {SLY_OP_LOAD_UNDEF,             "LOAD-UNDEF"},
+  {SLY_OP_CONST,                  "CONST"},
+  {SLY_OP_CONST_INIT,             "CONST-INIT"},
+  {SLY_OP_ARITY_EQ,               "ARITY="},
+  {SLY_OP_ARITY_GE,               "ARITY>="},
+  {SLY_OP_LISTIFY,                "LISTIFY"},
+  {SLY_OP_ABORT,                  "ABORT"},
+  {SLY_OP_NULL_P,                 "NULL?"},
+  {SLY_OP_BOOL_P,                 "BOOL?"},
+  {SLY_OP_CHAR_P,                 "CHAR?"},
+  {SLY_OP_FIXNUM_P,               "FIXNUM?"},
+  {SLY_OP_PAIR_P,                 "PAIR?"},
+  {SLY_OP_INC,                    "INC"},
+  {SLY_OP_DEC,                    "DEC"},
+  {SLY_OP_FIXNUM_TO_CHAR,         "FIXNUM->CHAR"},
+  {SLY_OP_CHAR_TO_FIXNUM,         "CHAR->FIXNUM"},
+  {SLY_OP_ZERO_P,                 "ZERO?"},
+  {SLY_OP_NOT,                    "NOT"},
+  {SLY_OP_PLUS,                   "PLUS"},
+  {SLY_OP_MINUS,                  "MINUS"},
+  {SLY_OP_MULT,                   "MULT"},
+  {SLY_OP_CONS,                   "CONS"},
+  {SLY_OP_CAR,                    "CAR"},
+  {SLY_OP_CDR,                    "CDR"},
+  {SLY_OP_NUM_EQ,                 "NUM-EQ"},
+  {SLY_OP_EQ,                     "EQ?"},
+  {SLY_OP_EQV,                    "EQV?"},
+  {SLY_OP_MAKE_STRING,            "MAKE-STRING"},
+  {SLY_OP_STRING_SET,             "STRING-SET"},
+  {SLY_OP_STRING_TO_SYMBOL,       "STRING->SYMBOL"},
+  {SLY_OP_MAKE_VECTOR,            "MAKE-VECTOR"},
+  {SLY_OP_VECTOR_SET,             "VECTOR-SET"},
+  {SLY_OP_WRITE,                  "WRITE"},
+  {SLY_OP_DEBUG,                  "DEBUG"},
   {0, NULL}
 };
 
@@ -236,21 +236,21 @@ static opcode_t global_opcodes[] = {
  */
 
 /* forward type declarations */
-typedef struct duna_Object_ duna_Object;
-typedef struct duna_GCObject_ duna_GCObject;
+typedef struct sly_Object_ sly_Object;
+typedef struct sly_GCObject_ sly_GCObject;
 
-typedef uint32_t duna_Char;
-typedef struct duna_Box_ duna_Box;
-typedef struct duna_Closure_ duna_Closure;
-typedef struct duna_Pair_ duna_Pair;
-typedef struct duna_Continuation_ duna_Continuation;
-typedef struct duna_String_ duna_String;
-typedef struct duna_Vector_ duna_Vector;
+typedef uint32_t sly_Char;
+typedef struct sly_Box_ sly_Box;
+typedef struct sly_Closure_ sly_Closure;
+typedef struct sly_Pair_ sly_Pair;
+typedef struct sly_Continuation_ sly_Continuation;
+typedef struct sly_String_ sly_String;
+typedef struct sly_Vector_ sly_Vector;
 
-typedef struct duna_Symbol_ duna_Symbol;
+typedef struct sly_Symbol_ sly_Symbol;
 
 /* value types */
-struct duna_Object_ {
+struct sly_Object_ {
 
   /* the runtime type tag */
   uint8_t type;
@@ -259,55 +259,55 @@ struct duna_Object_ {
   union {
     /* immediates */
     uint8_t bool;
-    duna_Char chr;
+    sly_Char chr;
     uint32_t fixnum;
-    duna_Symbol *symbol;
+    sly_Symbol *symbol;
 
     /* collectable objects */
-    duna_GCObject *gc;
+    sly_GCObject *gc;
   } value;
 };
 
-#define DUNA_GC_BASE uint32_t type
+#define SLY_GC_BASE uint32_t type
 
-struct duna_GCObject_ {
-  DUNA_GC_BASE;
+struct sly_GCObject_ {
+  SLY_GC_BASE;
 };
 
-struct duna_Box_ {
-  DUNA_GC_BASE;
-  duna_Object value;
+struct sly_Box_ {
+  SLY_GC_BASE;
+  sly_Object value;
 };
 
-struct duna_Closure_ {
-  DUNA_GC_BASE;
+struct sly_Closure_ {
+  SLY_GC_BASE;
   uint32_t entry_point;
   uint32_t nr_free;
-  duna_Object free_vars[0];
+  sly_Object free_vars[0];
 };
 
-struct duna_Pair_ {
-  DUNA_GC_BASE;
-  duna_Object car;
-  duna_Object cdr;  
+struct sly_Pair_ {
+  SLY_GC_BASE;
+  sly_Object car;
+  sly_Object cdr;  
 };
 
-struct duna_Continuation_ {
-  DUNA_GC_BASE;
+struct sly_Continuation_ {
+  SLY_GC_BASE;
   uint32_t size;
-  duna_Object stack[0];
+  sly_Object stack[0];
 };
 
-struct duna_String_ {
-  DUNA_GC_BASE;
+struct sly_String_ {
+  SLY_GC_BASE;
   uint32_t size;
-  duna_Char chars[0];
+  sly_Char chars[0];
 };
 
-struct duna_Vector_ {
-  DUNA_GC_BASE;
+struct sly_Vector_ {
+  SLY_GC_BASE;
   uint32_t size;
-  duna_Object data[0];
+  sly_Object data[0];
 };
 
 /*
@@ -316,53 +316,53 @@ struct duna_Vector_ {
  * some hash functions:
  * http://burtleburtle.net/bob/c/lookup3.c
  */
-struct duna_Symbol_ {
+struct sly_Symbol_ {
   /* symbol textual representation */
-  duna_String *str;
+  sly_String *str;
 
   /* next symbol in chain */
-  duna_Symbol *next;
+  sly_Symbol *next;
 };
 
 /*
  * the store, i.e., memory
  */
 
-#define DUNA_INITIAL_SPACE_SIZE     ((uint32_t)(1 << 7))
-#define DUNA_IMMEDIATE_P(o)         ((o)->type < DUNA_TYPE_CLOSURE)
-#define DUNA_FORWARD_TAG            199
+#define SLY_INITIAL_SPACE_SIZE     ((uint32_t)(1 << 7))
+#define SLY_IMMEDIATE_P(o)         ((o)->type < SLY_TYPE_CLOSURE)
+#define SLY_FORWARD_TAG            199
 
-#define DUNA_SIZE_OF_BOX \
-   (sizeof(duna_Box))
-#define DUNA_SIZE_OF_PAIR \
-   (sizeof(duna_Pair))
-#define DUNA_SIZE_OF_CLOSURE(n) \
-   (sizeof(duna_Closure) + (n) * sizeof(duna_Object))
-#define DUNA_SIZE_OF_CONTINUATION(n) \
-   (sizeof(duna_Continuation) + (n) * sizeof(duna_Object))
-#define DUNA_SIZE_OF_STRING(n) \
-   (sizeof(duna_String) + (n) * sizeof(duna_Char))
-#define DUNA_SIZE_OF_VECTOR(n) \
-   (sizeof(duna_Vector) + (n) * sizeof(duna_Object))
+#define SLY_SIZE_OF_BOX \
+   (sizeof(sly_Box))
+#define SLY_SIZE_OF_PAIR \
+   (sizeof(sly_Pair))
+#define SLY_SIZE_OF_CLOSURE(n) \
+   (sizeof(sly_Closure) + (n) * sizeof(sly_Object))
+#define SLY_SIZE_OF_CONTINUATION(n) \
+   (sizeof(sly_Continuation) + (n) * sizeof(sly_Object))
+#define SLY_SIZE_OF_STRING(n) \
+   (sizeof(sly_String) + (n) * sizeof(sly_Char))
+#define SLY_SIZE_OF_VECTOR(n) \
+   (sizeof(sly_Vector) + (n) * sizeof(sly_Object))
 
 /*
  * this callback is called by the garbage collector
  * to get all the mutator roots. It must return NULL
  * when there are no more roots to scan
  */
-typedef duna_Object* (*duna_Roots_Callback)(void*);
+typedef sly_Object* (*sly_Roots_Callback)(void*);
 
 /* forward reference to object in to-space */
-typedef struct duna_Forward_Ref_ duna_Forward_Ref;
+typedef struct sly_Forward_Ref_ sly_Forward_Ref;
 
-struct duna_Forward_Ref_ {
-  DUNA_GC_BASE;
-  duna_GCObject *ref;
+struct sly_Forward_Ref_ {
+  SLY_GC_BASE;
+  sly_GCObject *ref;
 };
 
-typedef struct duna_Store_ duna_Store;
+typedef struct sly_Store_ sly_Store;
 
-struct duna_Store_ {
+struct sly_Store_ {
   
   /* the total size of a semispace */
   uint32_t capacity;
@@ -380,24 +380,24 @@ struct duna_Store_ {
   void *to_space;
 
   /* roots callback */
-  duna_Roots_Callback roots_cb;
+  sly_Roots_Callback roots_cb;
 
   /* opaque data to pass to callback */
   void *roots_cb_data;
 };
 
-static int init_store(duna_Store *S, duna_Roots_Callback cb, void* ud)
+static int init_store(sly_Store *S, sly_Roots_Callback cb, void* ud)
 {
   /* alloc heap */
-  S->from_space = malloc(DUNA_INITIAL_SPACE_SIZE * 2);
+  S->from_space = malloc(SLY_INITIAL_SPACE_SIZE * 2);
   if(S->from_space == NULL) {
     return 0;
   }
 
   S->size = 0;
   S->os_address = S->from_space;
-  S->capacity = DUNA_INITIAL_SPACE_SIZE;
-  S->to_space = S->from_space + (DUNA_INITIAL_SPACE_SIZE);
+  S->capacity = SLY_INITIAL_SPACE_SIZE;
+  S->to_space = S->from_space + (SLY_INITIAL_SPACE_SIZE);
 
   S->roots_cb = cb;
   S->roots_cb_data = ud;
@@ -405,7 +405,7 @@ static int init_store(duna_Store *S, duna_Roots_Callback cb, void* ud)
   return 1;
 }
 
-static void finish_store(duna_Store *S)
+static void finish_store(sly_Store *S)
 {
   free(S->os_address);
   S->size = S->capacity = 0;
@@ -413,33 +413,33 @@ static void finish_store(duna_Store *S)
   S->roots_cb = S->roots_cb_data = NULL;
 }
 
-static uint32_t sizeof_gcobj(duna_GCObject* obj)
+static uint32_t sizeof_gcobj(sly_GCObject* obj)
 {
   uint32_t size;
 
   switch(obj->type) {
-  case DUNA_TYPE_CLOSURE:
-    size = DUNA_SIZE_OF_CLOSURE(((duna_Closure*)obj)->nr_free);
+  case SLY_TYPE_CLOSURE:
+    size = SLY_SIZE_OF_CLOSURE(((sly_Closure*)obj)->nr_free);
     break;
 
-  case DUNA_TYPE_PAIR:
-    size = DUNA_SIZE_OF_PAIR;
+  case SLY_TYPE_PAIR:
+    size = SLY_SIZE_OF_PAIR;
     break;
 
-  case DUNA_TYPE_CONTINUATION:
-    size = DUNA_SIZE_OF_CONTINUATION(((duna_Continuation*)obj)->size);
+  case SLY_TYPE_CONTINUATION:
+    size = SLY_SIZE_OF_CONTINUATION(((sly_Continuation*)obj)->size);
     break;
 
-  case DUNA_TYPE_BOX:
-    size = DUNA_SIZE_OF_BOX;
+  case SLY_TYPE_BOX:
+    size = SLY_SIZE_OF_BOX;
     break;
 
-  case DUNA_TYPE_STRING:
-    size = DUNA_SIZE_OF_STRING(((duna_String*)obj)->size);
+  case SLY_TYPE_STRING:
+    size = SLY_SIZE_OF_STRING(((sly_String*)obj)->size);
     break;
 
-  case DUNA_TYPE_VECTOR:
-    size = DUNA_SIZE_OF_VECTOR(((duna_Vector*)obj)->size);
+  case SLY_TYPE_VECTOR:
+    size = SLY_SIZE_OF_VECTOR(((sly_Vector*)obj)->size);
     break;
 
   default:
@@ -449,19 +449,19 @@ static uint32_t sizeof_gcobj(duna_GCObject* obj)
   return size;
 }
 
-static void copy_object(duna_Store* S, duna_Object* obj)
+static void copy_object(sly_Store* S, sly_Object* obj)
 {
   void *to;
   uint32_t size;
 
-  if(DUNA_IMMEDIATE_P(obj)) {
+  if(SLY_IMMEDIATE_P(obj)) {
     /* if not heap-allocated, bail */
     return;
   }
 
-  if(obj->value.gc->type == DUNA_FORWARD_TAG) {
+  if(obj->value.gc->type == SLY_FORWARD_TAG) {
     /* already copied, just update pointer */
-    obj->value.gc = ((duna_Forward_Ref*)obj->value.gc)->ref;
+    obj->value.gc = ((sly_Forward_Ref*)obj->value.gc)->ref;
     return;
   }
 
@@ -472,19 +472,19 @@ static void copy_object(duna_Store* S, duna_Object* obj)
   S->size += size;
 
   /* leave a forwarding pointer and update */
-  obj->value.gc->type = DUNA_FORWARD_TAG;
-  ((duna_Forward_Ref*)obj->value.gc)->ref = to;
+  obj->value.gc->type = SLY_FORWARD_TAG;
+  ((sly_Forward_Ref*)obj->value.gc)->ref = to;
   obj->value.gc = to;
 }
 
-static void collect_garbage(duna_Store* S)
+static void collect_garbage(sly_Store* S)
 {
   /*
    * classic, simple 2-space copy collector
    * using Cheney's algorithm
    */
   void *scan;
-  duna_Object *obj;
+  sly_Object *obj;
   uint32_t old_size;
 
   if(!S->roots_cb) {
@@ -503,36 +503,36 @@ static void collect_garbage(duna_Store* S)
   scan = S->to_space;
   while(scan < S->to_space + S->size) {
     uint32_t i, size;
-    duna_GCObject *gcobj;
+    sly_GCObject *gcobj;
 
-    gcobj = (duna_GCObject*)scan;
+    gcobj = (sly_GCObject*)scan;
     size = sizeof_gcobj(gcobj);
 
     switch(gcobj->type) {
-    case DUNA_TYPE_CLOSURE:
-      for(i = 0; i < ((duna_Closure*)gcobj)->nr_free; i++) {
-	copy_object(S, &(((duna_Closure*)gcobj)->free_vars[i]));
+    case SLY_TYPE_CLOSURE:
+      for(i = 0; i < ((sly_Closure*)gcobj)->nr_free; i++) {
+	copy_object(S, &(((sly_Closure*)gcobj)->free_vars[i]));
       }
       break;
 
-    case DUNA_TYPE_PAIR:
-      copy_object(S, &((duna_Pair*)gcobj)->car);
-      copy_object(S, &((duna_Pair*)gcobj)->cdr);
+    case SLY_TYPE_PAIR:
+      copy_object(S, &((sly_Pair*)gcobj)->car);
+      copy_object(S, &((sly_Pair*)gcobj)->cdr);
       break;
 
-    case DUNA_TYPE_CONTINUATION:
-      for(i = 0; i < ((duna_Continuation*)gcobj)->size; i++) {
-	copy_object(S, &(((duna_Continuation*)gcobj)->stack[i]));
+    case SLY_TYPE_CONTINUATION:
+      for(i = 0; i < ((sly_Continuation*)gcobj)->size; i++) {
+	copy_object(S, &(((sly_Continuation*)gcobj)->stack[i]));
       }
       break;
 
-    case DUNA_TYPE_BOX:
-      copy_object(S, &((duna_Box*)gcobj)->value);
+    case SLY_TYPE_BOX:
+      copy_object(S, &((sly_Box*)gcobj)->value);
       break;
 
-    case DUNA_TYPE_VECTOR:
-      for(i = 0; i < ((duna_Vector*)gcobj)->size; i++) {
-	copy_object(S, &(((duna_Vector*)gcobj)->data[i]));
+    case SLY_TYPE_VECTOR:
+      for(i = 0; i < ((sly_Vector*)gcobj)->size; i++) {
+	copy_object(S, &(((sly_Vector*)gcobj)->data[i]));
       }
       break;
     }
@@ -546,7 +546,7 @@ static void collect_garbage(duna_Store* S)
   S->to_space = scan;
 }
 
-static int expand_store(duna_Store* S)
+static int expand_store(sly_Store* S)
 {
   void *tmp;
   uint32_t old_size, size;
@@ -575,7 +575,7 @@ static int expand_store(duna_Store* S)
   }
 }
 
-static void* alloc_from_store(duna_Store *S, uint32_t size)
+static void* alloc_from_store(sly_Store *S, uint32_t size)
 {
   void *ret;
 
@@ -601,84 +601,84 @@ static void* alloc_from_store(duna_Store *S, uint32_t size)
   return ret;
 }
 
-static duna_Box *alloc_box(duna_Store *S)
+static sly_Box *alloc_box(sly_Store *S)
 {
-  duna_Box *ret;
+  sly_Box *ret;
 
-  ret = (duna_Box*)alloc_from_store(S, DUNA_SIZE_OF_BOX);
+  ret = (sly_Box*)alloc_from_store(S, SLY_SIZE_OF_BOX);
   if(ret) {
-    ret->type = DUNA_TYPE_BOX;
+    ret->type = SLY_TYPE_BOX;
   }
 
   return ret;
 }
 
-static duna_Closure *alloc_closure(duna_Store *S, uint32_t nr_vars)
+static sly_Closure *alloc_closure(sly_Store *S, uint32_t nr_vars)
 {
-  duna_Closure *ret;
+  sly_Closure *ret;
 
-  ret = (duna_Closure*) alloc_from_store(S, DUNA_SIZE_OF_CLOSURE(nr_vars));
+  ret = (sly_Closure*) alloc_from_store(S, SLY_SIZE_OF_CLOSURE(nr_vars));
   if(ret) {
-    ret->type = DUNA_TYPE_CLOSURE;
+    ret->type = SLY_TYPE_CLOSURE;
     ret->nr_free = nr_vars;
   }
 
   return ret;
 }
 
-static duna_Pair *alloc_pair(duna_Store *S)
+static sly_Pair *alloc_pair(sly_Store *S)
 {
-  duna_Pair *ret;
+  sly_Pair *ret;
 
-  ret = (duna_Pair*) alloc_from_store(S, DUNA_SIZE_OF_PAIR);
+  ret = (sly_Pair*) alloc_from_store(S, SLY_SIZE_OF_PAIR);
   if(ret) {
-    ret->type = DUNA_TYPE_PAIR;
+    ret->type = SLY_TYPE_PAIR;
   }
 
   return ret;
 }
 
-static duna_Continuation *alloc_continuation(duna_Store *S, uint32_t stack_size)
+static sly_Continuation *alloc_continuation(sly_Store *S, uint32_t stack_size)
 {
-  duna_Continuation *ret;
+  sly_Continuation *ret;
 
-  ret = (duna_Continuation*)alloc_from_store(S, DUNA_SIZE_OF_CONTINUATION(stack_size));
+  ret = (sly_Continuation*)alloc_from_store(S, SLY_SIZE_OF_CONTINUATION(stack_size));
   if(ret) {
-    ret->type = DUNA_TYPE_CONTINUATION;
+    ret->type = SLY_TYPE_CONTINUATION;
     ret->size = stack_size;
   }
 
   return ret;
 }
 
-static duna_String *alloc_string(duna_Store *S, uint32_t size)
+static sly_String *alloc_string(sly_Store *S, uint32_t size)
 {
-  duna_String *ret;
+  sly_String *ret;
 
-  ret = (duna_String*)alloc_from_store(S, DUNA_SIZE_OF_STRING(size));
+  ret = (sly_String*)alloc_from_store(S, SLY_SIZE_OF_STRING(size));
 
   if(ret) {
-    ret->type = DUNA_TYPE_STRING;
+    ret->type = SLY_TYPE_STRING;
     ret->size = size;
   }
 
   return ret;
 }
 
-static duna_Vector* alloc_vector(duna_Store *S, uint32_t size)
+static sly_Vector* alloc_vector(sly_Store *S, uint32_t size)
 {
-  duna_Vector* ret;
+  sly_Vector* ret;
 
-  ret = (duna_Vector*)alloc_from_store(S, DUNA_SIZE_OF_VECTOR(size));
+  ret = (sly_Vector*)alloc_from_store(S, SLY_SIZE_OF_VECTOR(size));
 
   if(ret) {
     uint32_t i;
 
-    ret->type = DUNA_TYPE_VECTOR;
+    ret->type = SLY_TYPE_VECTOR;
     ret->size = size;
 
     for(i = 0; i < size; i++) {
-      ret->data[i].type = DUNA_TYPE_UNDEF;
+      ret->data[i].type = SLY_TYPE_UNDEF;
     }
   }
 
@@ -689,29 +689,29 @@ static duna_Vector* alloc_vector(duna_Store *S, uint32_t size)
  * the virtual machine
  */
 
-typedef struct duna_Env_ duna_Env;
-typedef struct duna_Env_Var_ duna_Env_Var;
+typedef struct sly_Env_ sly_Env;
+typedef struct sly_Env_Var_ sly_Env_Var;
 
 /* an entry in an environment */
-struct duna_Env_Var_ {
+struct sly_Env_Var_ {
 
   /* entry in the symbol table */
-  duna_Symbol *symbol;
+  sly_Symbol *symbol;
 
   /* the actual value */
-  duna_Object value;
+  sly_Object value;
 };
 
 /* a global environment */
-struct duna_Env_ {
+struct sly_Env_ {
   uint32_t size;
-  duna_Env_Var *vars;
+  sly_Env_Var *vars;
 };
 
-/* the state of the Duna interpreter */
-typedef struct duna_State_ duna_State;
+/* the state of the Sly interpreter */
+typedef struct sly_State_ sly_State;
 
-struct duna_State_ {
+struct sly_State_ {
 
   /* the size of the bytecode vector used */
   uint32_t code_size;
@@ -732,40 +732,40 @@ struct duna_State_ {
   uint32_t pc;
 
   /* accumulator register */
-  duna_Object accum;
+  sly_Object accum;
 
   /* the current procedure */
-  duna_Object proc;
+  sly_Object proc;
 
   /* global environment */
-  duna_Env global_env;
+  sly_Env global_env;
 
   /* the bytecode to be interpreted */
   uint32_t *code;
 
   /* the machine stack */
-  duna_Object *stack;
+  sly_Object *stack;
 
   /* constants */
-  duna_Object *consts;
+  sly_Object *consts;
 
   /* symbol table */
-  duna_Symbol *symbol_table;
+  sly_Symbol *symbol_table;
 
   /* VM memory */
-  duna_Store store;
+  sly_Store store;
 };
 
 /* garbage collector callback */
 
 struct gc_data {
-  duna_State *D;
+  sly_State *D;
   uint32_t state, count;
 };
 
 static struct gc_data gc_data;
 
-static duna_Object* gc_callback(void *ud)
+static sly_Object* gc_callback(void *ud)
 {
   struct gc_data *gc_data;
 
@@ -820,11 +820,11 @@ static duna_Object* gc_callback(void *ud)
   }
 }
 
-duna_State* duna_init(void)
+sly_State* sly_init(void)
 {
-  duna_State *D = NULL;
+  sly_State *D = NULL;
 
-  D = (duna_State*)malloc(sizeof(duna_State));
+  D = (sly_State*)malloc(sizeof(sly_State));
   if(!D) {
     return NULL;
   }
@@ -848,11 +848,11 @@ duna_State* duna_init(void)
     return NULL;
   }
   /* instruction to halt execution always at address 0 */
-  D->code[0] = (uint32_t) DUNA_OP_HALT;
+  D->code[0] = (uint32_t) SLY_OP_HALT;
 
   /* stack */
   D->sp = 0;
-  D->stack = (duna_Object*)malloc(sizeof(duna_Object) * 1024);
+  D->stack = (sly_Object*)malloc(sizeof(sly_Object) * 1024);
   if(D->stack) {
     D->stack_size = 1024;
   } else {
@@ -871,13 +871,13 @@ duna_State* duna_init(void)
   D->global_env.vars = NULL;
 
   /* registers */
-  D->proc.type = DUNA_TYPE_UNDEF;
-  D->accum.type = DUNA_TYPE_UNDEF;
+  D->proc.type = SLY_TYPE_UNDEF;
+  D->accum.type = SLY_TYPE_UNDEF;
 
   return D;
 }
 
-void duna_close(duna_State* D)
+void sly_close(sly_State* D)
 {
   if(D) {
     finish_store(&D->store);
@@ -891,9 +891,9 @@ void duna_close(duna_State* D)
     }
 
     if(D->symbol_table) {
-      duna_Symbol *sym;
+      sly_Symbol *sym;
       for(sym = D->symbol_table; sym != NULL;) {
-	duna_Symbol *tmp = sym->next;
+	sly_Symbol *tmp = sym->next;
 	free(sym->str);
 	free(sym);
 	sym = tmp;
@@ -904,43 +904,43 @@ void duna_close(duna_State* D)
   }
 }
 
-static int string_equal_p(duna_String *s1, duna_String *s2)
+static int string_equal_p(sly_String *s1, sly_String *s2)
 {
   if(s1->size != s2->size) {
     return 0;
   }
 
-  return memcmp(s1->chars, s2->chars, s1->size * sizeof(duna_Char)) == 0;
+  return memcmp(s1->chars, s2->chars, s1->size * sizeof(sly_Char)) == 0;
 }
 
-static duna_String* string_copy(duna_State* D, duna_String* s)
+static sly_String* string_copy(sly_State* D, sly_String* s)
 {
-  duna_String *ret;
+  sly_String *ret;
 
   ret = alloc_string(&D->store, s->size);
-  memcpy(ret->chars, s->chars, s->size * sizeof(duna_Char));
+  memcpy(ret->chars, s->chars, s->size * sizeof(sly_Char));
 
   return ret;
 }
 
-static duna_String* string_copy_extern(duna_String* s)
+static sly_String* string_copy_extern(sly_String* s)
 {
   uint32_t size;
-  duna_String *ret;
+  sly_String *ret;
 
-  size = DUNA_SIZE_OF_STRING(s->size);
+  size = SLY_SIZE_OF_STRING(s->size);
 
-  ret = (duna_String*)malloc(size);
+  ret = (sly_String*)malloc(size);
   /* TODO: test and throw error */
   memcpy(ret, s, size);
 
   return ret;
 }
 
-static duna_Object duna_make_symbol(duna_State* D, duna_String *str)
+static sly_Object sly_make_symbol(sly_State* D, sly_String *str)
 {
-  duna_Object obj;
-  duna_Symbol *tmp;
+  sly_Object obj;
+  sly_Symbol *tmp;
 
   /* is the symbol already there? */
   for(tmp = D->symbol_table; tmp != NULL; tmp = tmp->next) {
@@ -951,13 +951,13 @@ static duna_Object duna_make_symbol(duna_State* D, duna_String *str)
 
   if(tmp == NULL) {
     /* adding new symbol */
-    tmp = (duna_Symbol*)malloc(sizeof(duna_Symbol));
+    tmp = (sly_Symbol*)malloc(sizeof(sly_Symbol));
     tmp->str = string_copy_extern(str);
     tmp->next = D->symbol_table;
     D->symbol_table = tmp;
   }
 
-  obj.type = DUNA_TYPE_SYMBOL;
+  obj.type = SLY_TYPE_SYMBOL;
   obj.value.symbol = tmp;
 
   return obj;
@@ -967,7 +967,7 @@ static duna_Object duna_make_symbol(duna_State* D, duna_String *str)
  * writer
  */
 
-static void write_string(duna_String* s, int quote)
+static void write_string(sly_String* s, int quote)
 {
   uint32_t i, c;
 
@@ -985,21 +985,21 @@ static void write_string(duna_String* s, int quote)
   }
 }
 
-static void write_obj(duna_Object* obj)
+static void write_obj(sly_Object* obj)
 {
   uint32_t i;
 
   switch(obj->type) {
 
-  case DUNA_TYPE_UNDEF:
+  case SLY_TYPE_UNDEF:
     printf("<#undef>");
     break;
 
-  case DUNA_TYPE_NIL:
+  case SLY_TYPE_NIL:
     printf("()");
     break;
 
-  case DUNA_TYPE_BOOL:
+  case SLY_TYPE_BOOL:
     if(obj->value.bool) {
       printf("#t");
     } else {
@@ -1007,48 +1007,48 @@ static void write_obj(duna_Object* obj)
     }
     break;
 
-  case DUNA_TYPE_FIXNUM:
+  case SLY_TYPE_FIXNUM:
     printf("%d", obj->value.fixnum);
     break;
 
-  case DUNA_TYPE_CHAR:
+  case SLY_TYPE_CHAR:
     printf("#\\%c", obj->value.chr);
     break;
 
-  case DUNA_TYPE_SYMBOL:
+  case SLY_TYPE_SYMBOL:
     write_string(obj->value.symbol->str, 0);
     break;
 
-  case DUNA_TYPE_CLOSURE:
-    printf("<#closure %u>", ((duna_Closure*)obj->value.gc)->entry_point);
+  case SLY_TYPE_CLOSURE:
+    printf("<#closure %u>", ((sly_Closure*)obj->value.gc)->entry_point);
     break;
 
-  case DUNA_TYPE_PAIR:
+  case SLY_TYPE_PAIR:
     printf("(");
-    write_obj(&(((duna_Pair*)obj->value.gc)->car));
+    write_obj(&(((sly_Pair*)obj->value.gc)->car));
     printf(" . ");
-    write_obj(&(((duna_Pair*)obj->value.gc)->cdr));
+    write_obj(&(((sly_Pair*)obj->value.gc)->cdr));
     printf(")");
     break;
 
-  case DUNA_TYPE_CONTINUATION:
-    printf("<#continuation %u>", ((duna_Continuation*)obj->value.gc)->size);
+  case SLY_TYPE_CONTINUATION:
+    printf("<#continuation %u>", ((sly_Continuation*)obj->value.gc)->size);
     break;
 
-  case DUNA_TYPE_BOX:
+  case SLY_TYPE_BOX:
     printf("#&");
-    write_obj(&(((duna_Box*)obj->value.gc)->value));
+    write_obj(&(((sly_Box*)obj->value.gc)->value));
     break;
 
-  case DUNA_TYPE_STRING:
-    write_string((duna_String*)obj->value.gc, 1);
+  case SLY_TYPE_STRING:
+    write_string((sly_String*)obj->value.gc, 1);
     break;
 
-  case DUNA_TYPE_VECTOR:
+  case SLY_TYPE_VECTOR:
     printf("#(");
-    for(i = 0; i < ((duna_Vector*)obj->value.gc)->size; i++) {
+    for(i = 0; i < ((sly_Vector*)obj->value.gc)->size; i++) {
       printf(" ");
-      write_obj(((duna_Vector*)obj->value.gc)->data + i);
+      write_obj(((sly_Vector*)obj->value.gc)->data + i);
     }
     printf(")");
     break;
@@ -1079,7 +1079,7 @@ static void dump_instr(uint32_t instr)
   }
 }
 
-static void disassemble(duna_State* D)
+static void disassemble(sly_State* D)
 {
   uint32_t i;
 
@@ -1091,7 +1091,7 @@ static void disassemble(duna_State* D)
   }
 }
 
-void duna_dump(duna_State* D)
+void sly_dump(sly_State* D)
 {
   uint32_t i;
 
@@ -1115,7 +1115,7 @@ void duna_dump(duna_State* D)
 
   printf("Globals:");
   for(i = 0; i < D->global_env.size; i++) {
-    duna_Env_Var var = D->global_env.vars[i];
+    sly_Env_Var var = D->global_env.vars[i];
     printf(" [");
     if(var.symbol) {
       write_string(var.symbol->str, 0);
@@ -1135,29 +1135,29 @@ void duna_dump(duna_State* D)
   printf("\n\n");
 }
 
-static void duna_abort(duna_State *D)
+static void sly_abort(sly_State *D)
 {
-  duna_dump(D);
+  sly_dump(D);
 
-  duna_close(D);
+  sly_close(D);
   abort();
 }
 
-static void check_alloc(duna_State *D, void* ptr)
+static void check_alloc(sly_State *D, void* ptr)
 {
   if(ptr == NULL) {
-    fprintf(stderr, "duna: Out of memory!\n");
-    duna_abort(D);
+    fprintf(stderr, "sly: Out of memory!\n");
+    sly_abort(D);
   }
 }
 
-#define DUNA_SET_BOOL(cond)		\
+#define SLY_SET_BOOL(cond)		\
   do {					\
     if(cond) {				\
-      D->accum.type = DUNA_TYPE_BOOL;	\
+      D->accum.type = SLY_TYPE_BOOL;	\
       D->accum.value.bool = 1;		\
     } else {				\
-      D->accum.type = DUNA_TYPE_BOOL;	\
+      D->accum.type = SLY_TYPE_BOOL;	\
       D->accum.value.bool = 0;		\
     }					\
   } while(0)
@@ -1184,19 +1184,19 @@ static void check_alloc(duna_State *D, void* ptr)
  *      +=====================+
  *      |    previous frame   |
  */
-int duna_vm_run(duna_State* D)
+int sly_vm_run(sly_State* D)
 {
   int go_on = 1, debug = 0;
 
   /*disassemble(D);*/
 
   while(go_on) {
-    duna_Object tmp;
+    sly_Object tmp;
     register uint32_t instr;
     uint32_t i, j, dw1, dw2;
 
     if(debug) {
-      duna_dump(D);
+      sly_dump(D);
       getchar();
     }
     assert(D->pc < D->code_size);
@@ -1205,132 +1205,132 @@ int duna_vm_run(duna_State* D)
 
     switch(EXTRACT_OP(instr)) {
 
-    case DUNA_OP_LOAD_NIL:
-      D->accum.type = DUNA_TYPE_NIL;
+    case SLY_OP_LOAD_NIL:
+      D->accum.type = SLY_TYPE_NIL;
       break;
 
-    case DUNA_OP_LOAD_FALSE:
-      D->accum.type = DUNA_TYPE_BOOL;
+    case SLY_OP_LOAD_FALSE:
+      D->accum.type = SLY_TYPE_BOOL;
       D->accum.value.bool = 0;
       break;
 
-    case DUNA_OP_LOAD_TRUE:
-      D->accum.type = DUNA_TYPE_BOOL;
+    case SLY_OP_LOAD_TRUE:
+      D->accum.type = SLY_TYPE_BOOL;
       D->accum.value.bool = 1;
       break;
 
-    case DUNA_OP_LOAD_ZERO:
-      D->accum.type = DUNA_TYPE_FIXNUM;
+    case SLY_OP_LOAD_ZERO:
+      D->accum.type = SLY_TYPE_FIXNUM;
       D->accum.value.fixnum = 0;
       break;
 
-    case DUNA_OP_LOAD_ONE:
-      D->accum.type = DUNA_TYPE_FIXNUM;
+    case SLY_OP_LOAD_ONE:
+      D->accum.type = SLY_TYPE_FIXNUM;
       D->accum.value.fixnum = 1;
       break;
 
-    case DUNA_OP_LOAD_FIXNUM:
-      D->accum.type = DUNA_TYPE_FIXNUM;
+    case SLY_OP_LOAD_FIXNUM:
+      D->accum.type = SLY_TYPE_FIXNUM;
       D->accum.value.fixnum = EXTRACT_ARG(instr);
       break;
 
-    case DUNA_OP_LOAD_CHAR:
-      D->accum.type = DUNA_TYPE_CHAR;
-      D->accum.value.chr = (duna_Char) EXTRACT_ARG(instr);
+    case SLY_OP_LOAD_CHAR:
+      D->accum.type = SLY_TYPE_CHAR;
+      D->accum.value.chr = (sly_Char) EXTRACT_ARG(instr);
       break;
 
-    case DUNA_OP_INC:
+    case SLY_OP_INC:
       D->accum.value.fixnum++;
       break;
 
-    case DUNA_OP_DEC:
+    case SLY_OP_DEC:
       D->accum.value.fixnum--;
       break;
 
-    case DUNA_OP_FIXNUM_TO_CHAR:
-      D->accum.type = DUNA_TYPE_CHAR;
-      D->accum.value.chr = (duna_Char) D->accum.value.fixnum;
+    case SLY_OP_FIXNUM_TO_CHAR:
+      D->accum.type = SLY_TYPE_CHAR;
+      D->accum.value.chr = (sly_Char) D->accum.value.fixnum;
       break;
 
-    case DUNA_OP_CHAR_TO_FIXNUM:
-      D->accum.type = DUNA_TYPE_FIXNUM;
+    case SLY_OP_CHAR_TO_FIXNUM:
+      D->accum.type = SLY_TYPE_FIXNUM;
       D->accum.value.fixnum = (uint32_t) D->accum.value.chr;
       break;
 
-    case DUNA_OP_NULL_P:
-      DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_NIL);
+    case SLY_OP_NULL_P:
+      SLY_SET_BOOL(D->accum.type == SLY_TYPE_NIL);
       break;
 
-    case DUNA_OP_ZERO_P:
-      DUNA_SET_BOOL(D->accum.value.fixnum == 0);
+    case SLY_OP_ZERO_P:
+      SLY_SET_BOOL(D->accum.value.fixnum == 0);
       break;
 
-    case DUNA_OP_NOT:
-      DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_BOOL &&
+    case SLY_OP_NOT:
+      SLY_SET_BOOL(D->accum.type == SLY_TYPE_BOOL &&
 		    D->accum.value.bool == 0);
       break;
 
-    case DUNA_OP_BOOL_P:
-      DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_BOOL);
+    case SLY_OP_BOOL_P:
+      SLY_SET_BOOL(D->accum.type == SLY_TYPE_BOOL);
       break;
 
-    case DUNA_OP_CHAR_P:
-      DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_CHAR);
+    case SLY_OP_CHAR_P:
+      SLY_SET_BOOL(D->accum.type == SLY_TYPE_CHAR);
       break;
 
-    case DUNA_OP_FIXNUM_P:
-      DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_FIXNUM);
+    case SLY_OP_FIXNUM_P:
+      SLY_SET_BOOL(D->accum.type == SLY_TYPE_FIXNUM);
       break;
 
-    case DUNA_OP_PAIR_P:
-      DUNA_SET_BOOL(D->accum.type == DUNA_TYPE_PAIR);
+    case SLY_OP_PAIR_P:
+      SLY_SET_BOOL(D->accum.type == SLY_TYPE_PAIR);
       break;
 
-    case DUNA_OP_PUSH:
+    case SLY_OP_PUSH:
       D->stack[D->sp++] = D->accum;
       break;
 
-    case DUNA_OP_PLUS:
+    case SLY_OP_PLUS:
       D->accum.value.fixnum =
 	(D->stack[--D->sp]).value.fixnum + D->accum.value.fixnum;
       break;
 
-    case DUNA_OP_MINUS:
+    case SLY_OP_MINUS:
       D->accum.value.fixnum =
 	(D->stack[--D->sp]).value.fixnum - D->accum.value.fixnum;
       break;
 
-    case DUNA_OP_MULT:
+    case SLY_OP_MULT:
       D->accum.value.fixnum =
 	(D->stack[--D->sp]).value.fixnum * D->accum.value.fixnum;
       break;
 
-    case DUNA_OP_LOAD_0:
+    case SLY_OP_LOAD_0:
       D->accum = D->stack[D->fp-1];
       break;
 
-    case DUNA_OP_LOAD_1:
+    case SLY_OP_LOAD_1:
       D->accum = D->stack[D->fp-2];
       break;
 
-    case DUNA_OP_LOAD_2:
+    case SLY_OP_LOAD_2:
       D->accum = D->stack[D->fp-3];
       break;
 
-    case DUNA_OP_LOAD_3:
+    case SLY_OP_LOAD_3:
       D->accum = D->stack[D->fp-4];
       break;
 
-    case DUNA_OP_LOAD:
+    case SLY_OP_LOAD:
       D->accum = D->stack[D->fp-EXTRACT_ARG(instr)-1];
       break;
 
-    case DUNA_OP_MAKE_CLOSURE:
+    case SLY_OP_MAKE_CLOSURE:
       /* number of free variables */
       dw1 = EXTRACT_ARG(instr);
 
-      tmp.type = DUNA_TYPE_CLOSURE;
-      tmp.value.gc = (duna_GCObject*) alloc_closure(&D->store, dw1);
+      tmp.type = SLY_TYPE_CLOSURE;
+      tmp.value.gc = (sly_GCObject*) alloc_closure(&D->store, dw1);
       check_alloc(D, tmp.value.gc);
       D->accum = tmp;
 
@@ -1338,16 +1338,16 @@ int duna_vm_run(duna_State* D)
        * There is always a jump after this instruction, to jump over the
        * closure code. So the closure entry point is PC + 1
        */
-      ((duna_Closure*)D->accum.value.gc)->entry_point = D->pc + 1;
+      ((sly_Closure*)D->accum.value.gc)->entry_point = D->pc + 1;
 
       /* gathering free variables */
       for(i = 0; i < dw1; i++) {
-	((duna_Closure*)D->accum.value.gc)->free_vars[i] = D->stack[D->sp-i-1];
+	((sly_Closure*)D->accum.value.gc)->free_vars[i] = D->stack[D->sp-i-1];
       }
       D->sp -= dw1;
       break;
 
-    case DUNA_OP_TAIL_CALL:
+    case SLY_OP_TAIL_CALL:
       /*
        * the arguments to the callee must be shifted down
        * removing the arguments of the caller
@@ -1365,13 +1365,13 @@ int duna_vm_run(duna_State* D)
       j = D->sp - dw1 - 1;
 
       D->sp = i + dw1 + 1;
-      memcpy(D->stack+i, D->stack+j, (dw1+1) * sizeof(duna_Object));
+      memcpy(D->stack+i, D->stack+j, (dw1+1) * sizeof(sly_Object));
 
       /* fall through */
 
-    case DUNA_OP_CALL:
-      if(D->accum.type != DUNA_TYPE_CLOSURE) {
-	duna_abort(D);
+    case SLY_OP_CALL:
+      if(D->accum.type != SLY_TYPE_CLOSURE) {
+	sly_abort(D);
       }
 
       /* frame pointer */
@@ -1381,10 +1381,10 @@ int duna_vm_run(duna_State* D)
       D->proc = D->accum;
 
       /* jumping to closure body */
-      D->pc = ((duna_Closure*)D->proc.value.gc)->entry_point;
+      D->pc = ((sly_Closure*)D->proc.value.gc)->entry_point;
       break;
 
-    case DUNA_OP_RETURN:
+    case SLY_OP_RETURN:
       /* removing number of arguments */
       dw1 = (D->stack[--D->sp]).value.fixnum;
 
@@ -1401,166 +1401,166 @@ int duna_vm_run(duna_State* D)
       D->pc = (D->stack[--D->sp]).value.fixnum;
       break;
 
-    case DUNA_OP_JMP_IF:
-      if(!(D->accum.type == DUNA_TYPE_BOOL && D->accum.value.bool == 0)) {
+    case SLY_OP_JMP_IF:
+      if(!(D->accum.type == SLY_TYPE_BOOL && D->accum.value.bool == 0)) {
 	D->pc += EXTRACT_ARG(instr);
       }
       break;
 
-    case DUNA_OP_JMP:
+    case SLY_OP_JMP:
       D->pc += EXTRACT_ARG(instr);
       break;
 
-    case DUNA_OP_LOAD_FREE:
-      D->accum = ((duna_Closure*)D->proc.value.gc)->free_vars[EXTRACT_ARG(instr)];
+    case SLY_OP_LOAD_FREE:
+      D->accum = ((sly_Closure*)D->proc.value.gc)->free_vars[EXTRACT_ARG(instr)];
       break;
 
-    case DUNA_OP_SAVE_CONT:
-      dw1 = D->sp * sizeof(duna_Object);
+    case SLY_OP_SAVE_CONT:
+      dw1 = D->sp * sizeof(sly_Object);
 
-      tmp.type = DUNA_TYPE_CONTINUATION;
-      tmp.value.gc = (duna_GCObject*) alloc_continuation(&D->store, D->sp);
+      tmp.type = SLY_TYPE_CONTINUATION;
+      tmp.value.gc = (sly_GCObject*) alloc_continuation(&D->store, D->sp);
       check_alloc(D, tmp.value.gc);
       D->accum = tmp;
 
       /* copying stack */
-      memcpy(((duna_Continuation*)D->accum.value.gc)->stack, D->stack, dw1);
+      memcpy(((sly_Continuation*)D->accum.value.gc)->stack, D->stack, dw1);
 
       /* removing number of arguments from the stack */
       D->sp--;
       break;
 
-    case DUNA_OP_REST_CONT:
+    case SLY_OP_REST_CONT:
       /* return value is on the stack */
       tmp = D->stack[--D->sp];
 
       /* restoring stack */
-      D->sp = ((duna_Continuation*)D->accum.value.gc)->size;
-      memcpy(D->stack, ((duna_Continuation*)D->accum.value.gc)->stack, D->sp * sizeof(duna_Object));
+      D->sp = ((sly_Continuation*)D->accum.value.gc)->size;
+      memcpy(D->stack, ((sly_Continuation*)D->accum.value.gc)->stack, D->sp * sizeof(sly_Object));
 
       D->accum = tmp;
       break;
 
-    case DUNA_OP_ASSIGN:
-      assert((D->stack[D->fp-EXTRACT_ARG(instr)-1]).type == DUNA_TYPE_BOX);
-      ((duna_Box*)(D->stack[D->fp-EXTRACT_ARG(instr)-1]).value.gc)->value = D->accum;
+    case SLY_OP_ASSIGN:
+      assert((D->stack[D->fp-EXTRACT_ARG(instr)-1]).type == SLY_TYPE_BOX);
+      ((sly_Box*)(D->stack[D->fp-EXTRACT_ARG(instr)-1]).value.gc)->value = D->accum;
       break;
 
-    case DUNA_OP_ASSIGN_FREE:
-      assert((((duna_Closure*)D->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).type == DUNA_TYPE_BOX);
-      ((duna_Box*)(((duna_Closure*)D->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).value.gc)->value = D->accum;
+    case SLY_OP_ASSIGN_FREE:
+      assert((((sly_Closure*)D->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).type == SLY_TYPE_BOX);
+      ((sly_Box*)(((sly_Closure*)D->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).value.gc)->value = D->accum;
       break;
 
-    case DUNA_OP_BOX:
-      tmp.type = DUNA_TYPE_BOX;
-      tmp.value.gc = (duna_GCObject*) alloc_box(&D->store);
+    case SLY_OP_BOX:
+      tmp.type = SLY_TYPE_BOX;
+      tmp.value.gc = (sly_GCObject*) alloc_box(&D->store);
       check_alloc(D, tmp.value.gc);
 
-      ((duna_Box*)tmp.value.gc)->value = D->accum;
+      ((sly_Box*)tmp.value.gc)->value = D->accum;
       D->accum = tmp;
       break;
 
-    case DUNA_OP_OPEN_BOX:
-      assert(D->accum.type == DUNA_TYPE_BOX);
-      D->accum = ((duna_Box*)D->accum.value.gc)->value;
+    case SLY_OP_OPEN_BOX:
+      assert(D->accum.type == SLY_TYPE_BOX);
+      D->accum = ((sly_Box*)D->accum.value.gc)->value;
       break;
 
-    case DUNA_OP_FRAME:
+    case SLY_OP_FRAME:
       /* pushing return address */
-      (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
+      (D->stack[D->sp  ]).type = SLY_TYPE_FIXNUM;
       (D->stack[D->sp++]).value.fixnum = EXTRACT_ARG(instr);
 
       /* pushing current procedure */
       D->stack[D->sp++] = D->proc;
 
       /* pushing frame pointer */
-      (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
+      (D->stack[D->sp  ]).type = SLY_TYPE_FIXNUM;
       (D->stack[D->sp++]).value.fixnum = D->fp;
       break;
 
-    case DUNA_OP_HALT:
+    case SLY_OP_HALT:
       write_obj(&D->accum);
       printf("\n");
       go_on = 0;
       break;
 
-    case DUNA_OP_LOAD_LOCAL:
+    case SLY_OP_LOAD_LOCAL:
       D->accum = D->stack[D->fp+EXTRACT_ARG(instr)+1];
       break;
 
-    case DUNA_OP_INSERT_BOX:
+    case SLY_OP_INSERT_BOX:
       i = D->fp-EXTRACT_ARG(instr)-1;
 
-      tmp.type = DUNA_TYPE_BOX;
-      tmp.value.gc = (duna_GCObject*) alloc_box(&D->store);
+      tmp.type = SLY_TYPE_BOX;
+      tmp.value.gc = (sly_GCObject*) alloc_box(&D->store);
       check_alloc(D, tmp.value.gc);
 
-      ((duna_Box*)tmp.value.gc)->value = D->stack[i];
+      ((sly_Box*)tmp.value.gc)->value = D->stack[i];
       D->stack[i] = tmp;
       break;
 
-    case DUNA_OP_ASSIGN_LOCAL:
-      assert((D->stack[D->fp+EXTRACT_ARG(instr)+1]).type == DUNA_TYPE_BOX);
-      ((duna_Box*)(D->stack[D->fp+EXTRACT_ARG(instr)+1]).value.gc)->value = D->accum;
+    case SLY_OP_ASSIGN_LOCAL:
+      assert((D->stack[D->fp+EXTRACT_ARG(instr)+1]).type == SLY_TYPE_BOX);
+      ((sly_Box*)(D->stack[D->fp+EXTRACT_ARG(instr)+1]).value.gc)->value = D->accum;
       break;
 
-    case DUNA_OP_POP:
+    case SLY_OP_POP:
       D->sp -= EXTRACT_ARG(instr);
       break;
 
-    case DUNA_OP_CHECKED_GLOBAL_REF:
-      if(D->global_env.vars[EXTRACT_ARG(instr)].value.type == DUNA_TYPE_UNDEF) {
+    case SLY_OP_CHECKED_GLOBAL_REF:
+      if(D->global_env.vars[EXTRACT_ARG(instr)].value.type == SLY_TYPE_UNDEF) {
 	printf("Undefined global referenced: ");
 	write_string(D->global_env.vars[EXTRACT_ARG(instr)].symbol->str, 0);
 	printf("\n");
-	duna_abort(D);
+	sly_abort(D);
       }
       /* fall through */
 
-    case DUNA_OP_GLOBAL_REF:
+    case SLY_OP_GLOBAL_REF:
       D->accum = D->global_env.vars[EXTRACT_ARG(instr)].value;
       break;
 
-    case DUNA_OP_CHECKED_GLOBAL_SET:
-      if(D->global_env.vars[EXTRACT_ARG(instr)].value.type == DUNA_TYPE_UNDEF) {
+    case SLY_OP_CHECKED_GLOBAL_SET:
+      if(D->global_env.vars[EXTRACT_ARG(instr)].value.type == SLY_TYPE_UNDEF) {
 	printf("Undefined global assigned: ");
 	write_string(D->global_env.vars[EXTRACT_ARG(instr)].symbol->str, 0);
 	printf("\n");
-	duna_abort(D);
+	sly_abort(D);
       }
       /* fall through */
 
-    case DUNA_OP_GLOBAL_SET:
+    case SLY_OP_GLOBAL_SET:
       D->global_env.vars[EXTRACT_ARG(instr)].value = D->accum;
       break;
 
-    case DUNA_OP_LOAD_UNDEF:
-      D->accum.type = DUNA_TYPE_UNDEF;
+    case SLY_OP_LOAD_UNDEF:
+      D->accum.type = SLY_TYPE_UNDEF;
       break;
 
-    case DUNA_OP_CONST:
+    case SLY_OP_CONST:
       D->accum = D->consts[EXTRACT_ARG(instr)];
       break;
 
-    case DUNA_OP_CONST_INIT:
+    case SLY_OP_CONST_INIT:
       D->consts[EXTRACT_ARG(instr)] = D->accum;
       break;
 
-    case DUNA_OP_ARITY_EQ:
+    case SLY_OP_ARITY_EQ:
       if(D->stack[D->fp].value.fixnum != EXTRACT_ARG(instr)) {
 	printf("Arity mismatch!\n");
-	duna_abort(D);
+	sly_abort(D);
       }
       break;
 
-    case DUNA_OP_ARITY_GE:
+    case SLY_OP_ARITY_GE:
       if(D->stack[D->fp].value.fixnum < EXTRACT_ARG(instr)) {
 	printf("Variable arity mismatch!\n");
-	duna_abort(D);
+	sly_abort(D);
       }
       break;
 
-    case DUNA_OP_LISTIFY:
+    case SLY_OP_LISTIFY:
       /* number of fixed arguments */
       dw1 = EXTRACT_ARG(instr);
 
@@ -1568,14 +1568,14 @@ int duna_vm_run(duna_State* D)
       dw2 = D->stack[D->fp].value.fixnum - dw1;
 
       /* consing */
-      D->accum.type = DUNA_TYPE_NIL;
+      D->accum.type = SLY_TYPE_NIL;
       for(i = D->fp - 1; i > D->fp - (dw2 + 1); i--) {
-	tmp.type = DUNA_TYPE_PAIR;
-	tmp.value.gc = (duna_GCObject*)alloc_pair(&D->store);
+	tmp.type = SLY_TYPE_PAIR;
+	tmp.value.gc = (sly_GCObject*)alloc_pair(&D->store);
 	check_alloc(D, tmp.value.gc);
 
-	((duna_Pair*)tmp.value.gc)->car = D->stack[i];
-	((duna_Pair*)tmp.value.gc)->cdr = D->accum;
+	((sly_Pair*)tmp.value.gc)->car = D->stack[i];
+	((sly_Pair*)tmp.value.gc)->cdr = D->accum;
 
 	D->accum = tmp;
       }
@@ -1583,96 +1583,96 @@ int duna_vm_run(duna_State* D)
       /* adjusting stack */
       D->stack[D->fp - dw2] = D->accum;
       D->fp -= dw2 - 1;
-      D->stack[D->fp].type = DUNA_TYPE_FIXNUM;
+      D->stack[D->fp].type = SLY_TYPE_FIXNUM;
       D->stack[D->fp].value.fixnum = dw1 + 1;
       D->sp = D->fp + 1;
       break;
 
-    case DUNA_OP_ABORT:
-      duna_abort(D);
+    case SLY_OP_ABORT:
+      sly_abort(D);
       break;
 
-    case DUNA_OP_CONS:
-      tmp.type = DUNA_TYPE_PAIR;
-      tmp.value.gc = (duna_GCObject*) alloc_pair(&D->store);
+    case SLY_OP_CONS:
+      tmp.type = SLY_TYPE_PAIR;
+      tmp.value.gc = (sly_GCObject*) alloc_pair(&D->store);
       check_alloc(D, tmp.value.gc);
 
-      ((duna_Pair*)tmp.value.gc)->car = D->stack[--D->sp];
-      ((duna_Pair*)tmp.value.gc)->cdr = D->accum;
+      ((sly_Pair*)tmp.value.gc)->car = D->stack[--D->sp];
+      ((sly_Pair*)tmp.value.gc)->cdr = D->accum;
       D->accum = tmp;
       break;
 
-    case DUNA_OP_CAR:
-      D->accum = ((duna_Pair*)D->accum.value.gc)->car;
+    case SLY_OP_CAR:
+      D->accum = ((sly_Pair*)D->accum.value.gc)->car;
       break;
 
-    case DUNA_OP_CDR:
-      D->accum = ((duna_Pair*)D->accum.value.gc)->cdr;
+    case SLY_OP_CDR:
+      D->accum = ((sly_Pair*)D->accum.value.gc)->cdr;
       break;
 
-    case DUNA_OP_NUM_EQ:
+    case SLY_OP_NUM_EQ:
       /* TODO: throw error if args are not numbers */
-      DUNA_SET_BOOL(D->accum.value.fixnum == D->stack[--D->sp].value.fixnum);
+      SLY_SET_BOOL(D->accum.value.fixnum == D->stack[--D->sp].value.fixnum);
       break;
 
-    case DUNA_OP_EQ:
-      DUNA_SET_BOOL(D->accum.type == D->stack[D->sp-1].type &&
+    case SLY_OP_EQ:
+      SLY_SET_BOOL(D->accum.type == D->stack[D->sp-1].type &&
 		    D->accum.value.symbol == D->stack[D->sp-1].value.symbol);
       --D->sp;
       break;
 
-    case DUNA_OP_EQV:
-      DUNA_SET_BOOL(D->accum.type == D->stack[D->sp-1].type &&
+    case SLY_OP_EQV:
+      SLY_SET_BOOL(D->accum.type == D->stack[D->sp-1].type &&
 		    D->accum.value.symbol == D->stack[D->sp-1].value.symbol);
       --D->sp;
       break;
 
-    case DUNA_OP_MAKE_STRING:
+    case SLY_OP_MAKE_STRING:
       /* string size */
       dw1 = D->accum.value.fixnum;
 
-      tmp.type = DUNA_TYPE_STRING;
-      tmp.value.gc = (duna_GCObject*)alloc_string(&D->store, dw1);
+      tmp.type = SLY_TYPE_STRING;
+      tmp.value.gc = (sly_GCObject*)alloc_string(&D->store, dw1);
       check_alloc(D, tmp.value.gc);
 
       D->accum = tmp;
       break;
 
-    case DUNA_OP_STRING_SET:
+    case SLY_OP_STRING_SET:
       dw1 = D->accum.value.chr;
       dw2 = D->stack[--D->sp].value.fixnum;
       D->accum = D->stack[--D->sp];
-      ((duna_String*)D->accum.value.gc)->chars[dw2] = dw1;
+      ((sly_String*)D->accum.value.gc)->chars[dw2] = dw1;
       break;
 
-    case DUNA_OP_STRING_TO_SYMBOL:
-      tmp = duna_make_symbol(D, (duna_String*)D->accum.value.gc);
+    case SLY_OP_STRING_TO_SYMBOL:
+      tmp = sly_make_symbol(D, (sly_String*)D->accum.value.gc);
       D->accum = tmp;
       break;
 
-    case DUNA_OP_MAKE_VECTOR:
+    case SLY_OP_MAKE_VECTOR:
       /* vector size */
       dw1 = D->accum.value.fixnum;
 
-      tmp.type = DUNA_TYPE_VECTOR;
-      tmp.value.gc = (duna_GCObject*)alloc_vector(&D->store, dw1);
+      tmp.type = SLY_TYPE_VECTOR;
+      tmp.value.gc = (sly_GCObject*)alloc_vector(&D->store, dw1);
       check_alloc(D, tmp.value.gc);
 
       D->accum = tmp;
       break;
 
-    case DUNA_OP_VECTOR_SET:
+    case SLY_OP_VECTOR_SET:
       tmp = D->accum;
       dw1 = D->stack[--D->sp].value.fixnum;
       D->accum = D->stack[--D->sp];
-      ((duna_Vector*)D->accum.value.gc)->data[dw1] = tmp;    
+      ((sly_Vector*)D->accum.value.gc)->data[dw1] = tmp;    
       break;
 
-    case DUNA_OP_WRITE:
+    case SLY_OP_WRITE:
       write_obj(&D->accum);
       break;
 
-    case DUNA_OP_DEBUG:
+    case SLY_OP_DEBUG:
       if(D->accum.value.bool == 0) {
 	debug = 0;
       } else {
@@ -1688,13 +1688,13 @@ int duna_vm_run(duna_State* D)
  * loading
  */
 
-typedef struct duna_Module_ duna_Module;
+typedef struct sly_Module_ sly_Module;
 
-struct duna_Module_ {
+struct sly_Module_ {
 
   /* uninterned globals */
   uint32_t nr_globals;
-  duna_String **globals;
+  sly_String **globals;
 
   /* constants */
   uint32_t nr_consts;
@@ -1703,7 +1703,7 @@ struct duna_Module_ {
   uint32_t *code, code_size;
 };
 
-static void duna_destroy_module(duna_Module *M)
+static void sly_destroy_module(sly_Module *M)
 {
   uint32_t i;
 
@@ -1715,16 +1715,16 @@ static void duna_destroy_module(duna_Module *M)
   free(M->globals);
 }
 
-static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
+static uint32_t sly_link_module(sly_State* D, sly_Module *mod)
 {
-  duna_Env env;
-  duna_Env_Var *vars;
-  duna_Object obj, *tmp;
+  sly_Env env;
+  sly_Env_Var *vars;
+  sly_Object obj, *tmp;
   uint32_t *code;
   uint32_t i, j, dw, consts_base, code_base, growth;
 
   env.size = mod->nr_globals;
-  env.vars = (duna_Env_Var*)malloc(env.size * sizeof(duna_Env_Var));
+  env.vars = (sly_Env_Var*)malloc(env.size * sizeof(sly_Env_Var));
   /* TODO: test return and throw error */
 
   /*
@@ -1735,9 +1735,9 @@ static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
    *
    */
   for(growth = 0, i = 0; i < env.size; i++) {
-    obj = duna_make_symbol(D, mod->globals[i]);
+    obj = sly_make_symbol(D, mod->globals[i]);
     env.vars[i].symbol = obj.value.symbol;
-    env.vars[i].value.type = DUNA_TYPE_FIXNUM;
+    env.vars[i].value.type = SLY_TYPE_FIXNUM;
 
     for(j = 0; j < D->global_env.size; j++) {
       if(env.vars[i].symbol == D->global_env.vars[j].symbol) {
@@ -1754,8 +1754,8 @@ static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
   /* enlarging global environment */
   if(growth > 0) {
     dw = D->global_env.size + growth;
-    vars = (duna_Env_Var*)realloc(D->global_env.vars,
-				  dw * sizeof(duna_Env_Var));
+    vars = (sly_Env_Var*)realloc(D->global_env.vars,
+				  dw * sizeof(sly_Env_Var));
     /* TODO: test return and throw error */
     D->global_env.vars = vars;
 
@@ -1763,7 +1763,7 @@ static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
       j = env.vars[i].value.value.fixnum;
       if(!(j < D->global_env.size)) {
 	D->global_env.vars[j].symbol = env.vars[i].symbol;
-	D->global_env.vars[j].value.type = DUNA_TYPE_UNDEF;
+	D->global_env.vars[j].value.type = SLY_TYPE_UNDEF;
       }
     }
     D->global_env.size = dw;
@@ -1772,11 +1772,11 @@ static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
   /* enlarging constants */
   consts_base = D->nr_consts;
   dw = D->nr_consts + mod->nr_consts;
-  tmp = (duna_Object*)realloc(D->consts, dw * sizeof(duna_Object));
+  tmp = (sly_Object*)realloc(D->consts, dw * sizeof(sly_Object));
   /* TODO: test return and throw error */
   D->consts = tmp;
   for(i = D->nr_consts; i < dw; i++) {
-    D->consts[i].type = DUNA_TYPE_UNDEF;
+    D->consts[i].type = SLY_TYPE_UNDEF;
   }
   D->nr_consts = dw;
 
@@ -1796,23 +1796,23 @@ static uint32_t duna_link_module(duna_State* D, duna_Module *mod)
 
     switch(op) {
 
-    case DUNA_OP_FRAME:
+    case SLY_OP_FRAME:
       dw = EXTRACT_ARG(instr);
       dw += code_base;
       instr = ((uint32_t)op) | dw << 8;
       break;
 
-    case DUNA_OP_CONST:
-    case DUNA_OP_CONST_INIT:
+    case SLY_OP_CONST:
+    case SLY_OP_CONST_INIT:
       dw = EXTRACT_ARG(instr);
       dw += consts_base;
       instr = ((uint32_t)op) | dw << 8;
       break;
 
-    case DUNA_OP_GLOBAL_REF:
-    case DUNA_OP_CHECKED_GLOBAL_REF:
-    case DUNA_OP_GLOBAL_SET:
-    case DUNA_OP_CHECKED_GLOBAL_SET:
+    case SLY_OP_GLOBAL_REF:
+    case SLY_OP_CHECKED_GLOBAL_REF:
+    case SLY_OP_GLOBAL_SET:
+    case SLY_OP_CHECKED_GLOBAL_SET:
       dw = EXTRACT_ARG(instr);
       dw = env.vars[dw].value.value.fixnum;
       instr = ((uint32_t)op) | dw << 8;
@@ -1866,7 +1866,7 @@ static int get_fixnum(FILE* f, uint32_t *num)
   return 1;
 }
 
-static int get_string(FILE *f, duna_String **str)
+static int get_string(FILE *f, sly_String **str)
 {
   int ret;
   uint32_t i, dw1, dw2;
@@ -1877,10 +1877,10 @@ static int get_string(FILE *f, duna_String **str)
     return 0;
   }
 
-  *str = (duna_String*)malloc(DUNA_SIZE_OF_STRING(dw1));
+  *str = (sly_String*)malloc(SLY_SIZE_OF_STRING(dw1));
   /* TODO: test return and throw error */
   (*str)->size  = dw1;
-  (*str)->type = DUNA_TYPE_STRING;
+  (*str)->type = SLY_TYPE_STRING;
 
   for(i = 0; i < dw1; i++) {
     ret = get_fixnum(f, &dw2);
@@ -1895,7 +1895,7 @@ static int get_string(FILE *f, duna_String **str)
   return 1;
 }
 
-static int load_code_from_file(duna_Module *mod, const char* fname)
+static int load_code_from_file(sly_Module *mod, const char* fname)
 {
   int ret;
   FILE *f;
@@ -1922,8 +1922,8 @@ static int load_code_from_file(duna_Module *mod, const char* fname)
   }
 
   mod->nr_globals = dw1;
-  dw2 = dw1 * sizeof(duna_String*);
-  mod->globals = (duna_String**)malloc(dw2);
+  dw2 = dw1 * sizeof(sly_String*);
+  mod->globals = (sly_String**)malloc(dw2);
   /* TODO: test return and throw error */
   memset(mod->globals, 0x00, dw2);
 
@@ -1964,7 +1964,7 @@ static int load_code_from_file(duna_Module *mod, const char* fname)
     ret = get_next(f, &instr);
     if(!ret) {
       /* unexpected end */
-      duna_destroy_module(mod);
+      sly_destroy_module(mod);
       fclose(f);
       return 0;
     }
@@ -1973,7 +1973,7 @@ static int load_code_from_file(duna_Module *mod, const char* fname)
     if(IS_TYPE_B(instr)) {
       ret = get_fixnum(f, &dw1);
       if(!ret) {
-	duna_destroy_module(mod);
+	sly_destroy_module(mod);
 	fclose(f);
 	return 0;
       }
@@ -1988,37 +1988,37 @@ static int load_code_from_file(duna_Module *mod, const char* fname)
   return 1;
 }
 
-int duna_load_file(duna_State* D, const char *fname)
+int sly_load_file(sly_State* D, const char *fname)
 {
-  duna_Module mod;
+  sly_Module mod;
 
   /* tries to load code into module */
   if(!load_code_from_file(&mod, fname)) {
     return 0;
   }
 
-  D->pc = duna_link_module(D, &mod);
-  duna_destroy_module(&mod);
+  D->pc = sly_link_module(D, &mod);
+  sly_destroy_module(&mod);
 
   /* initial frame on stack with address of halt instruction */
   /* return address */
-  (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
+  (D->stack[D->sp  ]).type = SLY_TYPE_FIXNUM;
   (D->stack[D->sp++]).value.fixnum = 0;
 
   /* saved procedure */
   D->stack[D->sp++] = D->proc;
 
   /* saved frame pointer */
-  (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
+  (D->stack[D->sp  ]).type = SLY_TYPE_FIXNUM;
   (D->stack[D->sp++]).value.fixnum = D->fp;
 
   /* number of arguments */
-  (D->stack[D->sp  ]).type = DUNA_TYPE_FIXNUM;
+  (D->stack[D->sp  ]).type = SLY_TYPE_FIXNUM;
   (D->stack[D->sp++]).value.fixnum = 0;
 
   D->fp = D->sp - 1;
 
-  return duna_vm_run(D);
+  return sly_vm_run(D);
 }
 
 
@@ -2028,26 +2028,26 @@ int duna_load_file(duna_State* D, const char *fname)
 
 int main(int argc, char *argv[])
 {
-  duna_State* D;
+  sly_State* D;
 
   if(argc != 2) {
     fprintf(stderr, "%s: Need file to run.\n", argv[0]);
     exit(13);
   }
 
-  D = duna_init();
+  D = sly_init();
 
   /* tries to load initial environment */
-  duna_load_file(D, "init.fasl");
+  sly_load_file(D, "init.fasl");
 
   /* tries to load compiler */
-  duna_load_file(D, "compiler.fasl");
+  sly_load_file(D, "compiler.fasl");
 
-  if(!duna_load_file(D, argv[1])) {
+  if(!sly_load_file(D, argv[1])) {
     printf("Error!\n");
   }
 
-  duna_close(D);
+  sly_close(D);
 
   return 0;
 }

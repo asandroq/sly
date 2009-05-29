@@ -1,5 +1,5 @@
 ;;;
-;;; The Duna Scheme library
+;;; The Sly Scheme library
 ;;; Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
 ;;;
 ;;; Permission is hereby granted, free of charge, to any person obtaining a copy

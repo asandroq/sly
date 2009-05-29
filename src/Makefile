@@ -1,5 +1,5 @@
 ##
-## The Duna Scheme compiler
+## The Sly Scheme compiler
 ## Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -26,7 +26,7 @@ CFLAGS = -g3 -O0 -Wall -Wextra
 LD = gcc
 LDFLAGS =
  
-TARGET = duna
+TARGET = sly
 
 SOURCES = \
 	vm.c

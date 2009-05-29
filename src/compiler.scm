@@ -1,5 +1,5 @@
 ;;;
-;;; The Duna Scheme compiler
+;;; The Sly Scheme compiler
 ;;; Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
 ;;;
 ;;; Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -21,7 +21,7 @@
 ;;; THE SOFTWARE.
 ;;;
 
-(define (duna-load file)
+(define (sly-load file)
   (with-input-from-file (string-append file ".scm")
     (lambda ()
       (let loop ((exps '()))

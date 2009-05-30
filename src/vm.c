@@ -550,7 +550,7 @@ void sly_dump(sly_State* S)
     sly_Env_Var var = S->global_env.vars[i];
     printf(" [");
     if(var.symbol) {
-      write_string(var.symbol->str, 0);
+      sly_io_write_symbol(var.symbol);
     }
     printf(" . ");
     sly_io_write(&var.value);
@@ -943,7 +943,7 @@ int sly_vm_run(sly_State* S)
     case SLY_OP_CHECKED_GLOBAL_REF:
       if(S->global_env.vars[EXTRACT_ARG(instr)].value.type == SLY_TYPE_UNDEF) {
 	printf("Undefined global referenced: ");
-	/*write_string(S->global_env.vars[EXTRACT_ARG(instr)].symbol->str, 0);*/
+	sly_io_write_symbol(S->global_env.vars[EXTRACT_ARG(instr)].symbol);
 	printf("\n");
 	sly_abort(S);
       }
@@ -956,7 +956,7 @@ int sly_vm_run(sly_State* S)
     case SLY_OP_CHECKED_GLOBAL_SET:
       if(S->global_env.vars[EXTRACT_ARG(instr)].value.type == SLY_TYPE_UNDEF) {
 	printf("Undefined global assigned: ");
-	/*write_string(S->global_env.vars[EXTRACT_ARG(instr)].symbol->str, 0);*/
+	sly_io_write_symbol(S->global_env.vars[EXTRACT_ARG(instr)].symbol);
 	printf("\n");
 	sly_abort(S);
       }

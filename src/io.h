@@ -28,5 +28,6 @@
 #include "object.h"
 
 void sly_io_write(sly_Object* obj);
+void sly_io_write_symbol(sly_Symbol* sym);
 
 #endif

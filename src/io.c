@@ -49,6 +49,11 @@ static void write_string(sly_String* s, int quote)
   }
 }
 
+void sly_io_write_symbol(sly_Symbol *sym)
+{
+  write_string(sym->str, 0);
+}
+
 void sly_io_write(sly_Object* obj)
 {
   uint32_t i;

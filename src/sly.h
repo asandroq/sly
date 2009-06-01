@@ -31,11 +31,11 @@
 #endif
 
 /* the state of the Sly virtual machine */
-typedef struct sly_State sly_State;
+typedef struct sly_state_t sly_state_t;
 
-sly_State* sly_init(void);
-void sly_close(sly_State* S);
+sly_state_t* sly_init(void);
+void sly_close(sly_state_t* S);
 
-int sly_load_file(sly_State* S, const char *fname);
+int sly_load_file(sly_state_t* S, const char *fname);
 
 #endif

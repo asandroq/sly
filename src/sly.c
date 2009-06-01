@@ -28,7 +28,7 @@
 
 int main(int argc, char *argv[])
 {
-  sly_State* S;
+  sly_state_t* S;
 
   if(argc != 2) {
     fprintf(stderr, "%s: Need file to run.\n", argv[0]);

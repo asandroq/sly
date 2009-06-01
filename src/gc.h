@@ -27,16 +27,16 @@
 #include "sly.h"
 #include "object.h"
 
-typedef struct sly_Store sly_Store;
+typedef struct sly_store_t sly_store_t;
 
 /*
  * this callback is called by the garbage collector
  * to get all the mutator roots. It must return NULL
  * when there are no more roots to scan
  */
-typedef sly_Object* (*sly_Roots_Callback)(void*);
+typedef sly_object_t* (*sly_roots_cb_t)(void*);
 
-struct sly_Store {
+struct sly_store_t {
   
   /* the total size of a semispace */
   uint32_t capacity;
@@ -54,20 +54,20 @@ struct sly_Store {
   void *to_space;
 
   /* roots callback */
-  sly_Roots_Callback roots_cb;
+  sly_roots_cb_t roots_cb;
 
   /* opaque data to pass to callback */
   void *roots_cb_data;
 };
 
-int sly_gc_init(sly_Store *S, sly_Roots_Callback cb, void* ud);
-void sly_gc_finish(sly_Store *S);
+int sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud);
+void sly_gc_finish(sly_store_t *S);
 
-sly_Box          *sly_gc_alloc_box(sly_Store *S);
-sly_Closure      *sly_gc_alloc_closure(sly_Store *S, uint32_t nr_vars);
-sly_Pair         *sly_gc_alloc_pair(sly_Store *S);
-sly_Continuation *sly_gc_alloc_continuation(sly_Store *S, uint32_t stack_size);
-sly_String       *sly_gc_alloc_string(sly_Store *S, uint32_t size);
-sly_Vector       *sly_gc_alloc_vector(sly_Store *S, uint32_t size);
+sly_box_t       *sly_gc_alloc_box(sly_store_t *S);
+sly_closure_t   *sly_gc_alloc_closure(sly_store_t *S, uint32_t nr_vars);
+sly_pair_t      *sly_gc_alloc_pair(sly_store_t *S);
+sly_conti_t     *sly_gc_alloc_continuation(sly_store_t *S, uint32_t stack_size);
+sly_string_t    *sly_gc_alloc_string(sly_store_t *S, uint32_t size);
+sly_vector_t    *sly_gc_alloc_vector(sly_store_t *S, uint32_t size);
 
 #endif

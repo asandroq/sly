@@ -31,7 +31,7 @@
  * writer
  */
 
-static void write_string(sly_String* s, int quote)
+static void write_string(sly_string_t* s, int quote)
 {
   uint32_t i, c;
 
@@ -49,12 +49,12 @@ static void write_string(sly_String* s, int quote)
   }
 }
 
-void sly_io_write_symbol(sly_Symbol *sym)
+void sly_io_write_symbol(sly_symbol_t *sym)
 {
   write_string(sym->str, 0);
 }
 
-void sly_io_write(sly_Object* obj)
+void sly_io_write(sly_object_t* obj)
 {
   uint32_t i;
 
@@ -89,35 +89,35 @@ void sly_io_write(sly_Object* obj)
     break;
 
   case SLY_TYPE_CLOSURE:
-    printf("<#closure %u>", ((sly_Closure*)obj->value.gc)->entry_point);
+    printf("<#closure %u>", ((sly_closure_t*)obj->value.gc)->entry_point);
     break;
 
   case SLY_TYPE_PAIR:
     printf("(");
-    sly_io_write(&(((sly_Pair*)obj->value.gc)->car));
+    sly_io_write(&(((sly_pair_t*)obj->value.gc)->car));
     printf(" . ");
-    sly_io_write(&(((sly_Pair*)obj->value.gc)->cdr));
+    sly_io_write(&(((sly_pair_t*)obj->value.gc)->cdr));
     printf(")");
     break;
 
-  case SLY_TYPE_CONTINUATION:
-    printf("<#continuation %u>", ((sly_Continuation*)obj->value.gc)->size);
+  case SLY_TYPE_CONTI:
+    printf("<#continuation %u>", ((sly_conti_t*)obj->value.gc)->size);
     break;
 
   case SLY_TYPE_BOX:
     printf("#&");
-    sly_io_write(&(((sly_Box*)obj->value.gc)->value));
+    sly_io_write(&(((sly_box_t*)obj->value.gc)->value));
     break;
 
   case SLY_TYPE_STRING:
-    write_string((sly_String*)obj->value.gc, 1);
+    write_string((sly_string_t*)obj->value.gc, 1);
     break;
 
   case SLY_TYPE_VECTOR:
     printf("#(");
-    for(i = 0; i < ((sly_Vector*)obj->value.gc)->size; i++) {
+    for(i = 0; i < ((sly_vector_t*)obj->value.gc)->size; i++) {
       printf(" ");
-      sly_io_write(((sly_Vector*)obj->value.gc)->data + i);
+      sly_io_write(((sly_vector_t*)obj->value.gc)->data + i);
     }
     printf(")");
     break;

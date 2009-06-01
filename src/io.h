@@ -27,7 +27,7 @@
 #include "sly.h"
 #include "object.h"
 
-void sly_io_write(sly_Object* obj);
-void sly_io_write_symbol(sly_Symbol* sym);
+void sly_io_write(sly_object_t* obj);
+void sly_io_write_symbol(sly_symbol_t* sym);
 
 #endif

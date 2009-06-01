@@ -219,26 +219,26 @@ static opcode_t global_opcodes[] = {
  * the virtual machine
  */
 
-typedef struct sly_Env_ sly_Env;
-typedef struct sly_Env_Var_ sly_Env_Var;
+typedef struct sly_env_t sly_env_t;
+typedef struct sly_env_var_t sly_env_var_t;
 
 /* an entry in an environment */
-struct sly_Env_Var_ {
+struct sly_env_var_t {
 
   /* entry in the symbol table */
-  sly_Symbol *symbol;
+  sly_symbol_t *symbol;
 
   /* the actual value */
-  sly_Object value;
+  sly_object_t value;
 };
 
 /* a global environment */
-struct sly_Env_ {
+struct sly_env_t {
   uint32_t size;
-  sly_Env_Var *vars;
+  sly_env_var_t *vars;
 };
 
-struct sly_State {
+struct sly_state_t {
 
   /* the size of the bytecode vector used */
   uint32_t code_size;
@@ -259,40 +259,40 @@ struct sly_State {
   uint32_t pc;
 
   /* accumulator register */
-  sly_Object accum;
+  sly_object_t accum;
 
   /* the current procedure */
-  sly_Object proc;
+  sly_object_t proc;
 
   /* global environment */
-  sly_Env global_env;
+  sly_env_t global_env;
 
   /* the bytecode to be interpreted */
   uint32_t *code;
 
   /* the machine stack */
-  sly_Object *stack;
+  sly_object_t *stack;
 
   /* constants */
-  sly_Object *consts;
+  sly_object_t *consts;
 
   /* symbol table */
-  sly_Symbol *symbol_table;
+  sly_symbol_t *symbol_table;
 
   /* VM memory */
-  sly_Store store;
+  sly_store_t store;
 };
 
 /* garbage collector callback */
 
 struct gc_data {
-  sly_State *D;
+  sly_state_t *S;
   uint32_t state, count;
 };
 
 static struct gc_data gc_data;
 
-static sly_Object* gc_callback(void *ud)
+static sly_object_t* gc_callback(void *ud)
 {
   struct gc_data *gc_data;
 
@@ -301,39 +301,39 @@ static sly_Object* gc_callback(void *ud)
   for(;;) {
     if(gc_data->state == 0) {
       /* stack */
-      if(gc_data->count == gc_data->D->sp) {
+      if(gc_data->count == gc_data->S->sp) {
 	gc_data->state++;
 	gc_data->count = 0;
 	continue;
       } else {
-	return &gc_data->D->stack[gc_data->count++];
+	return &gc_data->S->stack[gc_data->count++];
       }
     } else if(gc_data->state == 1) {
       /* globals */
-      if(gc_data->count == gc_data->D->global_env.size) {
+      if(gc_data->count == gc_data->S->global_env.size) {
 	gc_data->state++;
 	gc_data->count = 0;
 	continue;
       } else {
-	return &gc_data->D->global_env.vars[gc_data->count++].value;
+	return &gc_data->S->global_env.vars[gc_data->count++].value;
       }
     } else if(gc_data->state == 2) {
       /* constants */
-      if(gc_data->count == gc_data->D->nr_consts) {
+      if(gc_data->count == gc_data->S->nr_consts) {
 	gc_data->state++;
 	gc_data->count = 0;
 	continue;
       } else {
-	return &gc_data->D->consts[gc_data->count++];
+	return &gc_data->S->consts[gc_data->count++];
       }
     } else if(gc_data->state == 3) {
       /* registers */
       if(gc_data->count == 0) {
 	gc_data->count++;
-	return &gc_data->D->accum;
+	return &gc_data->S->accum;
       } else if(gc_data->count == 1) {
 	gc_data->count++;
-	return &gc_data->D->proc;
+	return &gc_data->S->proc;
       } else {
 	gc_data->state++;
 	gc_data->count = 0;
@@ -347,64 +347,64 @@ static sly_Object* gc_callback(void *ud)
   }
 }
 
-sly_State* sly_init(void)
+sly_state_t* sly_init(void)
 {
-  sly_State *D = NULL;
+  sly_state_t *S = NULL;
 
-  D = (sly_State*)malloc(sizeof(sly_State));
-  if(!D) {
+  S = (sly_state_t*)malloc(sizeof(sly_state_t));
+  if(!S) {
     return NULL;
   }
 
   /* store */
-  gc_data.D = D;
+  gc_data.S = S;
   gc_data.state = 0;
   gc_data.count = 0;
-  if(sly_gc_init(&D->store, gc_callback, &gc_data) == 0) {
+  if(sly_gc_init(&S->store, gc_callback, &gc_data) == 0) {
     return NULL;
   }
 
-  D->pc = 0;
-  D->fp = 0;
+  S->pc = 0;
+  S->fp = 0;
 
   /* code */
-  D->code_size = 1;
-  D->code = (uint32_t*)malloc(sizeof(uint32_t));
-  if(D->code == NULL) {
-    free(D);
+  S->code_size = 1;
+  S->code = (uint32_t*)malloc(sizeof(uint32_t));
+  if(S->code == NULL) {
+    free(S);
     return NULL;
   }
   /* instruction to halt execution always at address 0 */
-  D->code[0] = (uint32_t) SLY_OP_HALT;
+  S->code[0] = (uint32_t) SLY_OP_HALT;
 
   /* stack */
-  D->sp = 0;
-  D->stack = (sly_Object*)malloc(sizeof(sly_Object) * 1024);
-  if(D->stack) {
-    D->stack_size = 1024;
+  S->sp = 0;
+  S->stack = (sly_object_t*)malloc(sizeof(sly_object_t) * 1024);
+  if(S->stack) {
+    S->stack_size = 1024;
   } else {
-    free(D->code);
-    free(D);
+    free(S->code);
+    free(S);
     return NULL;
   }
 
-  D->symbol_table = NULL;
+  S->symbol_table = NULL;
 
-  D->consts = NULL;
-  D->nr_consts = 0;
+  S->consts = NULL;
+  S->nr_consts = 0;
 
   /* globals */
-  D->global_env.size = 0;
-  D->global_env.vars = NULL;
+  S->global_env.size = 0;
+  S->global_env.vars = NULL;
 
   /* registers */
-  D->proc.type = SLY_TYPE_UNDEF;
-  D->accum.type = SLY_TYPE_UNDEF;
+  S->proc.type = SLY_TYPE_UNDEF;
+  S->accum.type = SLY_TYPE_UNDEF;
 
-  return D;
+  return S;
 }
 
-void sly_close(sly_State* S)
+void sly_close(sly_state_t* S)
 {
   if(S) {
     sly_gc_finish(&S->store);
@@ -418,9 +418,9 @@ void sly_close(sly_State* S)
     }
 
     if(S->symbol_table) {
-      sly_Symbol *sym;
+      sly_symbol_t *sym;
       for(sym = S->symbol_table; sym != NULL;) {
-	sly_Symbol *tmp = sym->next;
+	sly_symbol_t *tmp = sym->next;
 	free(sym->str);
 	free(sym);
 	sym = tmp;
@@ -431,43 +431,43 @@ void sly_close(sly_State* S)
   }
 }
 
-static int string_equal_p(sly_String *s1, sly_String *s2)
+static int string_equal_p(sly_string_t *s1, sly_string_t *s2)
 {
   if(s1->size != s2->size) {
     return 0;
   }
 
-  return memcmp(s1->chars, s2->chars, s1->size * sizeof(sly_Char)) == 0;
+  return memcmp(s1->chars, s2->chars, s1->size * sizeof(sly_char_t)) == 0;
 }
 
-static sly_String* string_copy(sly_State* S, sly_String* s)
+static sly_string_t* string_copy(sly_state_t* S, sly_string_t* s)
 {
-  sly_String *ret;
+  sly_string_t *ret;
 
   ret = sly_gc_alloc_string(&S->store, s->size);
-  memcpy(ret->chars, s->chars, s->size * sizeof(sly_Char));
+  memcpy(ret->chars, s->chars, s->size * sizeof(sly_char_t));
 
   return ret;
 }
 
-static sly_String* string_copy_extern(sly_String* s)
+static sly_string_t* string_copy_extern(sly_string_t* s)
 {
   uint32_t size;
-  sly_String *ret;
+  sly_string_t *ret;
 
   size = SLY_SIZE_OF_STRING(s->size);
 
-  ret = (sly_String*)malloc(size);
+  ret = (sly_string_t*)malloc(size);
   /* TODO: test and throw error */
   memcpy(ret, s, size);
 
   return ret;
 }
 
-static sly_Object sly_make_symbol(sly_State* S, sly_String *str)
+static sly_object_t sly_make_symbol(sly_state_t* S, sly_string_t *str)
 {
-  sly_Object obj;
-  sly_Symbol *tmp;
+  sly_object_t obj;
+  sly_symbol_t *tmp;
 
   /* is the symbol already there? */
   for(tmp = S->symbol_table; tmp != NULL; tmp = tmp->next) {
@@ -478,7 +478,7 @@ static sly_Object sly_make_symbol(sly_State* S, sly_String *str)
 
   if(tmp == NULL) {
     /* adding new symbol */
-    tmp = (sly_Symbol*)malloc(sizeof(sly_Symbol));
+    tmp = (sly_symbol_t*)malloc(sizeof(sly_symbol_t));
     tmp->str = string_copy_extern(str);
     tmp->next = S->symbol_table;
     S->symbol_table = tmp;
@@ -511,7 +511,7 @@ static void dump_instr(uint32_t instr)
   }
 }
 
-static void disassemble(sly_State* S)
+static void disassemble(sly_state_t* S)
 {
   uint32_t i;
 
@@ -523,7 +523,7 @@ static void disassemble(sly_State* S)
   }
 }
 
-void sly_dump(sly_State* S)
+void sly_dump(sly_state_t* S)
 {
   uint32_t i;
 
@@ -567,7 +567,7 @@ void sly_dump(sly_State* S)
   printf("\n\n");
 }
 
-static void sly_abort(sly_State *S)
+static void sly_abort(sly_state_t *S)
 {
   sly_dump(S);
 
@@ -575,7 +575,7 @@ static void sly_abort(sly_State *S)
   abort();
 }
 
-static void check_alloc(sly_State *S, void* ptr)
+static void check_alloc(sly_state_t *S, void* ptr)
 {
   if(ptr == NULL) {
     fprintf(stderr, "sly: Out of memory!\n");
@@ -616,14 +616,14 @@ static void check_alloc(sly_State *S, void* ptr)
  *      +=====================+
  *      |    previous frame   |
  */
-int sly_vm_run(sly_State* S)
+int sly_vm_run(sly_state_t* S)
 {
   int go_on = 1, debug = 0;
 
   /*disassemble(S);*/
 
   while(go_on) {
-    sly_Object tmp;
+    sly_object_t tmp;
     register uint32_t instr;
     uint32_t i, j, dw1, dw2;
 
@@ -668,7 +668,7 @@ int sly_vm_run(sly_State* S)
 
     case SLY_OP_LOAD_CHAR:
       S->accum.type = SLY_TYPE_CHAR;
-      S->accum.value.chr = (sly_Char) EXTRACT_ARG(instr);
+      S->accum.value.chr = (sly_char_t) EXTRACT_ARG(instr);
       break;
 
     case SLY_OP_INC:
@@ -681,7 +681,7 @@ int sly_vm_run(sly_State* S)
 
     case SLY_OP_FIXNUM_TO_CHAR:
       S->accum.type = SLY_TYPE_CHAR;
-      S->accum.value.chr = (sly_Char) S->accum.value.fixnum;
+      S->accum.value.chr = (sly_char_t) S->accum.value.fixnum;
       break;
 
     case SLY_OP_CHAR_TO_FIXNUM:
@@ -762,7 +762,7 @@ int sly_vm_run(sly_State* S)
       dw1 = EXTRACT_ARG(instr);
 
       tmp.type = SLY_TYPE_CLOSURE;
-      tmp.value.gc = (sly_GCObject*) sly_gc_alloc_closure(&S->store, dw1);
+      tmp.value.gc = (sly_gcobject_t*) sly_gc_alloc_closure(&S->store, dw1);
       check_alloc(S, tmp.value.gc);
       S->accum = tmp;
 
@@ -770,11 +770,11 @@ int sly_vm_run(sly_State* S)
        * There is always a jump after this instruction, to jump over the
        * closure code. So the closure entry point is PC + 1
        */
-      ((sly_Closure*)S->accum.value.gc)->entry_point = S->pc + 1;
+      ((sly_closure_t*)S->accum.value.gc)->entry_point = S->pc + 1;
 
       /* gathering free variables */
       for(i = 0; i < dw1; i++) {
-	((sly_Closure*)S->accum.value.gc)->free_vars[i] = S->stack[S->sp-i-1];
+	((sly_closure_t*)S->accum.value.gc)->free_vars[i] = S->stack[S->sp-i-1];
       }
       S->sp -= dw1;
       break;
@@ -797,7 +797,7 @@ int sly_vm_run(sly_State* S)
       j = S->sp - dw1 - 1;
 
       S->sp = i + dw1 + 1;
-      memcpy(S->stack+i, S->stack+j, (dw1+1) * sizeof(sly_Object));
+      memcpy(S->stack+i, S->stack+j, (dw1+1) * sizeof(sly_object_t));
 
       /* fall through */
 
@@ -813,7 +813,7 @@ int sly_vm_run(sly_State* S)
       S->proc = S->accum;
 
       /* jumping to closure body */
-      S->pc = ((sly_Closure*)S->proc.value.gc)->entry_point;
+      S->pc = ((sly_closure_t*)S->proc.value.gc)->entry_point;
       break;
 
     case SLY_OP_RETURN:
@@ -844,19 +844,19 @@ int sly_vm_run(sly_State* S)
       break;
 
     case SLY_OP_LOAD_FREE:
-      S->accum = ((sly_Closure*)S->proc.value.gc)->free_vars[EXTRACT_ARG(instr)];
+      S->accum = ((sly_closure_t*)S->proc.value.gc)->free_vars[EXTRACT_ARG(instr)];
       break;
 
     case SLY_OP_SAVE_CONT:
-      dw1 = S->sp * sizeof(sly_Object);
+      dw1 = S->sp * sizeof(sly_object_t);
 
-      tmp.type = SLY_TYPE_CONTINUATION;
-      tmp.value.gc = (sly_GCObject*) sly_gc_alloc_continuation(&S->store, S->sp);
+      tmp.type = SLY_TYPE_CONTI;
+      tmp.value.gc = (sly_gcobject_t*) sly_gc_alloc_continuation(&S->store, S->sp);
       check_alloc(S, tmp.value.gc);
       S->accum = tmp;
 
       /* copying stack */
-      memcpy(((sly_Continuation*)S->accum.value.gc)->stack, S->stack, dw1);
+      memcpy(((sly_conti_t*)S->accum.value.gc)->stack, S->stack, dw1);
 
       /* removing number of arguments from the stack */
       S->sp--;
@@ -867,34 +867,34 @@ int sly_vm_run(sly_State* S)
       tmp = S->stack[--S->sp];
 
       /* restoring stack */
-      S->sp = ((sly_Continuation*)S->accum.value.gc)->size;
-      memcpy(S->stack, ((sly_Continuation*)S->accum.value.gc)->stack, S->sp * sizeof(sly_Object));
+      S->sp = ((sly_conti_t*)S->accum.value.gc)->size;
+      memcpy(S->stack, ((sly_conti_t*)S->accum.value.gc)->stack, S->sp * sizeof(sly_object_t));
 
       S->accum = tmp;
       break;
 
     case SLY_OP_ASSIGN:
       assert((S->stack[S->fp-EXTRACT_ARG(instr)-1]).type == SLY_TYPE_BOX);
-      ((sly_Box*)(S->stack[S->fp-EXTRACT_ARG(instr)-1]).value.gc)->value = S->accum;
+      ((sly_box_t*)(S->stack[S->fp-EXTRACT_ARG(instr)-1]).value.gc)->value = S->accum;
       break;
 
     case SLY_OP_ASSIGN_FREE:
-      assert((((sly_Closure*)S->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).type == SLY_TYPE_BOX);
-      ((sly_Box*)(((sly_Closure*)S->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).value.gc)->value = S->accum;
+      assert((((sly_closure_t*)S->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).type == SLY_TYPE_BOX);
+      ((sly_box_t*)(((sly_closure_t*)S->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).value.gc)->value = S->accum;
       break;
 
     case SLY_OP_BOX:
       tmp.type = SLY_TYPE_BOX;
-      tmp.value.gc = (sly_GCObject*) sly_gc_alloc_box(&S->store);
+      tmp.value.gc = (sly_gcobject_t*) sly_gc_alloc_box(&S->store);
       check_alloc(S, tmp.value.gc);
 
-      ((sly_Box*)tmp.value.gc)->value = S->accum;
+      ((sly_box_t*)tmp.value.gc)->value = S->accum;
       S->accum = tmp;
       break;
 
     case SLY_OP_OPEN_BOX:
       assert(S->accum.type == SLY_TYPE_BOX);
-      S->accum = ((sly_Box*)S->accum.value.gc)->value;
+      S->accum = ((sly_box_t*)S->accum.value.gc)->value;
       break;
 
     case SLY_OP_FRAME:
@@ -924,16 +924,16 @@ int sly_vm_run(sly_State* S)
       i = S->fp-EXTRACT_ARG(instr)-1;
 
       tmp.type = SLY_TYPE_BOX;
-      tmp.value.gc = (sly_GCObject*) sly_gc_alloc_box(&S->store);
+      tmp.value.gc = (sly_gcobject_t*) sly_gc_alloc_box(&S->store);
       check_alloc(S, tmp.value.gc);
 
-      ((sly_Box*)tmp.value.gc)->value = S->stack[i];
+      ((sly_box_t*)tmp.value.gc)->value = S->stack[i];
       S->stack[i] = tmp;
       break;
 
     case SLY_OP_ASSIGN_LOCAL:
       assert((S->stack[S->fp+EXTRACT_ARG(instr)+1]).type == SLY_TYPE_BOX);
-      ((sly_Box*)(S->stack[S->fp+EXTRACT_ARG(instr)+1]).value.gc)->value = S->accum;
+      ((sly_box_t*)(S->stack[S->fp+EXTRACT_ARG(instr)+1]).value.gc)->value = S->accum;
       break;
 
     case SLY_OP_POP:
@@ -1003,11 +1003,11 @@ int sly_vm_run(sly_State* S)
       S->accum.type = SLY_TYPE_NIL;
       for(i = S->fp - 1; i > S->fp - (dw2 + 1); i--) {
 	tmp.type = SLY_TYPE_PAIR;
-	tmp.value.gc = (sly_GCObject*)sly_gc_alloc_pair(&S->store);
+	tmp.value.gc = (sly_gcobject_t*)sly_gc_alloc_pair(&S->store);
 	check_alloc(S, tmp.value.gc);
 
-	((sly_Pair*)tmp.value.gc)->car = S->stack[i];
-	((sly_Pair*)tmp.value.gc)->cdr = S->accum;
+	((sly_pair_t*)tmp.value.gc)->car = S->stack[i];
+	((sly_pair_t*)tmp.value.gc)->cdr = S->accum;
 
 	S->accum = tmp;
       }
@@ -1026,20 +1026,20 @@ int sly_vm_run(sly_State* S)
 
     case SLY_OP_CONS:
       tmp.type = SLY_TYPE_PAIR;
-      tmp.value.gc = (sly_GCObject*) sly_gc_alloc_pair(&S->store);
+      tmp.value.gc = (sly_gcobject_t*) sly_gc_alloc_pair(&S->store);
       check_alloc(S, tmp.value.gc);
 
-      ((sly_Pair*)tmp.value.gc)->car = S->stack[--S->sp];
-      ((sly_Pair*)tmp.value.gc)->cdr = S->accum;
+      ((sly_pair_t*)tmp.value.gc)->car = S->stack[--S->sp];
+      ((sly_pair_t*)tmp.value.gc)->cdr = S->accum;
       S->accum = tmp;
       break;
 
     case SLY_OP_CAR:
-      S->accum = ((sly_Pair*)S->accum.value.gc)->car;
+      S->accum = ((sly_pair_t*)S->accum.value.gc)->car;
       break;
 
     case SLY_OP_CDR:
-      S->accum = ((sly_Pair*)S->accum.value.gc)->cdr;
+      S->accum = ((sly_pair_t*)S->accum.value.gc)->cdr;
       break;
 
     case SLY_OP_NUM_EQ:
@@ -1064,7 +1064,7 @@ int sly_vm_run(sly_State* S)
       dw1 = S->accum.value.fixnum;
 
       tmp.type = SLY_TYPE_STRING;
-      tmp.value.gc = (sly_GCObject*)sly_gc_alloc_string(&S->store, dw1);
+      tmp.value.gc = (sly_gcobject_t*)sly_gc_alloc_string(&S->store, dw1);
       check_alloc(S, tmp.value.gc);
 
       S->accum = tmp;
@@ -1074,11 +1074,11 @@ int sly_vm_run(sly_State* S)
       dw1 = S->accum.value.chr;
       dw2 = S->stack[--S->sp].value.fixnum;
       S->accum = S->stack[--S->sp];
-      ((sly_String*)S->accum.value.gc)->chars[dw2] = dw1;
+      ((sly_string_t*)S->accum.value.gc)->chars[dw2] = dw1;
       break;
 
     case SLY_OP_STRING_TO_SYMBOL:
-      tmp = sly_make_symbol(S, (sly_String*)S->accum.value.gc);
+      tmp = sly_make_symbol(S, (sly_string_t*)S->accum.value.gc);
       S->accum = tmp;
       break;
 
@@ -1087,7 +1087,7 @@ int sly_vm_run(sly_State* S)
       dw1 = S->accum.value.fixnum;
 
       tmp.type = SLY_TYPE_VECTOR;
-      tmp.value.gc = (sly_GCObject*)sly_gc_alloc_vector(&S->store, dw1);
+      tmp.value.gc = (sly_gcobject_t*)sly_gc_alloc_vector(&S->store, dw1);
       check_alloc(S, tmp.value.gc);
 
       S->accum = tmp;
@@ -1097,7 +1097,7 @@ int sly_vm_run(sly_State* S)
       tmp = S->accum;
       dw1 = S->stack[--S->sp].value.fixnum;
       S->accum = S->stack[--S->sp];
-      ((sly_Vector*)S->accum.value.gc)->data[dw1] = tmp;    
+      ((sly_vector_t*)S->accum.value.gc)->data[dw1] = tmp;    
       break;
 
     case SLY_OP_WRITE:
@@ -1120,13 +1120,13 @@ int sly_vm_run(sly_State* S)
  * loading
  */
 
-typedef struct sly_Module_ sly_Module;
+typedef struct sly_module_t sly_module_t;
 
-struct sly_Module_ {
+struct sly_module_t {
 
   /* uninterned globals */
   uint32_t nr_globals;
-  sly_String **globals;
+  sly_string_t **globals;
 
   /* constants */
   uint32_t nr_consts;
@@ -1135,7 +1135,7 @@ struct sly_Module_ {
   uint32_t *code, code_size;
 };
 
-static void sly_destroy_module(sly_Module *M)
+static void sly_destroy_module(sly_module_t *M)
 {
   uint32_t i;
 
@@ -1147,16 +1147,16 @@ static void sly_destroy_module(sly_Module *M)
   free(M->globals);
 }
 
-static uint32_t sly_link_module(sly_State* S, sly_Module *mod)
+static uint32_t sly_link_module(sly_state_t* S, sly_module_t *mod)
 {
-  sly_Env env;
-  sly_Env_Var *vars;
-  sly_Object obj, *tmp;
+  sly_env_t env;
+  sly_env_var_t *vars;
+  sly_object_t obj, *tmp;
   uint32_t *code;
   uint32_t i, j, dw, consts_base, code_base, growth;
 
   env.size = mod->nr_globals;
-  env.vars = (sly_Env_Var*)malloc(env.size * sizeof(sly_Env_Var));
+  env.vars = (sly_env_var_t*)malloc(env.size * sizeof(sly_env_var_t));
   /* TODO: test return and throw error */
 
   /*
@@ -1186,8 +1186,8 @@ static uint32_t sly_link_module(sly_State* S, sly_Module *mod)
   /* enlarging global environment */
   if(growth > 0) {
     dw = S->global_env.size + growth;
-    vars = (sly_Env_Var*)realloc(S->global_env.vars,
-				  dw * sizeof(sly_Env_Var));
+    vars = (sly_env_var_t*)realloc(S->global_env.vars,
+				  dw * sizeof(sly_env_var_t));
     /* TODO: test return and throw error */
     S->global_env.vars = vars;
 
@@ -1204,7 +1204,7 @@ static uint32_t sly_link_module(sly_State* S, sly_Module *mod)
   /* enlarging constants */
   consts_base = S->nr_consts;
   dw = S->nr_consts + mod->nr_consts;
-  tmp = (sly_Object*)realloc(S->consts, dw * sizeof(sly_Object));
+  tmp = (sly_object_t*)realloc(S->consts, dw * sizeof(sly_object_t));
   /* TODO: test return and throw error */
   S->consts = tmp;
   for(i = S->nr_consts; i < dw; i++) {
@@ -1298,7 +1298,7 @@ static int get_fixnum(FILE* f, uint32_t *num)
   return 1;
 }
 
-static int get_string(FILE *f, sly_String **str)
+static int get_string(FILE *f, sly_string_t **str)
 {
   int ret;
   uint32_t i, dw1, dw2;
@@ -1309,7 +1309,7 @@ static int get_string(FILE *f, sly_String **str)
     return 0;
   }
 
-  *str = (sly_String*)malloc(SLY_SIZE_OF_STRING(dw1));
+  *str = (sly_string_t*)malloc(SLY_SIZE_OF_STRING(dw1));
   /* TODO: test return and throw error */
   (*str)->size  = dw1;
   (*str)->type = SLY_TYPE_STRING;
@@ -1327,7 +1327,7 @@ static int get_string(FILE *f, sly_String **str)
   return 1;
 }
 
-static int load_code_from_file(sly_Module *mod, const char* fname)
+static int load_code_from_file(sly_module_t *mod, const char* fname)
 {
   int ret;
   FILE *f;
@@ -1354,8 +1354,8 @@ static int load_code_from_file(sly_Module *mod, const char* fname)
   }
 
   mod->nr_globals = dw1;
-  dw2 = dw1 * sizeof(sly_String*);
-  mod->globals = (sly_String**)malloc(dw2);
+  dw2 = dw1 * sizeof(sly_string_t*);
+  mod->globals = (sly_string_t**)malloc(dw2);
   /* TODO: test return and throw error */
   memset(mod->globals, 0x00, dw2);
 
@@ -1420,9 +1420,9 @@ static int load_code_from_file(sly_Module *mod, const char* fname)
   return 1;
 }
 
-int sly_load_file(sly_State* S, const char *fname)
+int sly_load_file(sly_state_t* S, const char *fname)
 {
-  sly_Module mod;
+  sly_module_t mod;
 
   /* tries to load code into module */
   if(!load_code_from_file(&mod, fname)) {

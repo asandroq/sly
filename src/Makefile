@@ -38,6 +38,8 @@ TARGET = sly
 SOURCES = \
 	gc.c \
 	io.c \
+	object.c \
+	state.c \
 	vm.c \
 	sly.c
 

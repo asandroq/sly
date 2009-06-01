@@ -22,7 +22,7 @@
  */
 
 #ifndef __SLY_GC_H__
-#define __SLY_GC_H_
+#define __SLY_GC_H__
 
 #include "sly.h"
 #include "object.h"

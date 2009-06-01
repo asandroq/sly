@@ -1,5 +1,5 @@
 /*
- * The Sly Scheme I/O
+ * The Sly Scheme system
  * Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -21,33 +21,74 @@
  * THE SOFTWARE.
  */
 
-#ifndef __SLY_IO_H__
-#define __SLY_IO_H__
+#ifndef __SLY_STATE_H__
+#define __SLY_STATE_H__
 
 #include "sly.h"
-#include "object.h"
+#include "gc.h"
 
-char* sly_strdup(const char* str);
+typedef struct sly_env_t sly_env_t;
+typedef struct sly_env_var_t sly_env_var_t;
 
-/*
- * A string buffer. This string buffer enlarges itself automatically to
- * accommodate new characters. It never shrinks.
- */
+/* an entry in an environment */
+struct sly_env_var_t {
 
-typedef struct sly_sbuffer_t sly_sbuffer_t;
+  /* entry in the symbol table */
+  sly_symbol_t *symbol;
 
-sly_sbuffer_t* sly_sbuffer_new(void);
-void sly_sbuffer_destroy(sly_sbuffer_t* buffer);
-void sly_sbuffer_assign(sly_sbuffer_t* buffer, const char* str);
-void sly_sbuffer_add(sly_sbuffer_t* buffer, char c);
-const char* sly_sbuffer_string(sly_sbuffer_t* buffer);
-int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const char* str);
+  /* the actual value */
+  sly_object_t value;
+};
 
-/*
- * writer
- */
+/* a global environment */
+struct sly_env_t {
+  uint32_t size;
+  sly_env_var_t *vars;
+};
 
-void sly_io_write(sly_object_t* obj);
-void sly_io_write_symbol(sly_symbol_t* sym);
+struct sly_state_t {
+
+  /* the size of the bytecode vector used */
+  uint32_t code_size;
+
+  /* stack allocated size */
+  uint32_t stack_size;
+
+  /* number of constants */
+  uint32_t nr_consts;
+
+  /* where is the top of the stack */
+  uint32_t sp;
+
+  /* the frame pointer */
+  uint32_t fp;
+
+  /* the program counter */
+  uint32_t pc;
+
+  /* accumulator register */
+  sly_object_t accum;
+
+  /* the current procedure */
+  sly_object_t proc;
+
+  /* global environment */
+  sly_env_t global_env;
+
+  /* the bytecode to be interpreted */
+  uint32_t *code;
+
+  /* the machine stack */
+  sly_object_t *stack;
+
+  /* constants */
+  sly_object_t *consts;
+
+  /* symbol table */
+  sly_symbol_t *symbol_table;
+
+  /* VM memory */
+  sly_store_t store;
+};
 
 #endif

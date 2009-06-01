@@ -31,16 +31,17 @@
  */
 #define SLY_TYPE_UNDEF            1
 #define SLY_TYPE_NIL              2
-#define SLY_TYPE_BOOL             3
-#define SLY_TYPE_FIXNUM           4
-#define SLY_TYPE_CHAR             5
-#define SLY_TYPE_SYMBOL           6
-#define SLY_TYPE_CLOSURE          7
-#define SLY_TYPE_PAIR             8
-#define SLY_TYPE_CONTI            9
-#define SLY_TYPE_BOX             10
-#define SLY_TYPE_STRING          11
-#define SLY_TYPE_VECTOR          12
+#define SLY_TYPE_EOF              3
+#define SLY_TYPE_BOOL             4
+#define SLY_TYPE_FIXNUM           5
+#define SLY_TYPE_CHAR             6
+#define SLY_TYPE_SYMBOL           7
+#define SLY_TYPE_CLOSURE          8
+#define SLY_TYPE_PAIR             9
+#define SLY_TYPE_CONTI           10
+#define SLY_TYPE_BOX             11
+#define SLY_TYPE_STRING          12
+#define SLY_TYPE_VECTOR          13
 
 #define SLY_SIZE_OF_BOX \
    (sizeof(sly_box_t))
@@ -143,5 +144,12 @@ struct sly_symbol_t {
   /* next symbol in chain */
   sly_symbol_t *next;
 };
+
+/*
+ * object creation
+ */
+
+sly_object_t sly_string_new(sly_state_t* S, const char* str);
+sly_object_t sly_symbol_new(sly_state_t* S, sly_string_t* str);
 
 #endif

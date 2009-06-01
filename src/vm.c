@@ -30,7 +30,9 @@
 
 #include "gc.h"
 #include "io.h"
+#include "vm.h"
 #include "object.h"
+#include "state.h"
 
 /*
  * Sly bytecode is an array of 32-bit values for
@@ -50,83 +52,6 @@
  * Type B: First byte is operand, remaining 3 bytes
  *         are used for single operand.
  */
-
-/* instructions without operands */
-#define SLY_OP_LOAD_NIL                1
-#define SLY_OP_LOAD_FALSE              2
-#define SLY_OP_LOAD_TRUE               3
-#define SLY_OP_LOAD_UNDEF              4
-#define SLY_OP_LOAD_ZERO               5
-#define SLY_OP_LOAD_ONE                6
-#define SLY_OP_PUSH                    7
-#define SLY_OP_LOAD_0                  8
-#define SLY_OP_LOAD_1                  9
-#define SLY_OP_LOAD_2                 10
-#define SLY_OP_LOAD_3                 11
-#define SLY_OP_CALL                   12
-#define SLY_OP_RETURN                 13
-#define SLY_OP_SAVE_CONT              14
-#define SLY_OP_REST_CONT              15
-#define SLY_OP_BOX                    16
-#define SLY_OP_OPEN_BOX               17
-#define SLY_OP_TAIL_CALL              18
-#define SLY_OP_HALT                   19
-#define SLY_OP_ABORT                  20
-
-#define SLY_OP_NULL_P                 40
-#define SLY_OP_BOOL_P                 41
-#define SLY_OP_CHAR_P                 42
-#define SLY_OP_FIXNUM_P               43
-#define SLY_OP_PAIR_P                 44
-
-/* primitives optimised as instructions */
-#define SLY_OP_INC                    60
-#define SLY_OP_DEC                    61
-#define SLY_OP_FIXNUM_TO_CHAR         62
-#define SLY_OP_CHAR_TO_FIXNUM         63
-#define SLY_OP_ZERO_P                 64
-#define SLY_OP_NOT                    65
-#define SLY_OP_PLUS                   66
-#define SLY_OP_MINUS                  67
-#define SLY_OP_MULT                   68
-#define SLY_OP_CONS                   69
-#define SLY_OP_CAR                    70
-#define SLY_OP_CDR                    71
-#define SLY_OP_NUM_EQ                 72
-#define SLY_OP_EQ                     73
-#define SLY_OP_EQV                    74
-#define SLY_OP_MAKE_STRING            75
-#define SLY_OP_STRING_SET             76
-#define SLY_OP_STRING_TO_SYMBOL       77
-#define SLY_OP_MAKE_VECTOR            78
-#define SLY_OP_VECTOR_SET             79
-#define SLY_OP_WRITE                  80
-#define SLY_OP_DEBUG                  81
-
-/* instructions with one operand */
-#define SLY_OP_LOAD_FIXNUM           120
-#define SLY_OP_LOAD_CHAR             121
-#define SLY_OP_LOAD                  122
-#define SLY_OP_MAKE_CLOSURE          123
-#define SLY_OP_JMP_IF                124
-#define SLY_OP_JMP                   125
-#define SLY_OP_LOAD_FREE             126
-#define SLY_OP_ASSIGN                127
-#define SLY_OP_ASSIGN_FREE           128
-#define SLY_OP_FRAME                 129
-#define SLY_OP_LOAD_LOCAL            130
-#define SLY_OP_INSERT_BOX            131
-#define SLY_OP_ASSIGN_LOCAL          132
-#define SLY_OP_POP                   133
-#define SLY_OP_GLOBAL_REF            134
-#define SLY_OP_CHECKED_GLOBAL_REF    135
-#define SLY_OP_GLOBAL_SET            136
-#define SLY_OP_CHECKED_GLOBAL_SET    137
-#define SLY_OP_CONST                 138
-#define SLY_OP_CONST_INIT            139
-#define SLY_OP_ARITY_EQ              140
-#define SLY_OP_ARITY_GE              141
-#define SLY_OP_LISTIFY               142
 
 #define IS_TYPE_B(instr) ((instr) > 119)
 
@@ -214,281 +139,6 @@ static opcode_t global_opcodes[] = {
   {SLY_OP_DEBUG,                  "DEBUG"},
   {0, NULL}
 };
-
-/*
- * the virtual machine
- */
-
-typedef struct sly_env_t sly_env_t;
-typedef struct sly_env_var_t sly_env_var_t;
-
-/* an entry in an environment */
-struct sly_env_var_t {
-
-  /* entry in the symbol table */
-  sly_symbol_t *symbol;
-
-  /* the actual value */
-  sly_object_t value;
-};
-
-/* a global environment */
-struct sly_env_t {
-  uint32_t size;
-  sly_env_var_t *vars;
-};
-
-struct sly_state_t {
-
-  /* the size of the bytecode vector used */
-  uint32_t code_size;
-
-  /* stack allocated size */
-  uint32_t stack_size;
-
-  /* number of constants */
-  uint32_t nr_consts;
-
-  /* where is the top of the stack */
-  uint32_t sp;
-
-  /* the frame pointer */
-  uint32_t fp;
-
-  /* the program counter */
-  uint32_t pc;
-
-  /* accumulator register */
-  sly_object_t accum;
-
-  /* the current procedure */
-  sly_object_t proc;
-
-  /* global environment */
-  sly_env_t global_env;
-
-  /* the bytecode to be interpreted */
-  uint32_t *code;
-
-  /* the machine stack */
-  sly_object_t *stack;
-
-  /* constants */
-  sly_object_t *consts;
-
-  /* symbol table */
-  sly_symbol_t *symbol_table;
-
-  /* VM memory */
-  sly_store_t store;
-};
-
-/* garbage collector callback */
-
-struct gc_data {
-  sly_state_t *S;
-  uint32_t state, count;
-};
-
-static struct gc_data gc_data;
-
-static sly_object_t* gc_callback(void *ud)
-{
-  struct gc_data *gc_data;
-
-  gc_data = (struct gc_data*) ud;
-
-  for(;;) {
-    if(gc_data->state == 0) {
-      /* stack */
-      if(gc_data->count == gc_data->S->sp) {
-	gc_data->state++;
-	gc_data->count = 0;
-	continue;
-      } else {
-	return &gc_data->S->stack[gc_data->count++];
-      }
-    } else if(gc_data->state == 1) {
-      /* globals */
-      if(gc_data->count == gc_data->S->global_env.size) {
-	gc_data->state++;
-	gc_data->count = 0;
-	continue;
-      } else {
-	return &gc_data->S->global_env.vars[gc_data->count++].value;
-      }
-    } else if(gc_data->state == 2) {
-      /* constants */
-      if(gc_data->count == gc_data->S->nr_consts) {
-	gc_data->state++;
-	gc_data->count = 0;
-	continue;
-      } else {
-	return &gc_data->S->consts[gc_data->count++];
-      }
-    } else if(gc_data->state == 3) {
-      /* registers */
-      if(gc_data->count == 0) {
-	gc_data->count++;
-	return &gc_data->S->accum;
-      } else if(gc_data->count == 1) {
-	gc_data->count++;
-	return &gc_data->S->proc;
-      } else {
-	gc_data->state++;
-	gc_data->count = 0;
-	continue;
-      }
-    } else {
-      gc_data->state = 0;
-      gc_data->count = 0;
-      return NULL;
-    }
-  }
-}
-
-sly_state_t* sly_init(void)
-{
-  sly_state_t *S = NULL;
-
-  S = (sly_state_t*)malloc(sizeof(sly_state_t));
-  if(!S) {
-    return NULL;
-  }
-
-  /* store */
-  gc_data.S = S;
-  gc_data.state = 0;
-  gc_data.count = 0;
-  if(sly_gc_init(&S->store, gc_callback, &gc_data) == 0) {
-    return NULL;
-  }
-
-  S->pc = 0;
-  S->fp = 0;
-
-  /* code */
-  S->code_size = 1;
-  S->code = (uint32_t*)malloc(sizeof(uint32_t));
-  if(S->code == NULL) {
-    free(S);
-    return NULL;
-  }
-  /* instruction to halt execution always at address 0 */
-  S->code[0] = (uint32_t) SLY_OP_HALT;
-
-  /* stack */
-  S->sp = 0;
-  S->stack = (sly_object_t*)malloc(sizeof(sly_object_t) * 1024);
-  if(S->stack) {
-    S->stack_size = 1024;
-  } else {
-    free(S->code);
-    free(S);
-    return NULL;
-  }
-
-  S->symbol_table = NULL;
-
-  S->consts = NULL;
-  S->nr_consts = 0;
-
-  /* globals */
-  S->global_env.size = 0;
-  S->global_env.vars = NULL;
-
-  /* registers */
-  S->proc.type = SLY_TYPE_UNDEF;
-  S->accum.type = SLY_TYPE_UNDEF;
-
-  return S;
-}
-
-void sly_close(sly_state_t* S)
-{
-  if(S) {
-    sly_gc_finish(&S->store);
-
-    if(S->code) {
-      free(S->code);
-    }
-
-    if(S->stack) {
-      free(S->stack);
-    }
-
-    if(S->symbol_table) {
-      sly_symbol_t *sym;
-      for(sym = S->symbol_table; sym != NULL;) {
-	sly_symbol_t *tmp = sym->next;
-	free(sym->str);
-	free(sym);
-	sym = tmp;
-      }
-    }
-
-    free(S);
-  }
-}
-
-static int string_equal_p(sly_string_t *s1, sly_string_t *s2)
-{
-  if(s1->size != s2->size) {
-    return 0;
-  }
-
-  return memcmp(s1->chars, s2->chars, s1->size * sizeof(sly_char_t)) == 0;
-}
-
-static sly_string_t* string_copy(sly_state_t* S, sly_string_t* s)
-{
-  sly_string_t *ret;
-
-  ret = sly_gc_alloc_string(&S->store, s->size);
-  memcpy(ret->chars, s->chars, s->size * sizeof(sly_char_t));
-
-  return ret;
-}
-
-static sly_string_t* string_copy_extern(sly_string_t* s)
-{
-  uint32_t size;
-  sly_string_t *ret;
-
-  size = SLY_SIZE_OF_STRING(s->size);
-
-  ret = (sly_string_t*)malloc(size);
-  /* TODO: test and throw error */
-  memcpy(ret, s, size);
-
-  return ret;
-}
-
-static sly_object_t sly_make_symbol(sly_state_t* S, sly_string_t *str)
-{
-  sly_object_t obj;
-  sly_symbol_t *tmp;
-
-  /* is the symbol already there? */
-  for(tmp = S->symbol_table; tmp != NULL; tmp = tmp->next) {
-    if(string_equal_p(tmp->str, str)) {
-      break;
-    }
-  }
-
-  if(tmp == NULL) {
-    /* adding new symbol */
-    tmp = (sly_symbol_t*)malloc(sizeof(sly_symbol_t));
-    tmp->str = string_copy_extern(str);
-    tmp->next = S->symbol_table;
-    S->symbol_table = tmp;
-  }
-
-  obj.type = SLY_TYPE_SYMBOL;
-  obj.value.symbol = tmp;
-
-  return obj;
-}
 
 /*
  * debugging
@@ -1078,7 +728,7 @@ int sly_vm_run(sly_state_t* S)
       break;
 
     case SLY_OP_STRING_TO_SYMBOL:
-      tmp = sly_make_symbol(S, (sly_string_t*)S->accum.value.gc);
+      tmp = sly_symbol_new(S, (sly_string_t*)S->accum.value.gc);
       S->accum = tmp;
       break;
 
@@ -1167,7 +817,7 @@ static uint32_t sly_link_module(sly_state_t* S, sly_module_t *mod)
    *
    */
   for(growth = 0, i = 0; i < env.size; i++) {
-    obj = sly_make_symbol(S, mod->globals[i]);
+    obj = sly_symbol_new(S, mod->globals[i]);
     env.vars[i].symbol = obj.value.symbol;
     env.vars[i].value.type = SLY_TYPE_FIXNUM;
 

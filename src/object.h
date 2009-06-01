@@ -149,7 +149,7 @@ struct sly_symbol_t {
  * object creation
  */
 
-sly_object_t sly_string_new(sly_state_t* S, const char* str);
-sly_object_t sly_symbol_new(sly_state_t* S, sly_string_t* str);
+sly_object_t sly_create_string(sly_state_t* S, const char* str);
+sly_object_t sly_create_symbol(sly_state_t* S, sly_string_t* str);
 
 #endif

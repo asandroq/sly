@@ -275,7 +275,7 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, FILE* in, sly_obje
   /* strings */
   if(c == '"') {
     read_string(in, buf);
-    *res = sly_string_new(S, sly_sbuffer_string(buf));
+    *res = sly_create_string(S, sly_sbuffer_string(buf));
     return;
   }
 
@@ -324,15 +324,15 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, FILE* in, sly_obje
     read_till_delimiter(in, buf);
     if(buf->str[0] == '+' || buf->str[0] == '-') {
       if(buf->size == 1) {
-	obj = sly_string_new(S, buf->str);
-	sly_symbol_new(S, (sly_string_t*)obj.value.gc);
+	obj = sly_create_string(S, buf->str);
+	sly_create_symbol(S, (sly_string_t*)obj.value.gc);
       } else {
 	/* number */
 	parse_number(buf->str, res);
       }
     } else if(strcmp(buf->str, "...") == 0) {
-      obj = sly_string_new(S, buf->str);
-      sly_symbol_new(S, (sly_string_t*)obj.value.gc);
+      obj = sly_create_string(S, buf->str);
+      sly_create_symbol(S, (sly_string_t*)obj.value.gc);
     } else {
       /* ERROR */
       res->type = SLY_TYPE_NIL;
@@ -343,8 +343,8 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, FILE* in, sly_obje
   if(strchr("!$%&*/:<=>?^_~", c) || isalpha(c)) {
     ungetc(c, in);
     read_till_delimiter(in, buf);
-    obj = sly_string_new(S, buf->str);
-    sly_symbol_new(S, (sly_string_t*)obj.value.gc);
+    obj = sly_create_string(S, buf->str);
+    sly_create_symbol(S, (sly_string_t*)obj.value.gc);
     return;
   }
 

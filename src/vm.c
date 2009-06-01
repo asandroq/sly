@@ -728,7 +728,7 @@ int sly_vm_run(sly_state_t* S)
       break;
 
     case SLY_OP_STRING_TO_SYMBOL:
-      tmp = sly_symbol_new(S, (sly_string_t*)S->accum.value.gc);
+      tmp = sly_create_symbol(S, (sly_string_t*)S->accum.value.gc);
       S->accum = tmp;
       break;
 
@@ -817,7 +817,7 @@ static uint32_t sly_link_module(sly_state_t* S, sly_module_t *mod)
    *
    */
   for(growth = 0, i = 0; i < env.size; i++) {
-    obj = sly_symbol_new(S, mod->globals[i]);
+    obj = sly_create_symbol(S, mod->globals[i]);
     env.vars[i].symbol = obj.value.symbol;
     env.vars[i].value.type = SLY_TYPE_FIXNUM;
 

@@ -22,6 +22,7 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "sly.h"
 #include "object.h"

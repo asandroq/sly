@@ -411,20 +411,20 @@ int sly_vm_run(sly_state_t* S)
       /* number of free variables */
       dw1 = EXTRACT_ARG(instr);
 
-      tmp.type = SLY_TYPE_CLOSURE;
-      tmp.value.gc = (sly_gcobject_t*) sly_gc_alloc_closure(&S->store, dw1);
-      check_alloc(S, tmp.value.gc);
-      S->accum = tmp;
-
       /*
        * There is always a jump after this instruction, to jump over the
        * closure code. So the closure entry point is PC + 1
        */
-      ((sly_closure_t*)S->accum.value.gc)->entry_point = S->pc + 1;
+      dw2 = S->pc + 1;
+
+      tmp.type = SLY_TYPE_CLOSURE;
+      tmp.value.gc = sly_create_sclosure(S, dw1, dw2);
+      check_alloc(S, tmp.value.gc);
+      S->accum = tmp;
 
       /* gathering free variables */
       for(i = 0; i < dw1; i++) {
-	((sly_closure_t*)S->accum.value.gc)->free_vars[i] = S->stack[S->sp-i-1];
+	SLY_CLOSURE(S->accum.value.gc)->free_vars[i] = S->stack[S->sp-i-1];
       }
       S->sp -= dw1;
       break;
@@ -463,7 +463,7 @@ int sly_vm_run(sly_state_t* S)
       S->proc = S->accum;
 
       /* jumping to closure body */
-      S->pc = ((sly_closure_t*)S->proc.value.gc)->entry_point;
+      S->pc = SLY_CLOSURE(S->proc.value.gc)->entry_point.scm;
       break;
 
     case SLY_OP_RETURN:
@@ -494,19 +494,19 @@ int sly_vm_run(sly_state_t* S)
       break;
 
     case SLY_OP_LOAD_FREE:
-      S->accum = ((sly_closure_t*)S->proc.value.gc)->free_vars[EXTRACT_ARG(instr)];
+      S->accum = SLY_CLOSURE(S->proc.value.gc)->free_vars[EXTRACT_ARG(instr)];
       break;
 
     case SLY_OP_SAVE_CONT:
       dw1 = S->sp * sizeof(sly_object_t);
 
       tmp.type = SLY_TYPE_CONTI;
-      tmp.value.gc = (sly_gcobject_t*) sly_gc_alloc_continuation(&S->store, S->sp);
+      tmp.value.gc = sly_create_conti(S, S->sp);
       check_alloc(S, tmp.value.gc);
       S->accum = tmp;
 
       /* copying stack */
-      memcpy(((sly_conti_t*)S->accum.value.gc)->stack, S->stack, dw1);
+      memcpy(SLY_CONTI(S->accum.value.gc)->stack, S->stack, dw1);
 
       /* removing number of arguments from the stack */
       S->sp--;
@@ -517,34 +517,33 @@ int sly_vm_run(sly_state_t* S)
       tmp = S->stack[--S->sp];
 
       /* restoring stack */
-      S->sp = ((sly_conti_t*)S->accum.value.gc)->size;
-      memcpy(S->stack, ((sly_conti_t*)S->accum.value.gc)->stack, S->sp * sizeof(sly_object_t));
+      S->sp = SLY_CONTI(S->accum.value.gc)->size;
+      memcpy(S->stack, SLY_CONTI(S->accum.value.gc)->stack, S->sp * sizeof(sly_object_t));
 
       S->accum = tmp;
       break;
 
     case SLY_OP_ASSIGN:
       assert((S->stack[S->fp-EXTRACT_ARG(instr)-1]).type == SLY_TYPE_BOX);
-      ((sly_box_t*)(S->stack[S->fp-EXTRACT_ARG(instr)-1]).value.gc)->value = S->accum;
+      SLY_BOX((S->stack[S->fp-EXTRACT_ARG(instr)-1]).value.gc)->value = S->accum;
       break;
 
     case SLY_OP_ASSIGN_FREE:
-      assert((((sly_closure_t*)S->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).type == SLY_TYPE_BOX);
-      ((sly_box_t*)(((sly_closure_t*)S->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).value.gc)->value = S->accum;
+      assert((SLY_CLOSURE(S->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).type == SLY_TYPE_BOX);
+      SLY_BOX((SLY_CLOSURE(S->proc.value.gc)->free_vars[EXTRACT_ARG(instr)]).value.gc)->value = S->accum;
       break;
 
     case SLY_OP_BOX:
       tmp.type = SLY_TYPE_BOX;
-      tmp.value.gc = (sly_gcobject_t*) sly_gc_alloc_box(&S->store);
+      tmp.value.gc = sly_create_box(S, S->accum);
       check_alloc(S, tmp.value.gc);
 
-      ((sly_box_t*)tmp.value.gc)->value = S->accum;
       S->accum = tmp;
       break;
 
     case SLY_OP_OPEN_BOX:
       assert(S->accum.type == SLY_TYPE_BOX);
-      S->accum = ((sly_box_t*)S->accum.value.gc)->value;
+      S->accum = SLY_BOX(S->accum.value.gc)->value;
       break;
 
     case SLY_OP_FRAME:
@@ -574,16 +573,15 @@ int sly_vm_run(sly_state_t* S)
       i = S->fp-EXTRACT_ARG(instr)-1;
 
       tmp.type = SLY_TYPE_BOX;
-      tmp.value.gc = (sly_gcobject_t*) sly_gc_alloc_box(&S->store);
+      tmp.value.gc = sly_create_box(S, S->stack[i]);
       check_alloc(S, tmp.value.gc);
 
-      ((sly_box_t*)tmp.value.gc)->value = S->stack[i];
       S->stack[i] = tmp;
       break;
 
     case SLY_OP_ASSIGN_LOCAL:
       assert((S->stack[S->fp+EXTRACT_ARG(instr)+1]).type == SLY_TYPE_BOX);
-      ((sly_box_t*)(S->stack[S->fp+EXTRACT_ARG(instr)+1]).value.gc)->value = S->accum;
+      SLY_BOX((S->stack[S->fp+EXTRACT_ARG(instr)+1]).value.gc)->value = S->accum;
       break;
 
     case SLY_OP_POP:
@@ -653,11 +651,8 @@ int sly_vm_run(sly_state_t* S)
       S->accum.type = SLY_TYPE_NIL;
       for(i = S->fp - 1; i > S->fp - (dw2 + 1); i--) {
 	tmp.type = SLY_TYPE_PAIR;
-	tmp.value.gc = (sly_gcobject_t*)sly_gc_alloc_pair(&S->store);
+	tmp.value.gc = sly_create_pair(S, S->stack[i], S->accum);
 	check_alloc(S, tmp.value.gc);
-
-	((sly_pair_t*)tmp.value.gc)->car = S->stack[i];
-	((sly_pair_t*)tmp.value.gc)->cdr = S->accum;
 
 	S->accum = tmp;
       }
@@ -676,20 +671,18 @@ int sly_vm_run(sly_state_t* S)
 
     case SLY_OP_CONS:
       tmp.type = SLY_TYPE_PAIR;
-      tmp.value.gc = (sly_gcobject_t*) sly_gc_alloc_pair(&S->store);
+      tmp.value.gc = sly_create_pair(S, S->stack[--S->sp], S->accum);
       check_alloc(S, tmp.value.gc);
 
-      ((sly_pair_t*)tmp.value.gc)->car = S->stack[--S->sp];
-      ((sly_pair_t*)tmp.value.gc)->cdr = S->accum;
       S->accum = tmp;
       break;
 
     case SLY_OP_CAR:
-      S->accum = ((sly_pair_t*)S->accum.value.gc)->car;
+      S->accum = SLY_PAIR(S->accum.value.gc)->car;
       break;
 
     case SLY_OP_CDR:
-      S->accum = ((sly_pair_t*)S->accum.value.gc)->cdr;
+      S->accum = SLY_PAIR(S->accum.value.gc)->cdr;
       break;
 
     case SLY_OP_NUM_EQ:
@@ -714,7 +707,7 @@ int sly_vm_run(sly_state_t* S)
       dw1 = S->accum.value.fixnum;
 
       tmp.type = SLY_TYPE_STRING;
-      tmp.value.gc = (sly_gcobject_t*)sly_gc_alloc_string(&S->store, dw1);
+      tmp.value.gc = sly_create_string(S, NULL, dw1);
       check_alloc(S, tmp.value.gc);
 
       S->accum = tmp;
@@ -724,11 +717,11 @@ int sly_vm_run(sly_state_t* S)
       dw1 = S->accum.value.chr;
       dw2 = S->stack[--S->sp].value.fixnum;
       S->accum = S->stack[--S->sp];
-      ((sly_string_t*)S->accum.value.gc)->chars[dw2] = dw1;
+      SLY_STRING(S->accum.value.gc)->chars[dw2] = dw1;
       break;
 
     case SLY_OP_STRING_TO_SYMBOL:
-      tmp = sly_create_symbol(S, (sly_string_t*)S->accum.value.gc);
+      tmp = sly_create_symbol(S, SLY_STRING(S->accum.value.gc));
       S->accum = tmp;
       break;
 
@@ -737,7 +730,7 @@ int sly_vm_run(sly_state_t* S)
       dw1 = S->accum.value.fixnum;
 
       tmp.type = SLY_TYPE_VECTOR;
-      tmp.value.gc = (sly_gcobject_t*)sly_gc_alloc_vector(&S->store, dw1);
+      tmp.value.gc = sly_create_vector(S, dw1);
       check_alloc(S, tmp.value.gc);
 
       S->accum = tmp;
@@ -747,7 +740,7 @@ int sly_vm_run(sly_state_t* S)
       tmp = S->accum;
       dw1 = S->stack[--S->sp].value.fixnum;
       S->accum = S->stack[--S->sp];
-      ((sly_vector_t*)S->accum.value.gc)->data[dw1] = tmp;    
+      SLY_VECTOR(S->accum.value.gc)->data[dw1] = tmp;    
       break;
 
     case SLY_OP_WRITE:
@@ -962,7 +955,7 @@ static int get_string(FILE *f, sly_string_t **str)
   *str = (sly_string_t*)malloc(SLY_SIZE_OF_STRING(dw1));
   /* TODO: test return and throw error */
   (*str)->size  = dw1;
-  (*str)->type = SLY_TYPE_STRING;
+  SLY_GCOBJECT(*str)->type = SLY_TYPE_STRING;
 
   for(i = 0; i < dw1; i++) {
     ret = get_fixnum(f, &dw2);

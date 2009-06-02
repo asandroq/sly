@@ -60,6 +60,8 @@
 typedef struct sly_object_t sly_object_t;
 typedef struct sly_gcobject_t sly_gcobject_t;
 
+typedef int (*sly_cfunction_t)(sly_state_t* S);
+
 typedef uint32_t sly_char_t;
 typedef struct sly_box_t sly_box_t;
 typedef struct sly_closure_t sly_closure_t;
@@ -69,6 +71,15 @@ typedef struct sly_string_t sly_string_t;
 typedef struct sly_vector_t sly_vector_t;
 
 typedef struct sly_symbol_t sly_symbol_t;
+
+/* casts */
+#define SLY_GCOBJECT(obj) ((sly_gcobject_t*)(obj))
+#define SLY_BOX(obj)      ((sly_box_t*)(obj))
+#define SLY_CLOSURE(obj)  ((sly_closure_t*)(obj))
+#define SLY_PAIR(obj)     ((sly_pair_t*)(obj))
+#define SLY_CONTI(obj)    ((sly_conti_t*)(obj))
+#define SLY_STRING(obj)   ((sly_string_t*)(obj))
+#define SLY_VECTOR(obj)   ((sly_vector_t*)(obj))
 
 /* value types */
 struct sly_object_t {
@@ -89,44 +100,59 @@ struct sly_object_t {
   } value;
 };
 
-#define SLY_GC_BASE uint32_t type
-
 struct sly_gcobject_t {
-  SLY_GC_BASE;
+  uint32_t type;
 };
 
 struct sly_box_t {
-  SLY_GC_BASE;
+  sly_gcobject_t base;
   sly_object_t value;
 };
 
 struct sly_closure_t {
-  SLY_GC_BASE;
-  uint32_t entry_point;
+  sly_gcobject_t base;
+  uint8_t is_c;
+  union {
+    uint32_t scm;
+    sly_cfunction_t c;
+  } entry_point;
   uint32_t nr_free;
   sly_object_t free_vars[0];
 };
 
+/*
+struct sly_sclosure_t {
+  sly_closure_t base;
+};
+
+struct sly_cclosure_t {
+  sly_closure_t base;
+  sly_cfunction_t func;
+  uint32_t nr_free;
+  sly_object_t free_vars[0];
+};
+*/
+
 struct sly_pair_t {
-  SLY_GC_BASE;
+  sly_gcobject_t base;
   sly_object_t car;
   sly_object_t cdr;  
 };
 
 struct sly_conti_t {
-  SLY_GC_BASE;
+  sly_gcobject_t base;
   uint32_t size;
   sly_object_t stack[0];
 };
 
 struct sly_string_t {
-  SLY_GC_BASE;
+  sly_gcobject_t base;
   uint32_t size;
   sly_char_t chars[0];
 };
 
 struct sly_vector_t {
-  SLY_GC_BASE;
+  sly_gcobject_t base;
   uint32_t size;
   sly_object_t data[0];
 };
@@ -149,7 +175,14 @@ struct sly_symbol_t {
  * object creation
  */
 
-sly_object_t sly_create_string(sly_state_t* S, const char* str);
+
+sly_gcobject_t *sly_create_box(sly_state_t *S, sly_object_t val);
+sly_gcobject_t *sly_create_sclosure(sly_state_t *S, uint32_t nr_vars, uint32_t entry);
+sly_gcobject_t *sly_create_pair(sly_state_t *S, sly_object_t car, sly_object_t cdr);
+sly_gcobject_t *sly_create_conti(sly_state_t *S, uint32_t stack_size);
+sly_gcobject_t *sly_create_string(sly_state_t *S, const char* str, uint32_t size);
+sly_gcobject_t *sly_create_vector(sly_state_t *S, uint32_t size);
+
 sly_object_t sly_create_symbol(sly_state_t* S, sly_string_t* str);
 
 #endif

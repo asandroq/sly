@@ -42,7 +42,7 @@
 typedef struct sly_forward_t sly_forward_t;
 
 struct sly_forward_t {
-  SLY_GC_BASE;
+  sly_gcobject_t base;
   sly_gcobject_t *ref;
 };
 
@@ -79,7 +79,7 @@ static uint32_t sizeof_gcobj(sly_gcobject_t* obj)
 
   switch(obj->type) {
   case SLY_TYPE_CLOSURE:
-    size = SLY_SIZE_OF_CLOSURE(((sly_closure_t*)obj)->nr_free);
+    size = SLY_SIZE_OF_CLOSURE(SLY_CLOSURE(obj)->nr_free);
     break;
 
   case SLY_TYPE_PAIR:
@@ -87,7 +87,7 @@ static uint32_t sizeof_gcobj(sly_gcobject_t* obj)
     break;
 
   case SLY_TYPE_CONTI:
-    size = SLY_SIZE_OF_CONTI(((sly_conti_t*)obj)->size);
+    size = SLY_SIZE_OF_CONTI(SLY_CONTI(obj)->size);
     break;
 
   case SLY_TYPE_BOX:
@@ -95,11 +95,11 @@ static uint32_t sizeof_gcobj(sly_gcobject_t* obj)
     break;
 
   case SLY_TYPE_STRING:
-    size = SLY_SIZE_OF_STRING(((sly_string_t*)obj)->size);
+    size = SLY_SIZE_OF_STRING(SLY_STRING(obj)->size);
     break;
 
   case SLY_TYPE_VECTOR:
-    size = SLY_SIZE_OF_VECTOR(((sly_vector_t*)obj)->size);
+    size = SLY_SIZE_OF_VECTOR(SLY_VECTOR(obj)->size);
     break;
 
   default:
@@ -235,7 +235,7 @@ static int expand_store(sly_store_t* S)
   }
 }
 
-static void* alloc_from_store(sly_store_t *S, uint32_t size)
+void* sly_gc_alloc(sly_store_t *S, uint32_t size)
 {
   void *ret;
 
@@ -257,90 +257,6 @@ static void* alloc_from_store(sly_store_t *S, uint32_t size)
   /* allocs from the from space */
   ret = S->from_space + S->size;
   S->size += size;
-
-  return ret;
-}
-
-sly_box_t *sly_gc_alloc_box(sly_store_t *S)
-{
-  sly_box_t *ret;
-
-  ret = (sly_box_t*)alloc_from_store(S, SLY_SIZE_OF_BOX);
-  if(ret) {
-    ret->type = SLY_TYPE_BOX;
-  }
-
-  return ret;
-}
-
-sly_closure_t *sly_gc_alloc_closure(sly_store_t *S, uint32_t nr_vars)
-{
-  sly_closure_t *ret;
-
-  ret = (sly_closure_t*) alloc_from_store(S, SLY_SIZE_OF_CLOSURE(nr_vars));
-  if(ret) {
-    ret->type = SLY_TYPE_CLOSURE;
-    ret->nr_free = nr_vars;
-  }
-
-  return ret;
-}
-
-sly_pair_t *sly_gc_alloc_pair(sly_store_t *S)
-{
-  sly_pair_t *ret;
-
-  ret = (sly_pair_t*) alloc_from_store(S, SLY_SIZE_OF_PAIR);
-  if(ret) {
-    ret->type = SLY_TYPE_PAIR;
-  }
-
-  return ret;
-}
-
-sly_conti_t *sly_gc_alloc_continuation(sly_store_t *S, uint32_t stack_size)
-{
-  sly_conti_t *ret;
-
-  ret = (sly_conti_t*)alloc_from_store(S, SLY_SIZE_OF_CONTI(stack_size));
-  if(ret) {
-    ret->type = SLY_TYPE_CONTI;
-    ret->size = stack_size;
-  }
-
-  return ret;
-}
-
-sly_string_t *sly_gc_alloc_string(sly_store_t *S, uint32_t size)
-{
-  sly_string_t *ret;
-
-  ret = (sly_string_t*)alloc_from_store(S, SLY_SIZE_OF_STRING(size));
-
-  if(ret) {
-    ret->type = SLY_TYPE_STRING;
-    ret->size = size;
-  }
-
-  return ret;
-}
-
-sly_vector_t *sly_gc_alloc_vector(sly_store_t *S, uint32_t size)
-{
-  sly_vector_t* ret;
-
-  ret = (sly_vector_t*)alloc_from_store(S, SLY_SIZE_OF_VECTOR(size));
-
-  if(ret) {
-    uint32_t i;
-
-    ret->type = SLY_TYPE_VECTOR;
-    ret->size = size;
-
-    for(i = 0; i < size; i++) {
-      ret->data[i].type = SLY_TYPE_UNDEF;
-    }
-  }
 
   return ret;
 }

@@ -63,11 +63,6 @@ struct sly_store_t {
 int sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud);
 void sly_gc_finish(sly_store_t *S);
 
-sly_box_t       *sly_gc_alloc_box(sly_store_t *S);
-sly_closure_t   *sly_gc_alloc_closure(sly_store_t *S, uint32_t nr_vars);
-sly_pair_t      *sly_gc_alloc_pair(sly_store_t *S);
-sly_conti_t     *sly_gc_alloc_continuation(sly_store_t *S, uint32_t stack_size);
-sly_string_t    *sly_gc_alloc_string(sly_store_t *S, uint32_t size);
-sly_vector_t    *sly_gc_alloc_vector(sly_store_t *S, uint32_t size);
+void* sly_gc_alloc(sly_store_t *S, uint32_t size);
 
 #endif

@@ -249,7 +249,7 @@ static void parse_number(const char *str, sly_object_t *res)
 static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, FILE* in, sly_object_t* res)
 {
   int c;
-  sly_object_t obj;
+  sly_gcobject_t *obj;
 
   res->type = SLY_TYPE_NIL;
 
@@ -275,7 +275,8 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, FILE* in, sly_obje
   /* strings */
   if(c == '"') {
     read_string(in, buf);
-    *res = sly_create_string(S, sly_sbuffer_string(buf));
+    res->type = SLY_TYPE_STRING;
+    res->value.gc = sly_create_string(S, sly_sbuffer_string(buf), 0);
     return;
   }
 
@@ -324,15 +325,15 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, FILE* in, sly_obje
     read_till_delimiter(in, buf);
     if(buf->str[0] == '+' || buf->str[0] == '-') {
       if(buf->size == 1) {
-	obj = sly_create_string(S, buf->str);
-	sly_create_symbol(S, (sly_string_t*)obj.value.gc);
+	obj = sly_create_string(S, buf->str, 0);
+	*res = sly_create_symbol(S, SLY_STRING(obj));
       } else {
 	/* number */
 	parse_number(buf->str, res);
       }
     } else if(strcmp(buf->str, "...") == 0) {
-      obj = sly_create_string(S, buf->str);
-      sly_create_symbol(S, (sly_string_t*)obj.value.gc);
+      obj = sly_create_string(S, buf->str, 0);
+      *res = sly_create_symbol(S, SLY_STRING(obj));
     } else {
       /* ERROR */
       res->type = SLY_TYPE_NIL;
@@ -343,8 +344,8 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, FILE* in, sly_obje
   if(strchr("!$%&*/:<=>?^_~", c) || isalpha(c)) {
     ungetc(c, in);
     read_till_delimiter(in, buf);
-    obj = sly_create_string(S, buf->str);
-    sly_create_symbol(S, (sly_string_t*)obj.value.gc);
+    obj = sly_create_string(S, buf->str, 0);
+    *res = sly_create_symbol(S, SLY_STRING(obj));
     return;
   }
 
@@ -432,7 +433,7 @@ void sly_io_write(sly_object_t* obj)
     break;
 
   case SLY_TYPE_CLOSURE:
-    printf("<#closure %u>", ((sly_closure_t*)obj->value.gc)->entry_point);
+    printf("<#closure>");
     break;
 
   case SLY_TYPE_PAIR:
@@ -444,23 +445,23 @@ void sly_io_write(sly_object_t* obj)
     break;
 
   case SLY_TYPE_CONTI:
-    printf("<#continuation %u>", ((sly_conti_t*)obj->value.gc)->size);
+    printf("<#continuation %u>", SLY_CONTI(obj->value.gc)->size);
     break;
 
   case SLY_TYPE_BOX:
     printf("#&");
-    sly_io_write(&(((sly_box_t*)obj->value.gc)->value));
+    sly_io_write(&(SLY_BOX(obj->value.gc)->value));
     break;
 
   case SLY_TYPE_STRING:
-    write_string((sly_string_t*)obj->value.gc, 1);
+    write_string(SLY_STRING(obj->value.gc), 1);
     break;
 
   case SLY_TYPE_VECTOR:
     printf("#(");
-    for(i = 0; i < ((sly_vector_t*)obj->value.gc)->size; i++) {
+    for(i = 0; i < SLY_VECTOR(obj->value.gc)->size; i++) {
       printf(" ");
-      sly_io_write(((sly_vector_t*)obj->value.gc)->data + i);
+      sly_io_write(SLY_VECTOR(obj->value.gc)->data + i);
     }
     printf(")");
     break;

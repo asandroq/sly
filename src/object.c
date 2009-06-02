@@ -37,6 +37,7 @@ static int string_equal_p(sly_string_t *s1, sly_string_t *s2)
   return memcmp(s1->chars, s2->chars, s1->size * sizeof(sly_char_t)) == 0;
 }
 
+/*
 static sly_string_t* string_copy(sly_state_t* S, sly_string_t* s)
 {
   sly_string_t *ret;
@@ -46,6 +47,7 @@ static sly_string_t* string_copy(sly_state_t* S, sly_string_t* s)
 
   return ret;
 }
+*/
 
 static sly_string_t* string_copy_extern(sly_string_t* s)
 {
@@ -61,21 +63,108 @@ static sly_string_t* string_copy_extern(sly_string_t* s)
   return ret;
 }
 
-sly_object_t sly_create_string(sly_state_t* S, const char* str)
+sly_gcobject_t *sly_create_box(sly_state_t *S, sly_object_t val)
 {
-  size_t len, i;
-  sly_object_t obj;
+  sly_box_t *ret;
 
-  len = strlen(str);
-
-  obj.type = SLY_TYPE_STRING;
-  obj.value.gc = (sly_gcobject_t*)sly_gc_alloc_string(&S->store, len);
-
-  for(i = 0; i < len; i++) {
-    ((sly_string_t*)obj.value.gc)->chars[i] = (sly_char_t)str[i];
+  ret = (sly_box_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_BOX);
+  if(ret) {
+    SLY_GCOBJECT(ret)->type = SLY_TYPE_BOX;
+    ret->value = val;
   }
 
-  return obj;
+  return SLY_GCOBJECT(ret);
+}
+
+sly_gcobject_t *sly_create_sclosure(sly_state_t *S, uint32_t nr_vars, uint32_t entry)
+{
+  sly_closure_t *ret;
+
+  ret = (sly_closure_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_CLOSURE(nr_vars));
+  if(ret) {
+    SLY_GCOBJECT(ret)->type = SLY_TYPE_CLOSURE;
+    ret->nr_free = nr_vars;
+    ret->entry_point.scm = entry;
+  }
+
+  return SLY_GCOBJECT(ret);
+}
+
+sly_gcobject_t *sly_create_pair(sly_state_t *S, sly_object_t car, sly_object_t cdr)
+{
+  sly_pair_t *ret;
+
+  ret = (sly_pair_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_PAIR);
+  if(ret) {
+    SLY_GCOBJECT(ret)->type = SLY_TYPE_PAIR;
+    ret->car = car;
+    ret->cdr = cdr;
+  }
+
+  return SLY_GCOBJECT(ret);
+}
+
+sly_gcobject_t *sly_create_conti(sly_state_t *S, uint32_t stack_size)
+{
+  sly_conti_t *ret;
+
+  ret = (sly_conti_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_CONTI(stack_size));
+  if(ret) {
+    SLY_GCOBJECT(ret)->type = SLY_TYPE_CONTI;
+    ret->size = stack_size;
+  }
+
+  return SLY_GCOBJECT(ret);
+}
+
+sly_gcobject_t *sly_create_string(sly_state_t *S, const char* str, uint32_t size)
+{
+  sly_string_t *ret;
+
+  if(str != NULL) {
+    size = strlen(str);
+  }
+
+  ret = (sly_string_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_STRING(size));
+
+  if(ret) {
+    uint32_t i;
+
+    SLY_GCOBJECT(ret)->type = SLY_TYPE_STRING;
+    ret->size = size;
+
+    if(str) {
+      for(i = 0; i < size; i++) {
+	ret->chars[i] = (sly_char_t)str[i];
+      }
+    } else {
+      for(i = 0; i < size; i++) {
+	ret->chars[i] = (sly_char_t)' ';
+      }
+    }
+  }
+
+  return SLY_GCOBJECT(ret);
+}
+
+sly_gcobject_t *sly_create_vector(sly_state_t *S, uint32_t size)
+{
+  sly_vector_t* ret;
+
+  ret = (sly_vector_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_VECTOR(size));
+
+  if(ret) {
+    uint32_t i;
+
+    SLY_GCOBJECT(ret)->type = SLY_TYPE_VECTOR;
+    ret->size = size;
+
+    for(i = 0; i < size; i++) {
+      ret->data[i].type = SLY_TYPE_UNDEF;
+    }
+  }
+
+  return SLY_GCOBJECT(ret);
 }
 
 sly_object_t sly_create_symbol(sly_state_t* S, sly_string_t *str)

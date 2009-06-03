@@ -36,15 +36,13 @@
 #define SLY_OP_LOAD_1                  9
 #define SLY_OP_LOAD_2                 10
 #define SLY_OP_LOAD_3                 11
-#define SLY_OP_CALL                   12
-#define SLY_OP_RETURN                 13
-#define SLY_OP_SAVE_CONT              14
-#define SLY_OP_REST_CONT              15
-#define SLY_OP_BOX                    16
-#define SLY_OP_OPEN_BOX               17
-#define SLY_OP_TAIL_CALL              18
-#define SLY_OP_HALT                   19
-#define SLY_OP_ABORT                  20
+#define SLY_OP_RETURN                 12
+#define SLY_OP_SAVE_CONT              13
+#define SLY_OP_REST_CONT              14
+#define SLY_OP_BOX                    15
+#define SLY_OP_OPEN_BOX               16
+#define SLY_OP_HALT                   17
+#define SLY_OP_ABORT                  18
 
 #define SLY_OP_NULL_P                 40
 #define SLY_OP_BOOL_P                 41
@@ -100,5 +98,7 @@
 #define SLY_OP_ARITY_EQ              140
 #define SLY_OP_ARITY_GE              141
 #define SLY_OP_LISTIFY               142
+#define SLY_OP_CALL                  143
+#define SLY_OP_TAIL_CALL             144
 
 #endif

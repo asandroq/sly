@@ -472,15 +472,12 @@
      (else
       (error "ill-formed 'lambda' arguments" n*))))
 
-  ;; the 'reverse' is here to account for the order
-  ;; the arguments are pushed on the stack, moving
-  ;; the responsibility to the VM would slow us down
   (define (meaning-internal n* n e r)
-    (let* ((an* (reverse (map (lambda (n)
-                                (cons n (rename-var n)))
-                              (if n
-                                  (append n* (list n))
-                                  n*))))
+    (let* ((an* (map (lambda (n)
+                       (cons n (rename-var n)))
+                     (if n
+                         (append n* (list n))
+                         n*)))
            (r2 (cons an* r))
            (m (meaning e r2 #t))
            (bound (map cdr an*))
@@ -852,18 +849,14 @@
         (tail? (memq 'tail (vector-ref m 2))))
     ;; this is the return address, will be back-patched later
     (or tail? (instr1 cs 'FRAME 0))
-    (instr cs 'LOAD-ZERO)
-    (instr cs 'PUSH)
     (instr cs 'SAVE-CONT)
     (instr cs 'PUSH)
     (generate-continuation-closure cs)
     (instr cs 'PUSH)
     ;; calling closure given to call/cc with
     ;; continuation-restoring closure as sole argument
-    (instr cs 'LOAD-ONE)
-    (instr cs 'PUSH)
     (generate-lambda cs (vector-ref m 1))
-    (instr cs (if tail? 'TAIL-CALL 'CALL))
+    (instr1 cs (if tail? 'TAIL-CALL 'CALL) 1)
     ;; back-patching return address
     (or tail? (patch-instr! cs i (code-size cs)))))
 
@@ -969,10 +962,8 @@
     ;; this is the return address, will be back-patched later
     (or tail? (instr1 cs 'FRAME 0))
     (let ((len (generate-push-arguments cs (vector-ref m 3))))
-      (emit-immediate cs len)
-      (instr cs 'PUSH)
       (generate-code cs (vector-ref m 2))
-      (instr cs (if tail? 'TAIL-CALL 'CALL))
+      (instr1 cs (if tail? 'TAIL-CALL 'CALL) len)
       ;; back-patching return address
       ;; this not a position-independent value
       (or tail? (patch-instr! cs i (code-size cs))))))
@@ -1065,15 +1056,13 @@
     (LOAD1              . 9)
     (LOAD2              . 10)
     (LOAD3              . 11)
-    (CALL               . 12)
-    (RETURN             . 13)
-    (SAVE-CONT          . 14)
-    (REST-CONT          . 15)
-    (BOX                . 16)
-    (OPEN-BOX           . 17)
-    (TAIL-CALL          . 18)
-    (HALT               . 19)
-    (ABORT              . 20)
+    (RETURN             . 12)
+    (SAVE-CONT          . 13)
+    (REST-CONT          . 14)
+    (BOX                . 15)
+    (OPEN-BOX           . 16)
+    (HALT               . 17)
+    (ABORT              . 18)
 
     ;; type predicates
     (NULL-P             . 40)
@@ -1129,7 +1118,9 @@
     (CONST-INIT         . 139)
     (ARITY=             . 140)
     (ARITY>=            . 141)
-    (LISTIFY            . 142)))
+    (LISTIFY            . 142)
+    (CALL               . 143)
+    (TAIL-CALL          . 144)))
 
 (define (make-compiler-state)
   (vector

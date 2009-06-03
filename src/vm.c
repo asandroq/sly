@@ -67,38 +67,38 @@ struct  opcode_ {
 typedef struct opcode_ opcode_t;
 
 static opcode_t global_opcodes[] = {
-  {SLY_OP_LOAD_NIL,          "LOAD-NIL"},
-  {SLY_OP_LOAD_FALSE,        "LOAD-FALSE"},
-  {SLY_OP_LOAD_TRUE,         "LOAD-TRUE"},
-  {SLY_OP_LOAD_ZERO,         "LOAD-ZERO"},
-  {SLY_OP_LOAD_ONE,          "LOAD-ONE"},
-  {SLY_OP_LOAD_FIXNUM,       "LOAD-FIXNUM"},
-  {SLY_OP_LOAD_CHAR,         "LOAD-CHAR"},
-  {SLY_OP_PUSH,              "PUSH"},
-  {SLY_OP_LOAD_0,            "LOAD0"},
-  {SLY_OP_LOAD_1,            "LOAD1"},
-  {SLY_OP_LOAD_2,            "LOAD2"},
-  {SLY_OP_LOAD_3,            "LOAD3"},
-  {SLY_OP_LOAD,              "LOAD"},
-  {SLY_OP_MAKE_CLOSURE,      "MAKE-CLOSURE"},
-  {SLY_OP_CALL,              "CALL"},
-  {SLY_OP_RETURN,            "RETURN"},
-  {SLY_OP_JMP_IF,            "JMP-IF"},
-  {SLY_OP_JMP,               "JMP"},
-  {SLY_OP_LOAD_FREE,         "LOAD-FREE"},
-  {SLY_OP_SAVE_CONT,         "SAVE-CONT"},
-  {SLY_OP_REST_CONT,         "REST-CONT"},
-  {SLY_OP_ASSIGN,            "ASSIGN"},
-  {SLY_OP_ASSIGN_FREE,       "ASSIGN-FREE"},
-  {SLY_OP_BOX,               "BOX"},
-  {SLY_OP_OPEN_BOX,          "OPEN-BOX"},
-  {SLY_OP_FRAME,             "FRAME"},
-  {SLY_OP_TAIL_CALL,         "TAIL-CALL"},
-  {SLY_OP_HALT,              "HALT"},
-  {SLY_OP_LOAD_LOCAL,        "LOAD-LOCAL"},
-  {SLY_OP_INSERT_BOX,        "INSERT-BOX"},
-  {SLY_OP_ASSIGN_LOCAL,      "ASSIGN-LOCAL"},
-  {SLY_OP_POP,               "POP"},
+  {SLY_OP_LOAD_NIL,               "LOAD-NIL"},
+  {SLY_OP_LOAD_FALSE,             "LOAD-FALSE"},
+  {SLY_OP_LOAD_TRUE,              "LOAD-TRUE"},
+  {SLY_OP_LOAD_ZERO,              "LOAD-ZERO"},
+  {SLY_OP_LOAD_ONE,               "LOAD-ONE"},
+  {SLY_OP_LOAD_FIXNUM,            "LOAD-FIXNUM"},
+  {SLY_OP_LOAD_CHAR,              "LOAD-CHAR"},
+  {SLY_OP_PUSH,                   "PUSH"},
+  {SLY_OP_LOAD_0,                 "LOAD0"},
+  {SLY_OP_LOAD_1,                 "LOAD1"},
+  {SLY_OP_LOAD_2,                 "LOAD2"},
+  {SLY_OP_LOAD_3,                 "LOAD3"},
+  {SLY_OP_LOAD,                   "LOAD"},
+  {SLY_OP_MAKE_CLOSURE,           "MAKE-CLOSURE"},
+  {SLY_OP_CALL,                   "CALL"},
+  {SLY_OP_RETURN,                 "RETURN"},
+  {SLY_OP_JMP_IF,                 "JMP-IF"},
+  {SLY_OP_JMP,                    "JMP"},
+  {SLY_OP_LOAD_FREE,              "LOAD-FREE"},
+  {SLY_OP_SAVE_CONT,              "SAVE-CONT"},
+  {SLY_OP_REST_CONT,              "REST-CONT"},
+  {SLY_OP_ASSIGN,                 "ASSIGN"},
+  {SLY_OP_ASSIGN_FREE,            "ASSIGN-FREE"},
+  {SLY_OP_BOX,                    "BOX"},
+  {SLY_OP_OPEN_BOX,               "OPEN-BOX"},
+  {SLY_OP_FRAME,                  "FRAME"},
+  {SLY_OP_TAIL_CALL,              "TAIL-CALL"},
+  {SLY_OP_HALT,                   "HALT"},
+  {SLY_OP_LOAD_LOCAL,             "LOAD-LOCAL"},
+  {SLY_OP_INSERT_BOX,             "INSERT-BOX"},
+  {SLY_OP_ASSIGN_LOCAL,           "ASSIGN-LOCAL"},
+  {SLY_OP_POP,                    "POP"},
   {SLY_OP_GLOBAL_REF,             "GLOBAL-REF"},
   {SLY_OP_CHECKED_GLOBAL_REF,     "CHECKED-GLOBAL-REF"},
   {SLY_OP_GLOBAL_SET,             "GLOBAL-SET"},
@@ -249,22 +249,25 @@ static void check_alloc(sly_state_t *S, void* ptr)
  * performed, the stack must have this
  * configuration:
  *
- *      +=====================+
- *      | number of arguments |
- *      +---------------------+
- *      |        arg 1        |
- *      |          .          |
- *      |          .          |
- *      |          .          |
- *      |        arg N        |
- *      +---------------------+
- *      | saved frame pointer |
- *      +---------------------+
- *      |   saved procedure   !
- *      +---------------------+
- *      |    return address   |
- *      +=====================+
- *      |    previous frame   |
+ * SP ->
+ *        +---------------------+
+ *        | locals, returns etc.|
+ *        +---------------------+
+ *        |        arg N        |
+ *        |          .          |
+ *        |          .          |
+ *        |          .          |
+ *        |        arg 1        |
+ *        +---------------------+
+ * FP ->  | number of arguments |
+ *        +---------------------+
+ *        | saved frame pointer |
+ *        +---------------------+
+ *        |   saved procedure   !
+ *        +---------------------+
+ *        |    return address   |
+ *        +=====================+
+ *        |    previous frame   |
  */
 int sly_vm_run(sly_state_t* S)
 {
@@ -388,23 +391,23 @@ int sly_vm_run(sly_state_t* S)
       break;
 
     case SLY_OP_LOAD_0:
-      S->accum = S->stack[S->fp-1];
+      S->accum = S->stack[S->fp+1];
       break;
 
     case SLY_OP_LOAD_1:
-      S->accum = S->stack[S->fp-2];
+      S->accum = S->stack[S->fp+2];
       break;
 
     case SLY_OP_LOAD_2:
-      S->accum = S->stack[S->fp-3];
+      S->accum = S->stack[S->fp+3];
       break;
 
     case SLY_OP_LOAD_3:
-      S->accum = S->stack[S->fp-4];
+      S->accum = S->stack[S->fp+4];
       break;
 
     case SLY_OP_LOAD:
-      S->accum = S->stack[S->fp-EXTRACT_ARG(instr)-1];
+      S->accum = S->stack[S->fp+EXTRACT_ARG(instr)+1];
       break;
 
     case SLY_OP_MAKE_CLOSURE:
@@ -430,34 +433,49 @@ int sly_vm_run(sly_state_t* S)
       break;
 
     case SLY_OP_TAIL_CALL:
+      if(S->accum.type != SLY_TYPE_CLOSURE) {
+	printf("calling non-closure!\n");
+	sly_abort(S);
+      }
+
       /*
        * the arguments to the callee must be shifted down
        * removing the arguments of the caller
        */
-      /* number of arguments newly pushed */
-      dw1 = (S->stack[S->sp-1]).value.fixnum;
 
-      /* number of arguments of old procedure */
-      dw2 = (S->stack[S->fp]).value.fixnum;
+      /* number of arguments newly pushed */
+      dw1 = EXTRACT_ARG(instr);
 
       /* where to copy the new values */
-      i = S->fp - dw2;
+      i = S->fp + 1;
 
       /* where the values will be copied from */
-      j = S->sp - dw1 - 1;
+      j = S->sp - dw1;
 
-      S->sp = i + dw1 + 1;
-      memcpy(S->stack+i, S->stack+j, (dw1+1) * sizeof(sly_object_t));
+      memcpy(S->stack+i, S->stack+j, dw1 * sizeof(sly_object_t));
 
-      /* fall through */
+      S->sp = S->fp + dw1 + 1;
+      S->stack[S->fp].value.fixnum = dw1;
+
+      /* setting current procedure */
+      S->proc = S->accum;
+
+      /* jumping to closure body */
+      S->pc = SLY_CLOSURE(S->proc.value.gc)->entry_point.scm;
+      break;
 
     case SLY_OP_CALL:
       if(S->accum.type != SLY_TYPE_CLOSURE) {
+	printf("calling non-closure!\n");
 	sly_abort(S);
       }
 
+      /* number of arguments newly pushed */
+      dw1 = EXTRACT_ARG(instr);
+
       /* frame pointer */
-      S->fp = S->sp - 1;
+      S->fp = S->sp - dw1 - 1;
+      S->stack[S->fp].value.fixnum = dw1;
 
       /* setting current procedure */
       S->proc = S->accum;
@@ -467,11 +485,11 @@ int sly_vm_run(sly_state_t* S)
       break;
 
     case SLY_OP_RETURN:
-      /* removing number of arguments */
-      dw1 = (S->stack[--S->sp]).value.fixnum;
+      /* number of arguments */
+      dw1 = (S->stack[S->fp]).value.fixnum;
 
       /* removing arguments */
-      S->sp -= dw1;
+      S->sp -= dw1 + 1;
 
       /* restoring previous frame pointer */
       S->fp = (S->stack[--S->sp]).value.fixnum;
@@ -508,8 +526,6 @@ int sly_vm_run(sly_state_t* S)
       /* copying stack */
       memcpy(SLY_CONTI(S->accum.value.gc)->stack, S->stack, dw1);
 
-      /* removing number of arguments from the stack */
-      S->sp--;
       break;
 
     case SLY_OP_REST_CONT:
@@ -518,14 +534,15 @@ int sly_vm_run(sly_state_t* S)
 
       /* restoring stack */
       S->sp = SLY_CONTI(S->accum.value.gc)->size;
+      S->fp = S->sp - 1;
       memcpy(S->stack, SLY_CONTI(S->accum.value.gc)->stack, S->sp * sizeof(sly_object_t));
 
       S->accum = tmp;
       break;
 
     case SLY_OP_ASSIGN:
-      assert((S->stack[S->fp-EXTRACT_ARG(instr)-1]).type == SLY_TYPE_BOX);
-      SLY_BOX((S->stack[S->fp-EXTRACT_ARG(instr)-1]).value.gc)->value = S->accum;
+      assert((S->stack[S->fp+EXTRACT_ARG(instr)+1]).type == SLY_TYPE_BOX);
+      SLY_BOX((S->stack[S->fp+EXTRACT_ARG(instr)+1]).value.gc)->value = S->accum;
       break;
 
     case SLY_OP_ASSIGN_FREE:
@@ -557,6 +574,10 @@ int sly_vm_run(sly_state_t* S)
       /* pushing frame pointer */
       (S->stack[S->sp  ]).type = SLY_TYPE_FIXNUM;
       (S->stack[S->sp++]).value.fixnum = S->fp;
+
+      /* push slot where number of arguments will be set */
+      (S->stack[S->sp  ]).type = SLY_TYPE_FIXNUM;
+      (S->stack[S->sp++]).value.fixnum = 0;      
       break;
 
     case SLY_OP_HALT:
@@ -570,7 +591,7 @@ int sly_vm_run(sly_state_t* S)
       break;
 
     case SLY_OP_INSERT_BOX:
-      i = S->fp-EXTRACT_ARG(instr)-1;
+      i = S->fp+EXTRACT_ARG(instr)+1;
 
       tmp.type = SLY_TYPE_BOX;
       tmp.value.gc = sly_create_box(S, S->stack[i]);
@@ -644,12 +665,12 @@ int sly_vm_run(sly_state_t* S)
       /* number of fixed arguments */
       dw1 = EXTRACT_ARG(instr);
 
-      /* number of variables arguments */
-      dw2 = S->stack[S->fp].value.fixnum - dw1;
+      /* total number of arguments */
+      dw2 = S->stack[S->fp].value.fixnum;
 
       /* consing */
       S->accum.type = SLY_TYPE_NIL;
-      for(i = S->fp - 1; i > S->fp - (dw2 + 1); i--) {
+      for(i = S->fp + dw2; i > S->fp + dw1; i--) {
 	tmp.type = SLY_TYPE_PAIR;
 	tmp.value.gc = sly_create_pair(S, S->stack[i], S->accum);
 	check_alloc(S, tmp.value.gc);
@@ -658,11 +679,9 @@ int sly_vm_run(sly_state_t* S)
       }
 
       /* adjusting stack */
-      S->stack[S->fp - dw2] = S->accum;
-      S->fp -= dw2 - 1;
-      S->stack[S->fp].type = SLY_TYPE_FIXNUM;
-      S->stack[S->fp].value.fixnum = dw1 + 1;
-      S->sp = S->fp + 1;
+      S->stack[S->fp + ++dw1] = S->accum;
+      S->stack[S->fp].value.fixnum = dw1;
+      S->sp = S->fp + dw1 + 1;
       break;
 
     case SLY_OP_ABORT:

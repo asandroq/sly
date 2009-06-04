@@ -485,11 +485,7 @@ int sly_vm_run(sly_state_t* S)
       break;
 
     case SLY_OP_RETURN:
-      /* number of arguments */
-      dw1 = (S->stack[S->fp]).value.fixnum;
-
-      /* removing arguments */
-      S->sp -= dw1 + 1;
+      S->sp = S->fp;
 
       /* restoring previous frame pointer */
       S->fp = (S->stack[--S->sp]).value.fixnum;
@@ -525,7 +521,6 @@ int sly_vm_run(sly_state_t* S)
 
       /* copying stack */
       memcpy(SLY_CONTI(S->accum.value.gc)->stack, S->stack, dw1);
-
       break;
 
     case SLY_OP_REST_CONT:

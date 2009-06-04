@@ -33,9 +33,41 @@
 /* the state of the Sly virtual machine */
 typedef struct sly_state_t sly_state_t;
 
+/* type of C functions callable by the VM */
+typedef int (*sly_cfunction_t)(sly_state_t* S);
+
+/* array of C functions to be registered in the state */
+typedef struct sly_reg_t {
+  const char *name;
+  sly_cfunction_t func;
+} sly_reg_t;
+
 sly_state_t* sly_init(void);
 void sly_close(sly_state_t* S);
 
+/*
+ * register several functions as globals
+ * at once
+ */
+void sly_register(sly_state_t* S, sly_reg_t* regs);
+
 int sly_load_file(sly_state_t* S, const char *fname);
+
+/*
+ * object manipulation API
+ */
+
+/* the height of the current interface stack */
+int sly_get_top(sly_state_t* S);
+
+/* push values onto the stack */
+void sly_push_boolean(sly_state_t* S, int bool);
+void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, int nr_vars);
+
+/* compare values on the stack */
+int sly_greater_than(sly_state_t* S, int idx1, int idx2);
+
+/* sets the current object on top of the stack as a global */
+void sly_set_global(sly_state_t* S, const char* name);
 
 #endif

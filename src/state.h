@@ -91,4 +91,8 @@ struct sly_state_t {
   sly_store_t store;
 };
 
+void sly_st_enlarge_globals(sly_state_t* S, uint32_t more);
+int sly_st_get_global_index(sly_state_t* S, sly_symbol_t *global);
+
+
 #endif

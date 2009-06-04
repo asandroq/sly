@@ -175,3 +175,29 @@ void sly_close(sly_state_t* S)
   }
 }
 
+void sly_st_enlarge_globals(sly_state_t* S, uint32_t more)
+{
+  sly_env_var_t *vars;
+
+  more += S->global_env.size;
+  vars = (sly_env_var_t*)realloc(S->global_env.vars,
+				 more * sizeof(sly_env_var_t));
+
+  /* TODO: test return and throw error */
+  S->global_env.vars = vars;
+  S->global_env.size = more;
+}
+
+int sly_st_get_global_index(sly_state_t* S, sly_symbol_t *global)
+{
+  size_t i;
+
+  for(i = 0; i < S->global_env.size; i++) {
+    if(global == S->global_env.vars[i].symbol) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+

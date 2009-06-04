@@ -36,8 +36,10 @@ LDFLAGS =
 TARGET = sly
 
 SOURCES = \
+	api.c \
 	gc.c \
 	io.c \
+	lib.c \
 	object.c \
 	state.c \
 	vm.c \

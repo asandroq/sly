@@ -411,14 +411,14 @@ int sly_vm_run(sly_state_t* S)
       break;
 
     case SLY_OP_MAKE_CLOSURE:
-      /* number of free variables */
-      dw1 = EXTRACT_ARG(instr);
-
       /*
        * There is always a jump after this instruction, to jump over the
        * closure code. So the closure entry point is PC + 1
        */
-      dw2 = S->pc + 1;
+      dw1 = S->pc + 1;
+
+      /* number of free variables */
+      dw2 = EXTRACT_ARG(instr);
 
       tmp.type = SLY_TYPE_CLOSURE;
       tmp.value.gc = sly_create_sclosure(S, dw1, dw2);
@@ -426,10 +426,10 @@ int sly_vm_run(sly_state_t* S)
       S->accum = tmp;
 
       /* gathering free variables */
-      for(i = 0; i < dw1; i++) {
+      for(i = 0; i < dw2; i++) {
 	SLY_CLOSURE(S->accum.value.gc)->free_vars[i] = S->stack[S->sp-i-1];
       }
-      S->sp -= dw1;
+      S->sp -= dw2;
       break;
 
     case SLY_OP_TAIL_CALL:
@@ -807,10 +807,10 @@ static void sly_destroy_module(sly_module_t *M)
 static uint32_t sly_link_module(sly_state_t* S, sly_module_t *mod)
 {
   sly_env_t env;
-  sly_env_var_t *vars;
   sly_object_t obj, *tmp;
   uint32_t *code;
-  uint32_t i, j, dw, consts_base, code_base, growth;
+  int idx, old_size;
+  uint32_t i, dw, consts_base, code_base, growth;
 
   env.size = mod->nr_globals;
   env.vars = (sly_env_var_t*)malloc(env.size * sizeof(sly_env_var_t));
@@ -828,34 +828,26 @@ static uint32_t sly_link_module(sly_state_t* S, sly_module_t *mod)
     env.vars[i].symbol = obj.value.symbol;
     env.vars[i].value.type = SLY_TYPE_FIXNUM;
 
-    for(j = 0; j < S->global_env.size; j++) {
-      if(env.vars[i].symbol == S->global_env.vars[j].symbol) {
-	env.vars[i].value.value.fixnum = j;
-	break;
-      }
-    }
-
-    if(j == S->global_env.size) {
+    idx = sly_st_get_global_index(S, env.vars[i].symbol);
+    if(idx > 0) {
+      env.vars[i].value.value.fixnum = idx;
+    } else {
       env.vars[i].value.value.fixnum = S->global_env.size + growth++;
     }
   }
 
   /* enlarging global environment */
   if(growth > 0) {
-    dw = S->global_env.size + growth;
-    vars = (sly_env_var_t*)realloc(S->global_env.vars,
-				  dw * sizeof(sly_env_var_t));
-    /* TODO: test return and throw error */
-    S->global_env.vars = vars;
+    old_size = S->global_env.size;
+    sly_st_enlarge_globals(S, growth);
 
     for(i = 0; i < env.size; i++) {
-      j = env.vars[i].value.value.fixnum;
-      if(!(j < S->global_env.size)) {
-	S->global_env.vars[j].symbol = env.vars[i].symbol;
-	S->global_env.vars[j].value.type = SLY_TYPE_UNDEF;
+      idx = env.vars[i].value.value.fixnum;
+      if(idx >= old_size) {
+	S->global_env.vars[idx].symbol = env.vars[i].symbol;
+	S->global_env.vars[idx].value.type = SLY_TYPE_UNDEF;
       }
     }
-    S->global_env.size = dw;
   }
 
   /* enlarging constants */

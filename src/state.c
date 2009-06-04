@@ -27,8 +27,9 @@
 #include "vm.h"
 #include "state.h"
 
-/* garbage collector callback */
+int sly_open_lib(sly_state_t* S);
 
+/* garbage collector callback */
 struct gc_data {
   sly_state_t *S;
   uint32_t state, count;
@@ -91,7 +92,7 @@ static sly_object_t* gc_callback(void *ud)
   }
 }
 
-sly_state_t* sly_init(void)
+static sly_state_t* sly_create_state(void)
 {
   sly_state_t *S = NULL;
 
@@ -144,6 +145,16 @@ sly_state_t* sly_init(void)
   /* registers */
   S->proc.type = SLY_TYPE_UNDEF;
   S->accum.type = SLY_TYPE_UNDEF;
+
+  return S;
+}
+
+sly_state_t* sly_open(void)
+{
+  sly_state_t *S = sly_create_state();
+
+  /* register C lib */
+  sly_open_lib(S);
 
   return S;
 }

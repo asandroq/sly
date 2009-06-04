@@ -50,7 +50,7 @@ static sly_reg_t lib_regs[] = {
   {NULL, NULL}
 };
 
-int sly_lib_init(sly_state_t* S)
+int sly_open_lib(sly_state_t* S)
 {
   sly_register(S, lib_regs);
 

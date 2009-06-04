@@ -42,7 +42,7 @@ typedef struct sly_reg_t {
   sly_cfunction_t func;
 } sly_reg_t;
 
-sly_state_t* sly_init(void);
+sly_state_t* sly_open(void);
 void sly_close(sly_state_t* S);
 
 /*

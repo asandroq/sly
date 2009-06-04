@@ -192,12 +192,12 @@ void sly_dump(sly_state_t* S)
     printf(" ");
     sly_io_write(S->stack + i);
   }
-#if 0
+
   printf("\n\n");
 
   printf("Globals:");
   for(i = 0; i < S->global_env.size; i++) {
-    sly_Env_Var var = S->global_env.vars[i];
+    sly_env_var_t var = S->global_env.vars[i];
     printf(" [");
     if(var.symbol) {
       sly_io_write_symbol(var.symbol);
@@ -208,6 +208,7 @@ void sly_dump(sly_state_t* S)
   }
   printf("\n\n");
 
+#if 0
   printf("Constants:");
   for(i = 0; i < S->nr_consts; i++) {
     printf(" ");

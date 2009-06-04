@@ -35,9 +35,9 @@ int main(int argc, char *argv[])
     exit(13);
   }
 
-  S = sly_init();
+  S = sly_open();
 
-  /* tries to load initial environment */
+  /* tries to load Scheme initial environment */
   sly_load_file(S, "init.fasl");
 
   /* tries to load compiler */

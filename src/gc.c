@@ -23,6 +23,7 @@
 
 #include "sly.h"
 
+/* #include <stdio.h> */
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -165,34 +166,34 @@ static void collect_garbage(sly_store_t* S)
     uint32_t i, size;
     sly_gcobject_t *gcobj;
 
-    gcobj = (sly_gcobject_t*)scan;
+    gcobj = SLY_GCOBJECT(scan);
     size = sizeof_gcobj(gcobj);
 
     switch(gcobj->type) {
     case SLY_TYPE_CLOSURE:
-      for(i = 0; i < ((sly_closure_t*)gcobj)->nr_free; i++) {
-	copy_object(S, &(((sly_closure_t*)gcobj)->free_vars[i]));
+      for(i = 0; i < SLY_CLOSURE(gcobj)->nr_free; i++) {
+	copy_object(S, &(SLY_CLOSURE(gcobj)->free_vars[i]));
       }
       break;
 
     case SLY_TYPE_PAIR:
-      copy_object(S, &((sly_pair_t*)gcobj)->car);
-      copy_object(S, &((sly_pair_t*)gcobj)->cdr);
+      copy_object(S, &(SLY_PAIR(gcobj)->car));
+      copy_object(S, &(SLY_PAIR(gcobj)->cdr));
       break;
 
     case SLY_TYPE_CONTI:
-      for(i = 0; i < ((sly_conti_t*)gcobj)->size; i++) {
-	copy_object(S, &(((sly_conti_t*)gcobj)->stack[i]));
+      for(i = 0; i < SLY_CONTI(gcobj)->size; i++) {
+	copy_object(S, &(SLY_CONTI(gcobj)->stack[i]));
       }
       break;
 
     case SLY_TYPE_BOX:
-      copy_object(S, &((sly_box_t*)gcobj)->value);
+      copy_object(S, &(SLY_BOX(gcobj)->value));
       break;
 
     case SLY_TYPE_VECTOR:
-      for(i = 0; i < ((sly_vector_t*)gcobj)->size; i++) {
-	copy_object(S, &(((sly_vector_t*)gcobj)->data[i]));
+      for(i = 0; i < SLY_VECTOR(gcobj)->size; i++) {
+	copy_object(S, &(SLY_VECTOR(gcobj)->data[i]));
       }
       break;
     }
@@ -204,6 +205,8 @@ static void collect_garbage(sly_store_t* S)
   scan = S->from_space;
   S->from_space = S->to_space;
   S->to_space = scan;
+
+  /*fprintf(stderr, "GC before: %d after: %d\n\n", old_size, S->size);*/
 }
 
 static int expand_store(sly_store_t* S)
@@ -216,6 +219,8 @@ static int expand_store(sly_store_t* S)
   /* new size is 30% larger, multiple of 4 */
   size = old_size * 4 / 3;
   size -= size % 4;
+
+  /*fprintf(stderr, "Expanding store from %d to %d\n\n", old_size, size);*/
 
   tmp = malloc(size * 2);
   if(tmp == NULL) {

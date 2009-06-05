@@ -118,19 +118,6 @@ struct sly_closure_t {
   sly_object_t free_vars[0];
 };
 
-/*
-struct sly_sclosure_t {
-  sly_closure_t base;
-};
-
-struct sly_cclosure_t {
-  sly_closure_t base;
-  sly_cfunction_t func;
-  uint32_t nr_free;
-  sly_object_t free_vars[0];
-};
-*/
-
 struct sly_pair_t {
   sly_gcobject_t base;
   sly_object_t car;

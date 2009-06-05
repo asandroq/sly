@@ -83,6 +83,7 @@ sly_gcobject_t *sly_create_sclosure(sly_state_t *S, uint32_t entry, uint32_t nr_
   ret = (sly_closure_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_CLOSURE(nr_vars));
   if(ret) {
     SLY_GCOBJECT(ret)->type = SLY_TYPE_CLOSURE;
+    ret->is_c = 0;
     ret->nr_free = nr_vars;
     ret->entry_point.scm = entry;
   }
@@ -97,6 +98,7 @@ sly_gcobject_t *sly_create_cclosure(sly_state_t *S, sly_cfunction_t func, uint32
   ret = (sly_closure_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_CLOSURE(nr_vars));
   if(ret) {
     SLY_GCOBJECT(ret)->type = SLY_TYPE_CLOSURE;
+    ret->is_c = 1;
     ret->nr_free = nr_vars;
     ret->entry_point.c = func;
   }

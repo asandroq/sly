@@ -936,24 +936,27 @@
 (define (generate-primitive-apply cs m)
   (let* ((ref (vector-ref m 2))
          (args (vector-ref m 3))
+         (nargs (number-of-arguments args))
          (prim (vector-ref ref 1))
          (prim-rec (assv prim *primitives*)))
     (if prim-rec
         (let ((code (cadr prim-rec))
               (arity (caddr prim-rec)))
-          (case arity
-            ((0)
-             (instr cs code))
-            ((1)
-             (generate-code cs (vector-ref args 1))
-             (instr cs code))
-            ((2)
-             (generate-code cs (vector-ref args 1))
-             (instr cs 'PUSH)
-             (generate-code cs (vector-ref (vector-ref args 2) 1))
-             (instr cs code))
-            (else
-             (error "Primitive with unknown arity"))))
+          (if (= nargs arity)
+              (case arity
+                ((0)
+                 (instr cs code))
+                ((1)
+                 (generate-code cs (vector-ref args 1))
+                 (instr cs code))
+                ((2)
+                 (generate-code cs (vector-ref args 1))
+                 (instr cs 'PUSH)
+                 (generate-code cs (vector-ref (vector-ref args 2) 1))
+                 (instr cs code))
+                (else
+                 (error "Primitive with unknown arity")))
+              (error "Primitive called with wrong arity!" prim)))
         (error "Unknown primitive"))))
 
 (define (generate-common-apply cs m)
@@ -986,6 +989,14 @@
 	      (and (memq v sets)
 		   (instr1 cs 'INSERT-BOX (index-of v vars))))
 	    vars))
+
+(define (number-of-arguments m)
+  (let loop ((len 0)
+             (m m))
+    (let ((kind (vector-ref m 0)))
+      (if (eq? kind 'arg-null)
+          len
+          (loop (+ len 1) (vector-ref m 2))))))
 
 ;; procs is an alist of (tag . proc)
 ;; the procedure gets the node and the visitor

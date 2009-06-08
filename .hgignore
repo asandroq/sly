@@ -1,5 +1,0 @@
-syntax: regexp
-
-^src/sly$
-^src/.+\.o$
-^src/.+\.fasl$

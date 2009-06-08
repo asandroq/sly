@@ -44,6 +44,12 @@ static int calc_index(sly_state_t* S, int idx)
   return idx;
 }
 
+void sly_error(sly_state_t* S)
+{
+  sly_close(S);
+  abort();
+}
+
 int sly_get_top(sly_state_t* S)
 {
   /*
@@ -53,10 +59,23 @@ int sly_get_top(sly_state_t* S)
   return S->sp - S->fp - 1;
 }
 
+void sly_push_value(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+  S->stack[S->sp++] = S->stack[idx];
+}
+
 void sly_push_boolean(sly_state_t* S, int bool)
 {
   S->stack[S->sp].type = SLY_TYPE_BOOL;
   S->stack[S->sp++].value.bool = bool ? 1 : 0;
+}
+
+void sly_push_integer(sly_state_t* S, sly_fixnum_t num)
+{
+  S->stack[S->sp].type = SLY_TYPE_FIXNUM;
+  S->stack[S->sp++].value.fixnum = num;
 }
 
 void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, int nr_vars)
@@ -75,12 +94,54 @@ void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, int nr_vars)
   S->stack[S->sp++].value.gc = cl;
 }
 
+void sly_push_string(sly_state_t* S, const char* str)
+{
+  sly_object_t obj;
+
+  obj.type = SLY_TYPE_STRING;
+  obj.value.gc = sly_create_string(S, str, 0);
+
+  S->stack[S->sp++] = obj;
+}
+
 int sly_greater_than(sly_state_t* S, int idx1, int idx2)
 {
   idx1 = calc_index(S, idx1);
   idx2 = calc_index(S, idx2);
 
   return S->stack[idx1].value.fixnum > S->stack[idx2].value.fixnum;
+}
+
+void sly_unary_minus(sly_state_t* S, int idx)
+{
+  sly_fixnum_t res;
+
+  idx = calc_index(S, idx);
+
+  res = - S->stack[idx].value.fixnum;
+  sly_push_integer(S, res);
+}
+
+void sly_add(sly_state_t* S, int idx1, int idx2)
+{
+  sly_fixnum_t res;
+  
+  idx1 = calc_index(S, idx1);
+  idx2 = calc_index(S, idx2);
+
+  res = S->stack[idx1].value.fixnum + S->stack[idx2].value.fixnum;
+  sly_push_integer(S, res);
+}
+
+void sly_sub(sly_state_t* S, int idx1, int idx2)
+{
+  sly_fixnum_t res;
+  
+  idx1 = calc_index(S, idx1);
+  idx2 = calc_index(S, idx2);
+
+  res = S->stack[idx1].value.fixnum - S->stack[idx2].value.fixnum;
+  sly_push_integer(S, res);
 }
 
 void sly_set_global(sly_state_t* S, const char* name)

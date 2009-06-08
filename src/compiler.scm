@@ -1327,8 +1327,6 @@
     (boolean? BOOL-P 1)
     (char? CHAR-P 1)
     (integer? FIXNUM-P 1)
-    (+ PLUS 2)
-    (- MINUS 2)
     (* MULT 2)
     (cons CONS 2)
     (car CAR 1)

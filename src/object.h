@@ -90,7 +90,7 @@ struct sly_object_t {
     /* immediates */
     uint8_t bool;
     sly_char_t chr;
-    uint32_t fixnum;
+    sly_fixnum_t fixnum;
     sly_symbol_t *symbol;
 
     /* collectable objects */

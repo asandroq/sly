@@ -30,6 +30,9 @@
 #include <inttypes.h>
 #endif
 
+/* type of small integers */
+typedef uint32_t sly_fixnum_t;
+
 /* the state of the Sly virtual machine */
 typedef struct sly_state_t sly_state_t;
 
@@ -44,6 +47,9 @@ typedef struct sly_reg_t {
 
 sly_state_t* sly_open(void);
 void sly_close(sly_state_t* S);
+
+/* signaling errors */
+void sly_error(sly_state_t* S);
 
 /*
  * register several functions as globals
@@ -61,11 +67,19 @@ int sly_load_file(sly_state_t* S, const char *fname);
 int sly_get_top(sly_state_t* S);
 
 /* push values onto the stack */
+void sly_push_value(sly_state_t* S, int idx);
 void sly_push_boolean(sly_state_t* S, int bool);
+void sly_push_integer(sly_state_t* S, sly_fixnum_t num);
 void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, int nr_vars);
+void sly_push_string(sly_state_t* S, const char* str);
 
 /* compare values on the stack */
 int sly_greater_than(sly_state_t* S, int idx1, int idx2);
+
+/* arithmetic */
+void sly_unary_minus(sly_state_t* S, int idx);
+void sly_add(sly_state_t* S, int idx1, int idx2);
+void sly_sub(sly_state_t* S, int idx1, int idx2);
 
 /* sets the current object on top of the stack as a global */
 void sly_set_global(sly_state_t* S, const char* name);

@@ -232,6 +232,35 @@ static void check_alloc(sly_state_t *S, void* ptr)
   }
 }
 
+static void return_from_call(sly_state_t* S)
+{
+  /* remove arguments and locals */
+  S->sp = S->fp;
+    
+  /* restoring previous frame pointer */
+  S->fp = (S->stack[--S->sp]).value.fixnum;
+
+  /* restoring previous procedure */
+  S->proc = S->stack[--S->sp];
+
+  /* jumping to return address */
+  S->pc = (S->stack[--S->sp]).value.fixnum;
+}
+
+static void call_c_closure(sly_state_t* S, sly_closure_t *clos)
+{
+  int ret;
+
+  /* arguments are already in position, do the call */
+  ret = (clos->entry_point.c)(S);
+
+  /* result is on top of stack */
+  S->accum = S->stack[S->sp-1];
+
+  /* now must do a 'return' */
+  return_from_call(S);
+}
+
 #define SLY_SET_BOOL(cond)		\
   do {					\
     if(cond) {				\
@@ -459,8 +488,12 @@ int sly_vm_run(sly_state_t* S)
       /* setting current procedure */
       S->proc = S->accum;
 
-      /* jumping to closure body */
-      S->pc = SLY_CLOSURE(S->proc.value.gc)->entry_point.scm;
+      /* executing closure code */
+      if(SLY_CLOSURE(S->proc.value.gc)->is_c) {
+	call_c_closure(S, SLY_CLOSURE(S->proc.value.gc));
+      } else {
+	S->pc = SLY_CLOSURE(S->proc.value.gc)->entry_point.scm;
+      }
       break;
 
     case SLY_OP_CALL:
@@ -479,21 +512,16 @@ int sly_vm_run(sly_state_t* S)
       /* setting current procedure */
       S->proc = S->accum;
 
-      /* jumping to closure body */
-      S->pc = SLY_CLOSURE(S->proc.value.gc)->entry_point.scm;
+      /* executing closure code */
+      if(SLY_CLOSURE(S->proc.value.gc)->is_c) {
+	call_c_closure(S, SLY_CLOSURE(S->proc.value.gc));
+      } else {
+	S->pc = SLY_CLOSURE(S->proc.value.gc)->entry_point.scm;
+      }
       break;
 
     case SLY_OP_RETURN:
-      S->sp = S->fp;
-
-      /* restoring previous frame pointer */
-      S->fp = (S->stack[--S->sp]).value.fixnum;
-
-      /* restoring previous procedure */
-      S->proc = S->stack[--S->sp];
-
-      /* jumping to return address */
-      S->pc = (S->stack[--S->sp]).value.fixnum;
+      return_from_call(S);
       break;
 
     case SLY_OP_JMP_IF:

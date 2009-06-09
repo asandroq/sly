@@ -161,6 +161,7 @@ static void dump_instr(uint32_t instr)
   }
 }
 
+/*
 static void disassemble(sly_state_t* S)
 {
   uint32_t i;
@@ -172,6 +173,7 @@ static void disassemble(sly_state_t* S)
     printf("\n");
   }
 }
+*/
 
 void sly_dump(sly_state_t* S)
 {
@@ -574,8 +576,9 @@ int sly_vm_run(sly_state_t* S)
 
     case SLY_OP_BOX:
       tmp.type = SLY_TYPE_BOX;
-      tmp.value.gc = sly_create_box(S, S->accum);
+      tmp.value.gc = sly_create_box(S);
       check_alloc(S, tmp.value.gc);
+      SLY_BOX(tmp.value.gc)->value = S->accum;
 
       S->accum = tmp;
       break;
@@ -616,8 +619,9 @@ int sly_vm_run(sly_state_t* S)
       i = S->fp+EXTRACT_ARG(instr)+1;
 
       tmp.type = SLY_TYPE_BOX;
-      tmp.value.gc = sly_create_box(S, S->stack[i]);
+      tmp.value.gc = sly_create_box(S);
       check_alloc(S, tmp.value.gc);
+      SLY_BOX(tmp.value.gc)->value = S->stack[i];
 
       S->stack[i] = tmp;
       break;
@@ -694,8 +698,10 @@ int sly_vm_run(sly_state_t* S)
       S->accum.type = SLY_TYPE_NIL;
       for(i = S->fp + dw2; i > S->fp + dw1; i--) {
 	tmp.type = SLY_TYPE_PAIR;
-	tmp.value.gc = sly_create_pair(S, S->stack[i], S->accum);
+	tmp.value.gc = sly_create_pair(S);
 	check_alloc(S, tmp.value.gc);
+	SLY_PAIR(tmp.value.gc)->car = S->stack[i];
+	SLY_PAIR(tmp.value.gc)->cdr = S->accum;
 
 	S->accum = tmp;
       }
@@ -712,8 +718,10 @@ int sly_vm_run(sly_state_t* S)
 
     case SLY_OP_CONS:
       tmp.type = SLY_TYPE_PAIR;
-      tmp.value.gc = sly_create_pair(S, S->stack[--S->sp], S->accum);
+      tmp.value.gc = sly_create_pair(S);
       check_alloc(S, tmp.value.gc);
+      SLY_PAIR(tmp.value.gc)->car = S->stack[--S->sp];
+      SLY_PAIR(tmp.value.gc)->cdr = S->accum;
 
       S->accum = tmp;
       break;

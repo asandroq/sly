@@ -63,14 +63,13 @@ static sly_string_t* string_copy_extern(sly_string_t* s)
   return ret;
 }
 
-sly_gcobject_t *sly_create_box(sly_state_t *S, sly_object_t val)
+sly_gcobject_t *sly_create_box(sly_state_t *S)
 {
   sly_box_t *ret;
 
   ret = (sly_box_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_BOX);
   if(ret) {
     SLY_GCOBJECT(ret)->type = SLY_TYPE_BOX;
-    ret->value = val;
   }
 
   return SLY_GCOBJECT(ret);
@@ -106,15 +105,13 @@ sly_gcobject_t *sly_create_cclosure(sly_state_t *S, sly_cfunction_t func, uint32
   return SLY_GCOBJECT(ret);
 }
 
-sly_gcobject_t *sly_create_pair(sly_state_t *S, sly_object_t car, sly_object_t cdr)
+sly_gcobject_t *sly_create_pair(sly_state_t *S)
 {
   sly_pair_t *ret;
 
   ret = (sly_pair_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_PAIR);
   if(ret) {
     SLY_GCOBJECT(ret)->type = SLY_TYPE_PAIR;
-    ret->car = car;
-    ret->cdr = cdr;
   }
 
   return SLY_GCOBJECT(ret);

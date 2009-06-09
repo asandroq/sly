@@ -161,10 +161,10 @@ struct sly_symbol_t {
  */
 
 
-sly_gcobject_t *sly_create_box(sly_state_t *S, sly_object_t val);
+sly_gcobject_t *sly_create_box(sly_state_t *S);
 sly_gcobject_t *sly_create_sclosure(sly_state_t *S, uint32_t entry, uint32_t nr_vars);
 sly_gcobject_t *sly_create_cclosure(sly_state_t *S, sly_cfunction_t func, uint32_t nr_vars);
-sly_gcobject_t *sly_create_pair(sly_state_t *S, sly_object_t car, sly_object_t cdr);
+sly_gcobject_t *sly_create_pair(sly_state_t *S);
 sly_gcobject_t *sly_create_conti(sly_state_t *S, uint32_t stack_size);
 sly_gcobject_t *sly_create_string(sly_state_t *S, const char* str, uint32_t size);
 sly_gcobject_t *sly_create_vector(sly_state_t *S, uint32_t size);

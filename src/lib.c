@@ -80,10 +80,25 @@ static int minus(sly_state_t* S)
   return 1;
 }
 
+static int number_to_string(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S);
+  } else {
+    sly_number_to_string(S, 1);
+  }
+
+  return 1;
+}
+
 static sly_reg_t lib_regs[] = {
   {">", greater_than},
   {"+", plus},
   {"-", minus},
+  {"number->string", number_to_string},
   {NULL, NULL}
 };
 

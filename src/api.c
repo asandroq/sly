@@ -21,6 +21,7 @@
  * THE SOFTWARE.
  */
 
+#include <stdio.h>
 #include <stddef.h>
 
 #include "sly.h"
@@ -142,6 +143,20 @@ void sly_sub(sly_state_t* S, int idx1, int idx2)
 
   res = S->stack[idx1].value.fixnum - S->stack[idx2].value.fixnum;
   sly_push_integer(S, res);
+}
+
+void sly_number_to_string(sly_state_t* S, int idx)
+{
+  char tmp[20];
+  sly_gcobject_t *str;
+
+  idx = calc_index(S, idx);
+
+  snprintf(tmp, 20, "%d", S->stack[idx].value.fixnum);
+  str = sly_create_string(S, tmp, 0);
+
+  S->stack[S->sp].type = SLY_TYPE_STRING;
+  S->stack[S->sp++].value.gc = str;
 }
 
 void sly_set_global(sly_state_t* S, const char* name)

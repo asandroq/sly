@@ -81,6 +81,9 @@ void sly_unary_minus(sly_state_t* S, int idx);
 void sly_add(sly_state_t* S, int idx1, int idx2);
 void sly_sub(sly_state_t* S, int idx1, int idx2);
 
+/* number I/O */
+void sly_number_to_string(sly_state_t* S, int idx);
+
 /* sets the current object on top of the stack as a global */
 void sly_set_global(sly_state_t* S, const char* name);
 

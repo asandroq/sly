@@ -72,7 +72,7 @@
              (i 0))
     (cond
      ((null? l) i)
-     ((pair? l) (loop (cdr l) (+ i 1)))
+     ((pair? l) (loop (cdr l) (add1 i)))
      (else (error "length applied to non-list" lst l)))))
 
 (define (reverse lst)
@@ -86,7 +86,7 @@
 (define (list-tail ls k)
   (if (= k 0)
       ls
-      (list-tail (cdr ls) (- k 1))))
+      (list-tail (cdr ls) (sub1 k))))
 
 (define (list-ref ls k)
   (car (list-tail ls k)))
@@ -133,4 +133,14 @@
             (write (car l))
             (write " ")
             (loop (cdr l)))))))
+
+;; Temporary bizarre solution
+
+(define gensym
+  (let ((counter 0))
+    (lambda ()
+      (set! counter (add1 counter))
+      (string->symbol
+       (string-append "sly-gensym-"
+                      (number->string counter))))))
 

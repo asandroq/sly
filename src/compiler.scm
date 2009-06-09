@@ -122,8 +122,9 @@
 	  (if (null? rest)
 	      test
 	      (let ((var (gensym)))
-		(list 'let (list (list var test))
-		      (list 'if var var (simplify (cons 'or rest))))))))))
+                (simplify
+                 (list 'let (list (list var test))
+                       (list 'if var var (simplify (cons 'or rest)))))))))))
 
 (define (simplify-begin exp)
   (if (not (null? (cdr exp)))

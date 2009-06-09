@@ -34,7 +34,7 @@ static int greater_than(sly_state_t* S)
     sly_push_boolean(S, 1);
   } else {
     for(i = 0; i < nargs - 1; i++) {
-      if(!sly_greater_than(S, i, i+i)) {
+      if(!sly_greater_than(S, i, i+1)) {
 	sly_push_boolean(S, 0);
 	return 1;
       }

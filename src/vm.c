@@ -196,7 +196,7 @@ void sly_dump(sly_state_t* S)
   }
 
   printf("\n\n");
-
+#if 0
   printf("Globals:\n");
   for(i = 0; i < S->global_env.size; i++) {
     sly_env_var_t var = S->global_env.vars[i];
@@ -209,7 +209,7 @@ void sly_dump(sly_state_t* S)
     printf("]\n");
   }
   printf("\n\n");
-#if 0
+
   printf("Constants:");
   for(i = 0; i < S->nr_consts; i++) {
     printf(" ");

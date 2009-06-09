@@ -1081,6 +1081,7 @@
     (CHAR-P             . 42)
     (FIXNUM-P           . 43)
     (PAIR-P             . 44)
+    (SYMBOL-P           . 45)
 
     ;; primitives optimised as instructions
     (INC                . 60)
@@ -1336,6 +1337,7 @@
     (eqv? EQV 2)
     (string->symbol STRING-TO-SYMBOL 1)
     (pair? PAIR-P 1)
+    (symbol? SYMBOL-P 1)
     (write WRITE 1)
     (abort ABORT 0)
     (debug DEBUG 1)))

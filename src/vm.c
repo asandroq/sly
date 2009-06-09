@@ -115,6 +115,7 @@ static opcode_t global_opcodes[] = {
   {SLY_OP_CHAR_P,                 "CHAR?"},
   {SLY_OP_FIXNUM_P,               "FIXNUM?"},
   {SLY_OP_PAIR_P,                 "PAIR?"},
+  {SLY_OP_SYMBOL_P,               "SYMBOL?"},
   {SLY_OP_INC,                    "INC"},
   {SLY_OP_DEC,                    "DEC"},
   {SLY_OP_FIXNUM_TO_CHAR,         "FIXNUM->CHAR"},
@@ -400,6 +401,10 @@ int sly_vm_run(sly_state_t* S)
 
     case SLY_OP_PAIR_P:
       SLY_SET_BOOL(S->accum.type == SLY_TYPE_PAIR);
+      break;
+
+    case SLY_OP_SYMBOL_P:
+      SLY_SET_BOOL(S->accum.type == SLY_TYPE_SYMBOL);
       break;
 
     case SLY_OP_PUSH:

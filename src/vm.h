@@ -49,6 +49,7 @@
 #define SLY_OP_CHAR_P                 42
 #define SLY_OP_FIXNUM_P               43
 #define SLY_OP_PAIR_P                 44
+#define SLY_OP_SYMBOL_P               45
 
 /* primitives optimised as instructions */
 #define SLY_OP_INC                    60

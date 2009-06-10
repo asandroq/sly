@@ -45,6 +45,11 @@ static int calc_index(sly_state_t* S, int idx)
     idx += S->fp + 1;
   }
 
+  if(!(idx > (int)S->fp && idx < (int)S->sp)) {
+    sly_push_string(S, "index out of range");
+    sly_error(S, 1);
+  }
+
   return idx;
 }
 
@@ -170,8 +175,6 @@ void sly_number_to_string(sly_state_t* S, int idx)
   sly_gcobject_t *str;
 
   idx = calc_index(S, idx);
-
-  sly_write(S, idx);
 
   if(S->stack[idx].type != SLY_TYPE_FIXNUM) {
     sly_push_string(S, "cannot apply to non-number");

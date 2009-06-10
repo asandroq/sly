@@ -88,7 +88,7 @@ static int number_to_string(sly_state_t* S)
     sly_push_string(S, "wrong number of arguments");
     sly_error(S, 1);
   } else {
-    sly_number_to_string(S, 1);
+    sly_number_to_string(S, 0);
   }
 
   return 1;

@@ -61,7 +61,7 @@ void sly_error(sly_state_t* S, int num)
     /* error objects are on top of stack */
     num = -num;
     printf("Error: ");
-    for(i = -1; i >= num; --i) {
+    for(i = num; i < 0; ++i) {
       sly_display(S, i);
     }
     printf("\n");

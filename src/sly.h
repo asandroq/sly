@@ -48,8 +48,11 @@ typedef struct sly_reg_t {
 sly_state_t* sly_open(void);
 void sly_close(sly_state_t* S);
 
-/* signaling errors */
-void sly_error(sly_state_t* S);
+/*
+ * shows the top nr elements of the stack and
+ * then aborts
+ */
+void sly_error(sly_state_t* S, int nr);
 
 /*
  * register several functions as globals
@@ -83,6 +86,10 @@ void sly_sub(sly_state_t* S, int idx1, int idx2);
 
 /* number I/O */
 void sly_number_to_string(sly_state_t* S, int idx);
+
+/* I/O */
+void sly_write(sly_state_t* S, int idx);
+void sly_display(sly_state_t* S, int idx);
 
 /* sets the current object on top of the stack as a global */
 void sly_set_global(sly_state_t* S, const char* name);

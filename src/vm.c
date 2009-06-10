@@ -176,7 +176,7 @@ static void disassemble(sly_state_t* S)
 }
 */
 
-void sly_dump(sly_state_t* S)
+void sly_vm_dump(sly_state_t* S)
 {
   uint32_t i;
 
@@ -220,19 +220,11 @@ void sly_dump(sly_state_t* S)
 #endif
 }
 
-static void sly_abort(sly_state_t *S)
-{
-  sly_dump(S);
-
-  sly_close(S);
-  abort();
-}
-
 static void check_alloc(sly_state_t *S, void* ptr)
 {
   if(ptr == NULL) {
     fprintf(stderr, "sly: Out of memory!\n");
-    sly_abort(S);
+    abort();
   }
 }
 
@@ -313,7 +305,7 @@ int sly_vm_run(sly_state_t* S)
     uint32_t i, j, dw1, dw2;
 
     if(debug) {
-      sly_dump(S);
+      sly_vm_dump(S);
       getchar();
     }
     assert(S->pc < S->code_size);
@@ -470,8 +462,8 @@ int sly_vm_run(sly_state_t* S)
 
     case SLY_OP_TAIL_CALL:
       if(S->accum.type != SLY_TYPE_CLOSURE) {
-	printf("calling non-closure!\n");
-	sly_abort(S);
+        sly_push_string(S, "calling non-closure");
+	sly_error(S, 1);
       }
 
       /*
@@ -506,8 +498,8 @@ int sly_vm_run(sly_state_t* S)
 
     case SLY_OP_CALL:
       if(S->accum.type != SLY_TYPE_CLOSURE) {
-	printf("calling non-closure!\n");
-	sly_abort(S);
+	sly_push_string(S, "calling non-closure");
+	sly_error(S, 1);
       }
 
       /* number of arguments newly pushed */
@@ -643,10 +635,10 @@ int sly_vm_run(sly_state_t* S)
 
     case SLY_OP_CHECKED_GLOBAL_REF:
       if(S->global_env.vars[EXTRACT_ARG(instr)].value.type == SLY_TYPE_UNDEF) {
-	printf("Undefined global referenced: %d ", EXTRACT_ARG(instr));
-	sly_io_write_symbol(S->global_env.vars[EXTRACT_ARG(instr)].symbol);
-	printf("\n");
-	sly_abort(S);
+	sly_push_string(S, "undefined global referenced: ");
+	S->stack[S->sp].type = SLY_TYPE_SYMBOL;
+        S->stack[S->sp++].value.symbol = S->global_env.vars[EXTRACT_ARG(instr)].symbol;
+	sly_error(S, 2);
       }
       /* fall through */
 
@@ -656,10 +648,10 @@ int sly_vm_run(sly_state_t* S)
 
     case SLY_OP_CHECKED_GLOBAL_SET:
       if(S->global_env.vars[EXTRACT_ARG(instr)].value.type == SLY_TYPE_UNDEF) {
-	printf("Undefined global assigned: %d ", EXTRACT_ARG(instr));
-	sly_io_write_symbol(S->global_env.vars[EXTRACT_ARG(instr)].symbol);
-	printf("\n");
-	sly_abort(S);
+	sly_push_string(S, "undefined global assigned: ");
+	S->stack[S->sp].type = SLY_TYPE_SYMBOL;
+        S->stack[S->sp++].value.symbol = S->global_env.vars[EXTRACT_ARG(instr)].symbol;
+	sly_error(S, 2);
       }
       /* fall through */
 
@@ -681,15 +673,15 @@ int sly_vm_run(sly_state_t* S)
 
     case SLY_OP_ARITY_EQ:
       if(S->stack[S->fp].value.fixnum != EXTRACT_ARG(instr)) {
-	printf("Arity mismatch!\n");
-	sly_abort(S);
+	sly_push_string(S, "arity mismatch");
+	sly_error(S, 1);
       }
       break;
 
     case SLY_OP_ARITY_GE:
       if(S->stack[S->fp].value.fixnum < EXTRACT_ARG(instr)) {
-	printf("Variable arity mismatch!\n");
-	sly_abort(S);
+	sly_push_string(S, "variable arity mismatch");
+	sly_error(S, 1);
       }
       break;
 
@@ -719,7 +711,7 @@ int sly_vm_run(sly_state_t* S)
       break;
 
     case SLY_OP_ABORT:
-      sly_abort(S);
+      sly_error(S, 0);
       break;
 
     case SLY_OP_CONS:

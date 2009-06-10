@@ -67,7 +67,7 @@ static int minus(sly_state_t* S)
 
   if(nargs == 0) {
     sly_push_string(S, "not enough arguments");
-    sly_error(S);
+    sly_error(S, 1);
   } else if(nargs == 1) {
     sly_unary_minus(S, -1);
   } else  {
@@ -86,7 +86,7 @@ static int number_to_string(sly_state_t* S)
 
   if(nargs != 1) {
     sly_push_string(S, "wrong number of arguments");
-    sly_error(S);
+    sly_error(S, 1);
   } else {
     sly_number_to_string(S, 1);
   }

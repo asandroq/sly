@@ -24,6 +24,8 @@
 #ifndef __SLY_VM_H__
 #define __SLY_VM_H__
 
+#include "sly.h"
+
 /* instructions without operands */
 #define SLY_OP_LOAD_NIL                1
 #define SLY_OP_LOAD_FALSE              2
@@ -101,5 +103,8 @@
 #define SLY_OP_LISTIFY               142
 #define SLY_OP_CALL                  143
 #define SLY_OP_TAIL_CALL             144
+
+/* dump the state of the VM to standard output */
+void sly_vm_dump(sly_state_t* S);
 
 #endif

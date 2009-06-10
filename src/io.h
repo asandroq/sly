@@ -50,4 +50,6 @@ int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const char* str);
 void sly_io_write(sly_object_t* obj);
 void sly_io_write_symbol(sly_symbol_t* sym);
 
+void sly_io_display(sly_object_t* obj);
+
 #endif

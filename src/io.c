@@ -393,12 +393,7 @@ static void write_string(sly_string_t* s, int quote)
   }
 }
 
-void sly_io_write_symbol(sly_symbol_t *sym)
-{
-  write_string(sym->str, 0);
-}
-
-void sly_io_write(sly_object_t* obj)
+static void sly_io_write_i(sly_object_t* obj, int quote)
 {
   uint32_t i;
 
@@ -425,7 +420,11 @@ void sly_io_write(sly_object_t* obj)
     break;
 
   case SLY_TYPE_CHAR:
-    printf("#\\%c", obj->value.chr);
+    if(quote) {
+      printf("#\\%c", obj->value.chr);
+    } else {
+      printf("%c", obj->value.chr);
+    }
     break;
 
   case SLY_TYPE_SYMBOL:
@@ -454,7 +453,7 @@ void sly_io_write(sly_object_t* obj)
     break;
 
   case SLY_TYPE_STRING:
-    write_string(SLY_STRING(obj->value.gc), 1);
+    write_string(SLY_STRING(obj->value.gc), quote);
     break;
 
   case SLY_TYPE_VECTOR:
@@ -469,5 +468,20 @@ void sly_io_write(sly_object_t* obj)
   default:
     printf("Unknown type!");
   }
+}
+
+void sly_io_write(sly_object_t *obj)
+{
+  sly_io_write_i(obj, 1);
+}
+
+void sly_io_write_symbol(sly_symbol_t *sym)
+{
+  write_string(sym->str, 0);
+}
+
+void sly_io_display(sly_object_t* obj)
+{
+  sly_io_write_i(obj, 0);
 }
 

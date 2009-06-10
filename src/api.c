@@ -25,6 +25,9 @@
 #include <stddef.h>
 
 #include "sly.h"
+
+#include "io.h"
+#include "vm.h"
 #include "state.h"
 
 static int calc_index(sly_state_t* S, int idx)
@@ -39,14 +42,30 @@ static int calc_index(sly_state_t* S, int idx)
     idx = S->sp + idx;
   } else {
     /* count from the frame pointer */
-    idx = S->fp + idx + 1;
+    idx += S->fp + 1;
   }
 
   return idx;
 }
 
-void sly_error(sly_state_t* S)
+void sly_error(sly_state_t* S, int num)
 {
+  if(num > 0 && num < (int)S->sp) {
+    int i;
+
+    /* error objects are on top of stack */
+    num = -num;
+    printf("Error: ");
+    for(i = -1; i >= num; --i) {
+      sly_display(S, i);
+    }
+    printf("\n");
+
+    S->sp += num;
+  }
+
+  sly_vm_dump(S);
+
   sly_close(S);
   abort();
 }
@@ -152,11 +171,32 @@ void sly_number_to_string(sly_state_t* S, int idx)
 
   idx = calc_index(S, idx);
 
+  sly_write(S, idx);
+
+  if(S->stack[idx].type != SLY_TYPE_FIXNUM) {
+    sly_push_string(S, "cannot apply to non-number");
+    sly_error(S, 1);
+  }
+
   snprintf(tmp, 20, "%d", S->stack[idx].value.fixnum);
   str = sly_create_string(S, tmp, 0);
 
   S->stack[S->sp].type = SLY_TYPE_STRING;
   S->stack[S->sp++].value.gc = str;
+}
+
+void sly_write(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+  sly_io_write(&S->stack[idx]);
+}
+
+void sly_display(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+  sly_io_display(&S->stack[idx]);
 }
 
 void sly_set_global(sly_state_t* S, const char* name)

@@ -52,7 +52,7 @@ void sly_close(sly_state_t* S);
  * shows the top nr elements of the stack and
  * then aborts
  */
-void sly_error(sly_state_t* S, int nr);
+int sly_error(sly_state_t* S, int nr);
 
 /*
  * register several functions as globals
@@ -66,18 +66,23 @@ int sly_load_file(sly_state_t* S, const char *fname);
  * object manipulation API
  */
 
-/* the height of the current interface stack */
 int sly_get_top(sly_state_t* S);
+void sly_pop(sly_state_t* S, uint32_t num);
 
 /* type predicates */
+int sly_integerp(sly_state_t* S, int idx);
 int sly_numberp(sly_state_t* S, int idx);
 
 /* push values onto the stack */
 void sly_push_value(sly_state_t* S, int idx);
 void sly_push_boolean(sly_state_t* S, int bool);
 void sly_push_integer(sly_state_t* S, sly_fixnum_t num);
-void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, int nr_vars);
+void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, uint32_t nr_vars);
 void sly_push_string(sly_state_t* S, const char* str);
+void sly_push_vector(sly_state_t* S, uint32_t size);
+
+/* get values from the stack */
+sly_fixnum_t sly_to_integer(sly_state_t* S, int idx);
 
 /* compare values on the stack */
 int sly_greater_than(sly_state_t* S, int idx1, int idx2);
@@ -92,6 +97,9 @@ void sly_number_to_string(sly_state_t* S, int idx);
 
 /* strings */
 void sly_concat(sly_state_t* S, int nr_strings);
+
+/* vectors */
+void sly_vector_set(sly_state_t* S, uint32_t pos, int idx);
 
 /* I/O */
 void sly_write(sly_state_t* S, int idx);

@@ -58,7 +58,7 @@ static uint32_t calc_index(sly_state_t* S, int idx)
   return idx;
 }
 
-void sly_error(sly_state_t* S, int num)
+int sly_error(sly_state_t* S, int num)
 {
   if(num > 0 && num < (int)S->sp) {
     int i;
@@ -78,6 +78,9 @@ void sly_error(sly_state_t* S, int num)
 
   sly_close(S);
   abort();
+
+  /* execution never gets here */
+  return 0;
 }
 
 int sly_get_top(sly_state_t* S)
@@ -87,6 +90,25 @@ int sly_get_top(sly_state_t* S)
    * as the last frame pushed
    */
   return S->sp - S->fp - 1;
+}
+
+void sly_pop(sly_state_t* S, uint32_t num)
+{
+  uint32_t size = S->sp - S->fp - 1;
+
+  if(num > size) {
+    sly_push_string(S, "cannot pop that much");
+    sly_error(S, 1);
+  } else {
+    S->sp -= num;
+  }
+}
+
+int sly_integerp(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+  return S->stack[idx].type == SLY_TYPE_FIXNUM;
 }
 
 int sly_numberp(sly_state_t* S, int idx)
@@ -115,9 +137,9 @@ void sly_push_integer(sly_state_t* S, sly_fixnum_t num)
   S->stack[S->sp++].value.fixnum = num;
 }
 
-void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, int nr_vars)
+void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, uint32_t nr_vars)
 {
-  int i;
+  uint32_t i;
   sly_gcobject_t *cl;
 
   cl = sly_create_cclosure(S, func, nr_vars);
@@ -139,6 +161,28 @@ void sly_push_string(sly_state_t* S, const char* str)
   obj.value.gc = sly_create_string(S, str, 0);
 
   S->stack[S->sp++] = obj;
+}
+
+void sly_push_vector(sly_state_t* S, uint32_t size)
+{
+  sly_object_t obj;
+
+  obj.type = SLY_TYPE_VECTOR;
+  obj.value.gc = sly_create_vector(S, size);
+
+  S->stack[S->sp++] = obj;
+}
+
+sly_fixnum_t sly_to_integer(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+  if(numberp(S, idx)) {
+    return S->stack[idx].value.fixnum;
+  } else {
+    sly_push_string(S, "sly_to_integer: non-number at index position");
+    return sly_error(S, 1);
+  }
 }
 
 int sly_greater_than(sly_state_t* S, int idx1, int idx2)
@@ -294,6 +338,26 @@ void sly_concat(sly_state_t* S, int nr_strs)
     S->sp -= nr_strs;
     S->stack[S->sp].type = SLY_TYPE_STRING;
     S->stack[S->sp++].value.gc = str;
+  }
+}
+
+void sly_vector_set(sly_state_t* S, uint32_t pos, int idx)
+{
+  sly_gcobject_t *vec;
+
+  idx = calc_index(S, idx);
+
+  if(S->stack[idx].type != SLY_TYPE_VECTOR) {
+    sly_push_string(S, "setting non-vector");
+    sly_error(S, 1);
+  }
+
+  vec = S->stack[idx].value.gc;
+  if(pos < SLY_VECTOR(vec)->size) {
+    SLY_VECTOR(vec)->data[pos] = S->stack[--S->sp];
+  } else {
+    sly_push_string(S, "invalid vector position");
+    sly_error(S, 1);
   }
 }
 

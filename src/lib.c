@@ -83,7 +83,7 @@ static int minus(sly_state_t* S)
     sly_push_string(S, "not enough numbers to subtract");
     sly_error(S, 1);
   } else if(nargs == 1) {
-    sly_unary_minus(S, -1);
+    sly_unary_minus(S, 0);
   } else  {
     sly_subtract(S, nargs);
   }
@@ -127,12 +127,77 @@ static int string_append(sly_state_t* S)
   return 1;
 }
 
+/*
+ * R5RS 6.3.6
+ */
+
+static int make_vector(sly_state_t* S)
+{
+  int i, size, nargs = sly_get_top(S);
+
+  if(nargs != 1 && nargs != 2) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(!sly_integerp(S, 0)) {
+    sly_push_string(S, "non-integer size given to vector: ");
+    sly_push_value(S, 0);
+    sly_error(S, 2);
+  }
+
+  size = sly_to_integer(S, 0);
+  sly_push_vector(S, size);
+
+  if(nargs == 2) {
+    for(i = 0; i < size; i++) {
+      sly_push_value(S, 1);
+      sly_vector_set(S, i, -2);
+    }
+  }
+
+  return 1;
+}
+
+static int vector_set(sly_state_t* S)
+{
+  int i, nargs = sly_get_top(S);
+
+  if(nargs != 3) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  i = sly_to_integer(S, 1);
+  sly_vector_set(S, i, 0);
+  sly_pop(S, 1);
+
+  return 1;
+}
+
+static int write(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  sly_write(S, 0);
+
+  return 1;
+}
+
 static sly_reg_t lib_regs[] = {
   {">", greater_than},
   {"+", plus},
   {"-", minus},
   {"number->string", number_to_string},
   {"string-append", string_append},
+  {"make-vector", make_vector},
+  {"vector-set!", vector_set},
+  {"write", write},
   {NULL, NULL}
 };
 

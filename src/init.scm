@@ -109,6 +109,21 @@
    ((equal? x (car lst)) lst)
    (else (member x (cdr lst)))))
 
+;;
+;; R5RS 6.3.6
+;;
+
+(define vector
+  (lambda args
+    (let* ((len (length args))
+           (vec (make-vector len)))
+      (let loop ((i 0))
+        (if (= i len)
+            vec
+            (let ((arg (list-ref args i)))
+              (vector-set! vec i arg)
+              (loop (add1 i))))))))
+
 ;; R5RS 6.4
 
 ;; this is not a complete map implementation

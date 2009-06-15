@@ -26,12 +26,24 @@
 #include "sly.h"
 #include "object.h"
 
+/*
+ * R5RS 6.2.5
+ */
+
 static int greater_than(sly_state_t* S)
 {
   int i, nargs = sly_get_top(S);
 
-  if(nargs < 2) {
-    sly_push_boolean(S, 1);
+  if(nargs == 0) {
+    sly_push_string(S, "cannot compare zero numbers");
+    sly_error(S, 1);
+  } else if(nargs == 1) {
+    if(!sly_numberp(S, 0)) {
+      sly_push_string(S, "cannot compare single non-number");
+      sly_error(S, 1);
+    } else {
+      sly_push_boolean(S, 1);
+    }
   } else {
     for(i = 0; i < nargs - 1; i++) {
       if(!sly_greater_than(S, i, i+1)) {
@@ -66,7 +78,7 @@ static int minus(sly_state_t* S)
   int i, nargs = sly_get_top(S);
 
   if(nargs == 0) {
-    sly_push_string(S, "not enough arguments");
+    sly_push_string(S, "not enough numbers to subtract");
     sly_error(S, 1);
   } else if(nargs == 1) {
     sly_unary_minus(S, -1);
@@ -79,6 +91,10 @@ static int minus(sly_state_t* S)
 
   return 1;
 }
+
+/*
+ * R5RS 6.2.6
+ */
 
 static int number_to_string(sly_state_t* S)
 {
@@ -94,11 +110,30 @@ static int number_to_string(sly_state_t* S)
   return 1;
 }
 
+/*
+ * R5RS 6.3.5
+ */
+
+static int string_append(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs == 0) {
+    sly_push_string(S, "cannot append zero strings");
+    sly_error(S, 1);
+  } else {
+    sly_concat(S, nargs);
+  }
+
+  return 1;
+}
+
 static sly_reg_t lib_regs[] = {
   {">", greater_than},
   {"+", plus},
   {"-", minus},
   {"number->string", number_to_string},
+  {"string-append", string_append},
   {NULL, NULL}
 };
 

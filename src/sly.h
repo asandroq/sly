@@ -69,6 +69,9 @@ int sly_load_file(sly_state_t* S, const char *fname);
 /* the height of the current interface stack */
 int sly_get_top(sly_state_t* S);
 
+/* type predicates */
+int sly_numberp(sly_state_t* S, int idx);
+
 /* push values onto the stack */
 void sly_push_value(sly_state_t* S, int idx);
 void sly_push_boolean(sly_state_t* S, int bool);
@@ -86,6 +89,9 @@ void sly_sub(sly_state_t* S, int idx1, int idx2);
 
 /* number I/O */
 void sly_number_to_string(sly_state_t* S, int idx);
+
+/* strings */
+void sly_concat(sly_state_t* S, int nr_strings);
 
 /* I/O */
 void sly_write(sly_state_t* S, int idx);

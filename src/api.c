@@ -30,7 +30,7 @@
 #include "vm.h"
 #include "state.h"
 
-static int calc_index(sly_state_t* S, int idx)
+static uint32_t calc_index(sly_state_t* S, int idx)
 {
   /*
    * TODO: better checking of index interval
@@ -82,6 +82,13 @@ int sly_get_top(sly_state_t* S)
    * as the last frame pushed
    */
   return S->sp - S->fp - 1;
+}
+
+int sly_numberp(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+  return S->stack[idx].type == SLY_TYPE_FIXNUM;
 }
 
 void sly_push_value(sly_state_t* S, int idx)
@@ -186,6 +193,43 @@ void sly_number_to_string(sly_state_t* S, int idx)
 
   S->stack[S->sp].type = SLY_TYPE_STRING;
   S->stack[S->sp++].value.gc = str;
+}
+
+void sly_concat(sly_state_t* S, int nr_strs)
+{
+  if(nr_strs < 0) {
+    sly_push_string(S, "sly_concat: negative number of strings");
+    sly_error(S, 1);
+  } else if(nr_strs == 0) {
+    sly_push_string(S, "");
+  } else {
+    sly_gcobject_t *str, *tmp;
+    uint32_t i, j, k, first, last, total_size = 0;
+
+    first = calc_index(S, -nr_strs);
+    last = calc_index(S, -1);
+
+    for(i = first; i <= last; i++) {
+      if(S->stack[i].type != SLY_TYPE_STRING) {
+        sly_push_string(S, "sly_concat: non-string given");
+        sly_error(S, 1);
+      } else {
+        total_size += SLY_STRING(S->stack[i].value.gc)->size;
+      }
+    }
+
+    str = sly_create_string(S, NULL, total_size);
+    for(k = 0, i = first; i <= last; i++) {
+      tmp = S->stack[i].value.gc;
+      for(j = 0; j < SLY_STRING(tmp)->size; j++) {
+        SLY_STRING(str)->chars[k++] = SLY_STRING(tmp)->chars[j];
+      }
+    }
+
+    S->sp -= nr_strs;
+    S->stack[S->sp].type = SLY_TYPE_STRING;
+    S->stack[S->sp++].value.gc = str;
+  }
 }
 
 void sly_write(sly_state_t* S, int idx)

@@ -1105,8 +1105,7 @@
     (STRING-TO-SYMBOL   . 77)
     (MAKE-VECTOR        . 78)
     (VECTOR-SET         . 79)
-    (WRITE              . 80)
-    (DEBUG              . 81)
+    (DEBUG              . 80)
 
     ;; instructions that take an operand
     (LOAD-FIXNUM        . 120)
@@ -1339,7 +1338,6 @@
     (string->symbol STRING-TO-SYMBOL 1)
     (pair? PAIR-P 1)
     (symbol? SYMBOL-P 1)
-    (write WRITE 1)
     (abort ABORT 0)
     (debug DEBUG 1)))
 

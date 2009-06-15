@@ -74,8 +74,7 @@
 #define SLY_OP_STRING_TO_SYMBOL       77
 #define SLY_OP_MAKE_VECTOR            78
 #define SLY_OP_VECTOR_SET             79
-#define SLY_OP_WRITE                  80
-#define SLY_OP_DEBUG                  81
+#define SLY_OP_DEBUG                  80
 
 /* instructions with one operand */
 #define SLY_OP_LOAD_FIXNUM           120

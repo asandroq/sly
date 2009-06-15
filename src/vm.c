@@ -136,7 +136,6 @@ static opcode_t global_opcodes[] = {
   {SLY_OP_STRING_TO_SYMBOL,       "STRING->SYMBOL"},
   {SLY_OP_MAKE_VECTOR,            "MAKE-VECTOR"},
   {SLY_OP_VECTOR_SET,             "VECTOR-SET"},
-  {SLY_OP_WRITE,                  "WRITE"},
   {SLY_OP_DEBUG,                  "DEBUG"},
   {0, NULL}
 };
@@ -788,10 +787,6 @@ int sly_vm_run(sly_state_t* S)
       dw1 = S->stack[--S->sp].value.fixnum;
       S->accum = S->stack[--S->sp];
       SLY_VECTOR(S->accum.value.gc)->data[dw1] = tmp;    
-      break;
-
-    case SLY_OP_WRITE:
-      sly_io_write(&S->accum);
       break;
 
     case SLY_OP_DEBUG:

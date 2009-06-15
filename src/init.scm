@@ -137,18 +137,6 @@
                             res)))
      (else (error "map applied to non-list")))))
 
-;; Error handling
-
-(define error
-  (lambda args
-    (let loop ((l args))
-      (if (null? l)
-          (abort)
-          (begin
-            (write (car l))
-            (write " ")
-            (loop (cdr l)))))))
-
 ;; Temporary bizarre solution
 
 (define gensym

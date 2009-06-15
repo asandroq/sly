@@ -189,6 +189,11 @@ static int write(sly_state_t* S)
   return 1;
 }
 
+static int error(sly_state_t* S)
+{
+  return sly_error(S, sly_get_top(S));
+}
+
 static sly_reg_t lib_regs[] = {
   {">", greater_than},
   {"+", plus},
@@ -198,6 +203,7 @@ static sly_reg_t lib_regs[] = {
   {"make-vector", make_vector},
   {"vector-set!", vector_set},
   {"write", write},
+  {"error", error},
   {NULL, NULL}
 };
 

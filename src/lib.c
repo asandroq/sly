@@ -59,15 +59,17 @@ static int greater_than(sly_state_t* S)
 
 static int plus(sly_state_t* S)
 {
-  int i, nargs = sly_get_top(S);
+  int nargs = sly_get_top(S);
 
   if(nargs == 0) {
     sly_push_integer(S, 0);
-  } else if(nargs > 1) {
-    sly_push_value(S, 0);
-    for(i = 1; i < nargs; i++) {
-      sly_add(S, -1, i);
+  } else if(nargs == 1) {
+    if(!sly_numberp(S, 0)) {
+      sly_push_string(S, "cannot add single non-number");
+      sly_error(S, 1);
     }
+  } else {
+    sly_add(S, nargs);
   }
 
   return 1;
@@ -75,7 +77,7 @@ static int plus(sly_state_t* S)
 
 static int minus(sly_state_t* S)
 {
-  int i, nargs = sly_get_top(S);
+  int nargs = sly_get_top(S);
 
   if(nargs == 0) {
     sly_push_string(S, "not enough numbers to subtract");
@@ -83,10 +85,7 @@ static int minus(sly_state_t* S)
   } else if(nargs == 1) {
     sly_unary_minus(S, -1);
   } else  {
-    sly_push_value(S, 0);
-    for(i = 1; i < nargs; i++) {
-      sly_sub(S, -1, i);
-    }
+    sly_subtract(S, nargs);
   }
 
   return 1;

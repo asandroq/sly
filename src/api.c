@@ -30,6 +30,11 @@
 #include "vm.h"
 #include "state.h"
 
+static int numberp(sly_state_t* S, uint32_t idx)
+{
+  return S->stack[idx].type == SLY_TYPE_FIXNUM;
+}
+
 static uint32_t calc_index(sly_state_t* S, int idx)
 {
   /*
@@ -154,26 +159,86 @@ void sly_unary_minus(sly_state_t* S, int idx)
   sly_push_integer(S, res);
 }
 
-void sly_add(sly_state_t* S, int idx1, int idx2)
+void sly_add(sly_state_t* S, int nr_nums)
 {
-  sly_fixnum_t res;
-  
-  idx1 = calc_index(S, idx1);
-  idx2 = calc_index(S, idx2);
+  if(nr_nums < 0) {
+    sly_push_string(S, "sly_add: negative number of numbers given");
+    sly_error(S, 1);
+  } else if(nr_nums == 0) {
+    sly_push_integer(S, 0);
+  } else if(nr_nums == 1) {
+    if(!numberp(S, S->sp-1)) {
+      sly_push_string(S, "sly_add: non-number single argument given: ");
+      sly_push_value(S, -2);
+      sly_error(S, 1);
+    }
+  } else {
+    sly_fixnum_t res;
+    uint32_t i, first, last;
 
-  res = S->stack[idx1].value.fixnum + S->stack[idx2].value.fixnum;
-  sly_push_integer(S, res);
+    first = calc_index(S, -nr_nums);
+    last = calc_index(S, -1);
+
+    for(res = 0, i = first; i <= last; i++) {
+      if(!numberp(S, i)) {
+        sly_push_string(S, "sly_add: non-number given: ");
+        S->stack[S->sp++] = S->stack[i];
+        sly_error(S, -2);
+      } else {
+        res += S->stack[i].value.fixnum;
+      }
+    }
+
+    S->sp -= nr_nums;
+    S->stack[S->sp].type = SLY_TYPE_FIXNUM;
+    S->stack[S->sp++].value.fixnum = res;
+  }
 }
 
-void sly_sub(sly_state_t* S, int idx1, int idx2)
+void sly_subtract(sly_state_t* S, int nr_nums)
 {
-  sly_fixnum_t res;
-  
-  idx1 = calc_index(S, idx1);
-  idx2 = calc_index(S, idx2);
+  if(nr_nums < 0) {
+    sly_push_string(S, "sly_subtract: negative number of numbers given");
+    sly_error(S, 1);
+  } else if(nr_nums == 0) {
+    sly_push_string(S, "sly_subtract: cannot subtract zero arguments");
+    sly_error(S, 1);
+  } else if(nr_nums == 1) {
+    if(!numberp(S, S->sp-1)) {
+      sly_push_string(S, "sly_subtract: non-number single argument given: ");
+      sly_push_value(S, -2);
+      sly_error(S, 1);
+    } else {
+      S->stack[S->sp-1].value.fixnum = -S->stack[S->sp-1].value.fixnum;
+    }
+  } else {
+    sly_fixnum_t res;
+    uint32_t i, first, last;
 
-  res = S->stack[idx1].value.fixnum - S->stack[idx2].value.fixnum;
-  sly_push_integer(S, res);
+    first = calc_index(S, -nr_nums);
+    last = calc_index(S, -1);
+
+    if(!numberp(S, first)) {
+      sly_push_string(S, "sly_subtract: non-number given: ");
+      S->stack[S->sp++] = S->stack[first];
+      sly_error(S, -2);
+    } else {
+      res = S->stack[first].value.fixnum;
+    }
+    for(i = first + 1; i <= last; i++) {
+      if(!numberp(S, i)) {
+        sly_push_string(S, "sly_subtract: non-number given: ");
+        S->stack[S->sp++] = S->stack[i];
+        sly_error(S, -2);
+      } else {
+        res -= S->stack[i].value.fixnum;
+      }
+    }
+
+    S->sp -= nr_nums;
+    S->stack[S->sp].type = SLY_TYPE_FIXNUM;
+    S->stack[S->sp++].value.fixnum = res;
+  }
 }
 
 void sly_number_to_string(sly_state_t* S, int idx)

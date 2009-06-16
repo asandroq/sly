@@ -106,4 +106,7 @@
 /* dump the state of the VM to standard output */
 void sly_vm_dump(sly_state_t* S);
 
+/* calls a procedure */
+void sly_vm_call(sly_state_t *S);
+
 #endif

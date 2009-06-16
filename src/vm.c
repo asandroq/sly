@@ -242,18 +242,30 @@ static void return_from_call(sly_state_t* S)
   S->pc = (S->stack[--S->sp]).value.fixnum;
 }
 
-static void call_c_closure(sly_state_t* S, sly_closure_t *clos)
+void sly_vm_call(sly_state_t* S)
 {
-  int ret;
+  sly_closure_t *clos;
 
-  /* arguments are already in position, do the call */
-  ret = (clos->entry_point.c)(S);
+  /* setting current procedure */
+  S->proc = S->accum;
+  clos  = SLY_CLOSURE(S->proc.value.gc);
 
-  /* result is on top of stack */
-  S->accum = S->stack[S->sp-1];
+  /* executing closure code */
+  if(clos->is_c) {
+    int ret;
 
-  /* now must do a 'return' */
-  return_from_call(S);
+    /* arguments are already in position, do the call */
+    ret = (clos->entry_point.c)(S);
+
+    /* result is on top of stack */
+    S->accum = S->stack[S->sp-1];
+
+    /* now must do a 'return' */
+    return_from_call(S);
+  } else {
+    /* just jump to closure code */
+    S->pc = clos->entry_point.scm;
+  }
 }
 
 #define SLY_SET_BOOL(cond)		\
@@ -484,15 +496,7 @@ int sly_vm_run(sly_state_t* S)
       S->sp = S->fp + dw1 + 1;
       S->stack[S->fp].value.fixnum = dw1;
 
-      /* setting current procedure */
-      S->proc = S->accum;
-
-      /* executing closure code */
-      if(SLY_CLOSURE(S->proc.value.gc)->is_c) {
-	call_c_closure(S, SLY_CLOSURE(S->proc.value.gc));
-      } else {
-	S->pc = SLY_CLOSURE(S->proc.value.gc)->entry_point.scm;
-      }
+      sly_vm_call(S);
       break;
 
     case SLY_OP_CALL:
@@ -508,15 +512,7 @@ int sly_vm_run(sly_state_t* S)
       S->fp = S->sp - dw1 - 1;
       S->stack[S->fp].value.fixnum = dw1;
 
-      /* setting current procedure */
-      S->proc = S->accum;
-
-      /* executing closure code */
-      if(SLY_CLOSURE(S->proc.value.gc)->is_c) {
-	call_c_closure(S, SLY_CLOSURE(S->proc.value.gc));
-      } else {
-	S->pc = SLY_CLOSURE(S->proc.value.gc)->entry_point.scm;
-      }
+      sly_vm_call(S);
       break;
 
     case SLY_OP_RETURN:

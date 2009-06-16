@@ -74,6 +74,7 @@ int sly_integerp(sly_state_t* S, int idx);
 int sly_numberp(sly_state_t* S, int idx);
 int sly_pairp(sly_state_t* S, int idx);
 int sly_vectorp(sly_state_t* S, int idx);
+int sly_procedurep(sly_state_t* S, int idx);
 
 /* push values onto the stack */
 void sly_push_value(sly_state_t* S, int idx);
@@ -94,8 +95,8 @@ void sly_symbol_to_string(sly_state_t* S, int idx);
 
 /* arithmetic */
 void sly_unary_minus(sly_state_t* S, int idx);
-void sly_add(sly_state_t* S, int nr_numbers);
-void sly_subtract(sly_state_t* S, int nr_numbers);
+void sly_add(sly_state_t* S, uint32_t nr_numbers);
+void sly_subtract(sly_state_t* S, uint32_t nr_numbers);
 
 /* number I/O */
 void sly_number_to_string(sly_state_t* S, int idx);
@@ -106,11 +107,14 @@ void sly_car(sly_state_t* S, int idx);
 void sly_cdr(sly_state_t* S, int idx);
 
 /* strings */
-void sly_concat(sly_state_t* S, int nr_strings);
+void sly_concat(sly_state_t* S, uint32_t nr_strings);
 
 /* vectors */
 void sly_vector_ref(sly_state_t* S, uint32_t pos, int idx);
 void sly_vector_set(sly_state_t* S, uint32_t pos, int idx);
+
+/* control */
+void sly_apply(sly_state_t* S, int idx, uint32_t nr_args);
 
 /* I/O */
 void sly_write(sly_state_t* S, int idx);

@@ -99,14 +99,11 @@ int sly_get_top(sly_state_t* S)
 
 void sly_pop(sly_state_t* S, uint32_t num)
 {
-  uint32_t size = S->sp - S->fp - 1;
+#ifdef SLY_DEBUG_API
+  assert(num < S->sp - S->fp);
+#endif
 
-  if(num > size) {
-    sly_push_string(S, "cannot pop that much");
-    sly_error(S, 1);
-  } else {
-    S->sp -= num;
-  }
+  S->sp -= num;
 }
 
 static int check_type(sly_state_t* S, int idx, int type)
@@ -134,6 +131,11 @@ int sly_pairp(sly_state_t* S, int idx)
 int sly_vectorp(sly_state_t* S, int idx)
 {
   return check_type(S, idx, SLY_TYPE_VECTOR);
+}
+
+int sly_procedurep(sly_state_t* S, int idx)
+{
+  return check_type(S, idx, SLY_TYPE_CLOSURE);
 }
 
 void sly_push_value(sly_state_t* S, int idx)
@@ -195,12 +197,11 @@ sly_fixnum_t sly_to_integer(sly_state_t* S, int idx)
 {
   idx = calc_index(S, idx);
 
-  if(numberp(S, idx)) {
-    return S->stack[idx].value.fixnum;
-  } else {
-    sly_push_string(S, "sly_to_integer: non-number at index position");
-    return sly_error(S, 1);
-  }
+#ifdef SLY_DEBUG_API
+  assert(numberp(S, idx));
+#endif
+
+  return S->stack[idx].value.fixnum;
 }
 
 int sly_greater_than(sly_state_t* S, int idx1, int idx2)
@@ -213,24 +214,23 @@ int sly_greater_than(sly_state_t* S, int idx1, int idx2)
 
 void sly_symbol_to_string(sly_state_t* S, int idx)
 {
+  uint32_t size;
+  sly_symbol_t *sym;
+  sly_gcobject_t *str;
+
   idx = calc_index(S, idx);
 
-  if(S->stack[idx].type != SLY_TYPE_SYMBOL) {
-    sly_push_string(S, "cannot convert non-symbol to string");
-    sly_error(S, 1);
-  } else {
-    uint32_t size;
-    sly_symbol_t *sym;
-    sly_gcobject_t *str;
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_SYMBOL);
+#endif
 
-    sym = S->stack[idx].value.symbol;
-    size = sym->str->size;
-    str = sly_create_string(S, NULL, size);
-    memcpy(SLY_STRING(str)->chars, sym->str->chars, size * sizeof(sly_char_t));
+  sym = S->stack[idx].value.symbol;
+  size = sym->str->size;
+  str = sly_create_string(S, NULL, size);
+  memcpy(SLY_STRING(str)->chars, sym->str->chars, size * sizeof(sly_char_t));
 
-    S->stack[S->sp].type = SLY_TYPE_STRING;
-    S->stack[S->sp++].value.gc = str;
-  }
+  S->stack[S->sp].type = SLY_TYPE_STRING;
+  S->stack[S->sp++].value.gc = str;
 }
 
 void sly_unary_minus(sly_state_t* S, int idx)
@@ -239,23 +239,28 @@ void sly_unary_minus(sly_state_t* S, int idx)
 
   idx = calc_index(S, idx);
 
+#ifdef SLY_DEBUG_API
+  assert(numberp(S, idx));
+#endif
+
   res = - S->stack[idx].value.fixnum;
   sly_push_integer(S, res);
 }
 
-void sly_add(sly_state_t* S, int nr_nums)
+void sly_add(sly_state_t* S, uint32_t nr_nums)
 {
-  if(nr_nums < 0) {
-    sly_push_string(S, "sly_add: negative number of numbers given");
-    sly_error(S, 1);
-  } else if(nr_nums == 0) {
+#ifdef SLY_DEBUG_API
+  assert(nr_nums < S->sp - S->fp);
+#endif
+
+  if(nr_nums == 0) {
     sly_push_integer(S, 0);
   } else if(nr_nums == 1) {
-    if(!numberp(S, S->sp-1)) {
-      sly_push_string(S, "sly_add: non-number single argument given: ");
-      sly_push_value(S, -2);
-      sly_error(S, 1);
-    }
+
+#ifdef SLY_DEBUG_API
+    assert(numberp(S, S->sp-1));
+#endif
+
   } else {
     sly_fixnum_t res;
     uint32_t i, first, last;
@@ -264,13 +269,12 @@ void sly_add(sly_state_t* S, int nr_nums)
     last = calc_index(S, -1);
 
     for(res = 0, i = first; i <= last; i++) {
-      if(!numberp(S, i)) {
-        sly_push_string(S, "sly_add: non-number given: ");
-        S->stack[S->sp++] = S->stack[i];
-        sly_error(S, -2);
-      } else {
-        res += S->stack[i].value.fixnum;
-      }
+
+#ifdef SLY_DEBUG_API
+      assert(numberp(S, i));
+#endif
+
+      res += S->stack[i].value.fixnum;
     }
 
     S->sp -= nr_nums;
@@ -279,10 +283,10 @@ void sly_add(sly_state_t* S, int nr_nums)
   }
 }
 
-void sly_subtract(sly_state_t* S, int nr_nums)
+void sly_subtract(sly_state_t* S, uint32_t nr_nums)
 {
 #ifdef SLY_DEBUG_API
-  assert(nr_nums > 0);
+  assert(nr_nums < S->sp - S->fp);
 #endif
 
   if(nr_nums == 1) {
@@ -299,21 +303,19 @@ void sly_subtract(sly_state_t* S, int nr_nums)
     first = calc_index(S, -nr_nums);
     last = calc_index(S, -1);
 
-    if(!numberp(S, first)) {
-      sly_push_string(S, "sly_subtract: non-number given: ");
-      S->stack[S->sp++] = S->stack[first];
-      sly_error(S, -2);
-    } else {
-      res = S->stack[first].value.fixnum;
-    }
+#ifdef SLY_DEBUG_API
+    assert(numberp(S, first));
+#endif
+
+    res = S->stack[first].value.fixnum;
+
     for(i = first + 1; i <= last; i++) {
-      if(!numberp(S, i)) {
-        sly_push_string(S, "sly_subtract: non-number given: ");
-        S->stack[S->sp++] = S->stack[i];
-        sly_error(S, -2);
-      } else {
-        res -= S->stack[i].value.fixnum;
-      }
+
+#ifdef SLY_DEBUG_API
+      assert(numberp(S, i));
+#endif
+
+      res -= S->stack[i].value.fixnum;
     }
 
     S->sp -= nr_nums;
@@ -377,12 +379,13 @@ void sly_cdr(sly_state_t* S, int idx)
   S->stack[S->sp++] = SLY_PAIR(S->stack[idx].value.gc)->cdr;
 }
 
-void sly_concat(sly_state_t* S, int nr_strs)
+void sly_concat(sly_state_t* S, uint32_t nr_strs)
 {
-  if(nr_strs < 0) {
-    sly_push_string(S, "sly_concat: negative number of strings");
-    sly_error(S, 1);
-  } else if(nr_strs == 0) {
+#ifdef SLY_DEBUG_API
+  assert(nr_strs < S->sp - S->fp);
+#endif
+
+  if(nr_strs == 0) {
     sly_push_string(S, "");
   } else {
     sly_gcobject_t *str, *tmp;
@@ -392,12 +395,12 @@ void sly_concat(sly_state_t* S, int nr_strs)
     last = calc_index(S, -1);
 
     for(i = first; i <= last; i++) {
-      if(S->stack[i].type != SLY_TYPE_STRING) {
-        sly_push_string(S, "sly_concat: non-string given");
-        sly_error(S, 1);
-      } else {
-        total_size += SLY_STRING(S->stack[i].value.gc)->size;
-      }
+
+#ifdef SLY_DEBUG_API
+      assert(S->stack[i].type == SLY_TYPE_STRING);
+#endif
+
+      total_size += SLY_STRING(S->stack[i].value.gc)->size;
     }
 
     str = sly_create_string(S, NULL, total_size);
@@ -450,6 +453,55 @@ void sly_vector_set(sly_state_t* S, uint32_t pos, int idx)
 #endif
 
   SLY_VECTOR(vec)->data[pos] = S->stack[--S->sp];
+}
+
+void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
+{
+  sly_object_t p;
+  uint32_t old_pc, first, proc;
+
+  proc = calc_index(S, idx);
+  first = calc_index(S, -nr_args);
+
+#ifdef SLY_DEBUG_API
+  assert(nr_args > 0);
+  assert(nr_args < S->sp - S->fp);
+  assert(S->stack[proc].type == SLY_TYPE_CLOSURE);
+  assert(S->stack[S->sp-1].type == SLY_TYPE_PAIR);
+#endif
+
+  old_pc = S->pc;
+
+  /* creating fake frame */
+  sly_push_integer(S, 0);
+  S->stack[S->sp++] = S->proc;
+  sly_push_integer(S, S->fp);
+
+  S->fp = S->sp++;
+  S->stack[S->fp].type = SLY_TYPE_FIXNUM;
+
+  /* adding non-list arguments */
+  if(nr_args > 1) {
+    memcpy(&S->stack[S->sp],
+           &S->stack[first],
+           (nr_args-1) * sizeof(sly_object_t));
+    S->sp += nr_args - 1;
+  }
+
+  /* add arguments from list */
+  --nr_args;
+  for(p = S->stack[S->fp-4]; p.type == SLY_TYPE_PAIR; nr_args++) {
+    S->stack[S->sp++] = SLY_PAIR(p.value.gc)->car;
+    p = SLY_PAIR(p.value.gc)->cdr;
+  }
+
+  /* calling */
+  S->stack[S->fp].value.fixnum = nr_args;
+  S->accum = S->stack[proc];
+  sly_vm_call(S);
+  S->pc = old_pc;
+
+  S->stack[S->sp++] = S->accum;
 }
 
 void sly_write(sly_state_t* S, int idx)

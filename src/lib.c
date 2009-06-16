@@ -284,6 +284,35 @@ static int vector_set(sly_state_t* S)
   return 1;
 }
 
+/*
+ * R5RS 6.4
+ */
+
+static int apply(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs < 2) {
+    sly_push_string(S, "too few arguments to apply");
+    sly_error(S, 1);
+  }
+
+  if(!sly_procedurep(S, 0)) {
+    sly_push_string(S, "cannot apply non-procedure");
+    sly_error(S, 1);
+  }
+
+  /* TODO: test for list, not pair */
+  if(!sly_pairp(S, -1)) {
+    sly_push_string(S, "last argument to apply must be a pair");
+    sly_error(S, 1);
+  }
+
+  sly_apply(S, 0, nargs-1);
+
+  return 1;
+}
+
 static int write(sly_state_t* S)
 {
   int nargs = sly_get_top(S);
@@ -316,6 +345,7 @@ static sly_reg_t lib_regs[] = {
   {"make-vector", make_vector},
   {"vector-ref", vector_ref},
   {"vector-set!", vector_set},
+  {"apply", apply},
   {"write", write},
   {"error", error},
   {NULL, NULL}

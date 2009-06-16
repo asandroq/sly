@@ -26,6 +26,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef SLY_DEBUG_API
+#include <assert.h>
+#endif
+
 #include "sly.h"
 
 #include "io.h"
@@ -52,10 +56,9 @@ static uint32_t calc_index(sly_state_t* S, int idx)
     idx += S->fp + 1;
   }
 
-  if(!(idx > (int)S->fp && idx < (int)S->sp)) {
-    sly_push_string(S, "index out of range");
-    sly_error(S, 1);
-  }
+#ifdef SLY_DEBUG_API
+  assert(idx > (int)S->fp && idx < (int)S->sp);
+#endif
 
   return idx;
 }
@@ -106,18 +109,31 @@ void sly_pop(sly_state_t* S, uint32_t num)
   }
 }
 
-int sly_integerp(sly_state_t* S, int idx)
+static int check_type(sly_state_t* S, int idx, int type)
 {
   idx = calc_index(S, idx);
 
-  return S->stack[idx].type == SLY_TYPE_FIXNUM;
+  return S->stack[idx].type == type;
+}
+
+int sly_integerp(sly_state_t* S, int idx)
+{
+  return check_type(S, idx, SLY_TYPE_FIXNUM);
 }
 
 int sly_numberp(sly_state_t* S, int idx)
 {
-  idx = calc_index(S, idx);
+  return check_type(S, idx, SLY_TYPE_FIXNUM);
+}
 
-  return S->stack[idx].type == SLY_TYPE_FIXNUM;
+int sly_pairp(sly_state_t* S, int idx)
+{
+  return check_type(S, idx, SLY_TYPE_PAIR);
+}
+
+int sly_vectorp(sly_state_t* S, int idx)
+{
+  return check_type(S, idx, SLY_TYPE_VECTOR);
 }
 
 void sly_push_value(sly_state_t* S, int idx)
@@ -265,20 +281,17 @@ void sly_add(sly_state_t* S, int nr_nums)
 
 void sly_subtract(sly_state_t* S, int nr_nums)
 {
-  if(nr_nums < 0) {
-    sly_push_string(S, "sly_subtract: negative number of numbers given");
-    sly_error(S, 1);
-  } else if(nr_nums == 0) {
-    sly_push_string(S, "sly_subtract: cannot subtract zero arguments");
-    sly_error(S, 1);
-  } else if(nr_nums == 1) {
-    if(!numberp(S, S->sp-1)) {
-      sly_push_string(S, "sly_subtract: non-number single argument given: ");
-      sly_push_value(S, -2);
-      sly_error(S, 1);
-    } else {
-      S->stack[S->sp-1].value.fixnum = -S->stack[S->sp-1].value.fixnum;
-    }
+#ifdef SLY_DEBUG_API
+  assert(nr_nums > 0);
+#endif
+
+  if(nr_nums == 1) {
+
+#ifdef SLY_DEBUG_API
+    assert(numberp(S, S->sp-1));
+#endif
+
+    S->stack[S->sp-1].value.fixnum = -S->stack[S->sp-1].value.fixnum;
   } else {
     sly_fixnum_t res;
     uint32_t i, first, last;
@@ -316,16 +329,52 @@ void sly_number_to_string(sly_state_t* S, int idx)
 
   idx = calc_index(S, idx);
 
-  if(S->stack[idx].type != SLY_TYPE_FIXNUM) {
-    sly_push_string(S, "cannot apply to non-number");
-    sly_error(S, 1);
-  }
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_FIXNUM);
+#endif
 
   snprintf(tmp, 20, "%d", S->stack[idx].value.fixnum);
   str = sly_create_string(S, tmp, 0);
 
   S->stack[S->sp].type = SLY_TYPE_STRING;
   S->stack[S->sp++].value.gc = str;
+}
+
+void sly_cons(sly_state_t* S, int idx1, int idx2)
+{
+  sly_gcobject_t *pair;
+
+  idx1 = calc_index(S, idx1);
+  idx1 = calc_index(S, idx1);
+
+  pair = sly_create_pair(S);
+  SLY_PAIR(pair)->car = S->stack[idx1];
+  SLY_PAIR(pair)->cdr = S->stack[idx2];
+
+  S->stack[S->sp].type = SLY_TYPE_PAIR;
+  S->stack[S->sp++].value.gc = pair;
+}
+
+void sly_car(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_PAIR);
+#endif
+
+  S->stack[S->sp++] = SLY_PAIR(S->stack[idx].value.gc)->car;
+}
+
+void sly_cdr(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_PAIR);
+#endif
+
+  S->stack[S->sp++] = SLY_PAIR(S->stack[idx].value.gc)->cdr;
 }
 
 void sly_concat(sly_state_t* S, int nr_strs)
@@ -365,24 +414,42 @@ void sly_concat(sly_state_t* S, int nr_strs)
   }
 }
 
+void sly_vector_ref(sly_state_t* S, uint32_t pos, int idx)
+{
+  sly_gcobject_t *vec;
+
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_VECTOR);
+#endif
+
+  vec = S->stack[idx].value.gc;
+
+#ifdef SLY_DEBUG_API
+  assert(pos < SLY_VECTOR(vec)->size);
+#endif
+
+  S->stack[S->sp++] = SLY_VECTOR(vec)->data[pos];
+}
+
 void sly_vector_set(sly_state_t* S, uint32_t pos, int idx)
 {
   sly_gcobject_t *vec;
 
   idx = calc_index(S, idx);
 
-  if(S->stack[idx].type != SLY_TYPE_VECTOR) {
-    sly_push_string(S, "setting non-vector");
-    sly_error(S, 1);
-  }
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_VECTOR);
+#endif
 
   vec = S->stack[idx].value.gc;
-  if(pos < SLY_VECTOR(vec)->size) {
-    SLY_VECTOR(vec)->data[pos] = S->stack[--S->sp];
-  } else {
-    sly_push_string(S, "invalid vector position");
-    sly_error(S, 1);
-  }
+
+#ifdef SLY_DEBUG_API
+  assert(pos < SLY_VECTOR(vec)->size);
+#endif
+
+  SLY_VECTOR(vec)->data[pos] = S->stack[--S->sp];
 }
 
 void sly_write(sly_state_t* S, int idx)

@@ -72,6 +72,8 @@ void sly_pop(sly_state_t* S, uint32_t num);
 /* type predicates */
 int sly_integerp(sly_state_t* S, int idx);
 int sly_numberp(sly_state_t* S, int idx);
+int sly_pairp(sly_state_t* S, int idx);
+int sly_vectorp(sly_state_t* S, int idx);
 
 /* push values onto the stack */
 void sly_push_value(sly_state_t* S, int idx);
@@ -98,10 +100,16 @@ void sly_subtract(sly_state_t* S, int nr_numbers);
 /* number I/O */
 void sly_number_to_string(sly_state_t* S, int idx);
 
+/* lists */
+void sly_cons(sly_state_t* S, int idx1, int idx2);
+void sly_car(sly_state_t* S, int idx);
+void sly_cdr(sly_state_t* S, int idx);
+
 /* strings */
 void sly_concat(sly_state_t* S, int nr_strings);
 
 /* vectors */
+void sly_vector_ref(sly_state_t* S, uint32_t pos, int idx);
 void sly_vector_set(sly_state_t* S, uint32_t pos, int idx);
 
 /* I/O */

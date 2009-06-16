@@ -110,6 +110,62 @@ static int number_to_string(sly_state_t* S)
 }
 
 /*
+ * R5RS 6.3.2
+ */
+
+static int cons(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 2) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  sly_cons(S, 0, 1);
+
+  return 1;
+}
+
+static int car(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(!sly_pairp(S, 0)) {
+    sly_push_string(S, "cannot extract the car of non-pair");
+    sly_error(S, 1);
+  }
+
+  sly_car(S, 0);
+
+  return 1;
+}
+
+static int cdr(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(!sly_pairp(S, 0)) {
+    sly_push_string(S, "cannot extract the cdr of non-pair");
+    sly_error(S, 1);
+  }
+
+  sly_cdr(S, 0);
+
+  return 1;
+}
+
+/*
  * R5RS 6.3.3
  */
 
@@ -177,12 +233,47 @@ static int make_vector(sly_state_t* S)
   return 1;
 }
 
+static int vector_ref(sly_state_t* S)
+{
+  int i, nargs = sly_get_top(S);
+
+  if(nargs != 2) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(!sly_vectorp(S, 0)) {
+    sly_push_string(S, "cannot index non-vector");
+    sly_error(S, 1);
+  }
+
+  if(!sly_integerp(S, 1)) {
+    sly_push_string(S, "cannot index vector using a non-integer");
+    sly_error(S, 1);
+  }
+
+  i = sly_to_integer(S, 1);
+  sly_vector_ref(S, i, 0);
+
+  return 1;
+}
+
 static int vector_set(sly_state_t* S)
 {
   int i, nargs = sly_get_top(S);
 
   if(nargs != 3) {
     sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(!sly_vectorp(S, 0)) {
+    sly_push_string(S, "cannot set non-vector");
+    sly_error(S, 1);
+  }
+
+  if(!sly_integerp(S, 1)) {
+    sly_push_string(S, "cannot index vector using a non-integer");
     sly_error(S, 1);
   }
 
@@ -217,9 +308,13 @@ static sly_reg_t lib_regs[] = {
   {"+", plus},
   {"-", minus},
   {"number->string", number_to_string},
+  {"cons", cons},
+  {"car", car},
+  {"cdr", cdr},
   {"symbol->string", symbol_to_string},
   {"string-append", string_append},
   {"make-vector", make_vector},
+  {"vector-ref", vector_ref},
   {"vector-set!", vector_set},
   {"write", write},
   {"error", error},

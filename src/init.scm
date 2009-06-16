@@ -65,6 +65,12 @@
 (define (cdddar x) (cdr (cdr (cdr (car x)))))
 (define (cddddr x) (cdr (cdr (cdr (cdr x)))))
 
+(define (list? l)
+  (cond
+   ((null? l) #t)
+   ((pair? l) (list? (cdr l)))
+   (else #f)))
+
 (define list (lambda args args))
 
 (define (length lst)
@@ -74,6 +80,23 @@
      ((null? l) i)
      ((pair? l) (loop (cdr l) (add1 i)))
      (else (error "length applied to non-list" lst l)))))
+
+(define append
+  (lambda args
+    (let loop ((lol args)
+               (res '()))
+      (if (null? lol)
+          res
+          (let ((l (car lol)))
+            (if (list? l)
+                (let loop2 ((l l)
+                            (res res))
+                  (if (null? l)
+                      (loop (cdr lol) res)
+                      (loop2 (cdr l) (cons (car l) res))))
+                (if (null? (cdr lol))
+                    (cons (reverse res) l)
+                    (error "non-list must be last in append"))))))))
 
 (define (reverse lst)
   (let loop ((l lst)
@@ -108,6 +131,19 @@
    ((null? lst) #f)
    ((equal? x (car lst)) lst)
    (else (member x (cdr lst)))))
+
+(define (assq x alist)
+  (if (list? alist)
+      (let loop ((al alist))
+        (if (null? al)
+            #f
+            (let ((pair (car al)))
+              (if (pair? pair)
+                  (if (eq? x (car pair))
+                      pair
+                      (loop (cdr al)))
+                  (error "pair-list expected")))))
+      (error "list expected")))
 
 ;;
 ;; R5RS 6.3.6

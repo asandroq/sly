@@ -87,6 +87,9 @@ sly_fixnum_t sly_to_integer(sly_state_t* S, int idx);
 /* compare values on the stack */
 int sly_greater_than(sly_state_t* S, int idx1, int idx2);
 
+/* convert values on stack */
+void sly_symbol_to_string(sly_state_t* S, int idx);
+
 /* arithmetic */
 void sly_unary_minus(sly_state_t* S, int idx);
 void sly_add(sly_state_t* S, int nr_numbers);

@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "sly.h"
 
@@ -192,6 +193,28 @@ int sly_greater_than(sly_state_t* S, int idx1, int idx2)
   idx2 = calc_index(S, idx2);
 
   return S->stack[idx1].value.fixnum > S->stack[idx2].value.fixnum;
+}
+
+void sly_symbol_to_string(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+  if(S->stack[idx].type != SLY_TYPE_SYMBOL) {
+    sly_push_string(S, "cannot convert non-symbol to string");
+    sly_error(S, 1);
+  } else {
+    uint32_t size;
+    sly_symbol_t *sym;
+    sly_gcobject_t *str;
+
+    sym = S->stack[idx].value.symbol;
+    size = sym->str->size;
+    str = sly_create_string(S, NULL, size);
+    memcpy(SLY_STRING(str)->chars, sym->str->chars, size * sizeof(sly_char_t));
+
+    S->stack[S->sp].type = SLY_TYPE_STRING;
+    S->stack[S->sp++].value.gc = str;
+  }
 }
 
 void sly_unary_minus(sly_state_t* S, int idx)

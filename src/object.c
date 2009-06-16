@@ -37,18 +37,6 @@ static int string_equal_p(sly_string_t *s1, sly_string_t *s2)
   return memcmp(s1->chars, s2->chars, s1->size * sizeof(sly_char_t)) == 0;
 }
 
-/*
-static sly_string_t* string_copy(sly_state_t* S, sly_string_t* s)
-{
-  sly_string_t *ret;
-
-  ret = sly_gc_alloc_string(&S->store, s->size);
-  memcpy(ret->chars, s->chars, s->size * sizeof(sly_char_t));
-
-  return ret;
-}
-*/
-
 static sly_string_t* string_copy_extern(sly_string_t* s)
 {
   uint32_t size;

@@ -110,6 +110,24 @@ static int number_to_string(sly_state_t* S)
 }
 
 /*
+ * R5RS 6.3.3
+ */
+
+static int symbol_to_string(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  sly_symbol_to_string(S, 0);
+
+  return 1;
+}
+
+/*
  * R5RS 6.3.5
  */
 
@@ -199,6 +217,7 @@ static sly_reg_t lib_regs[] = {
   {"+", plus},
   {"-", minus},
   {"number->string", number_to_string},
+  {"symbol->string", symbol_to_string},
   {"string-append", string_append},
   {"make-vector", make_vector},
   {"vector-set!", vector_set},

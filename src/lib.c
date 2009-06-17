@@ -165,6 +165,24 @@ static int cdr(sly_state_t* S)
   return 1;
 }
 
+static int listp(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(sly_listp(S, 0)) {
+    sly_push_boolean(S, 1);
+  } else {
+    sly_push_boolean(S, 0);
+  }
+
+  return 1;
+}
+
 /*
  * R5RS 6.3.3
  */
@@ -302,8 +320,7 @@ static int apply(sly_state_t* S)
     sly_error(S, 1);
   }
 
-  /* TODO: test for list, not pair */
-  if(!sly_pairp(S, -1)) {
+  if(!sly_listp(S, -1)) {
     sly_push_string(S, "last argument to apply must be a pair");
     sly_error(S, 1);
   }
@@ -340,6 +357,7 @@ static sly_reg_t lib_regs[] = {
   {"cons", cons},
   {"car", car},
   {"cdr", cdr},
+  {"list?", listp},
   {"symbol->string", symbol_to_string},
   {"string-append", string_append},
   {"make-vector", make_vector},

@@ -128,6 +128,35 @@ int sly_pairp(sly_state_t* S, int idx)
   return check_type(S, idx, SLY_TYPE_PAIR);
 }
 
+int sly_listp(sly_state_t* S, int idx)
+{
+  sly_gcobject_t *p;
+
+  idx = calc_index(S, idx);
+
+  if(S->stack[idx].type == SLY_TYPE_NIL) {
+    return 1;
+  }
+
+  if(S->stack[idx].type != SLY_TYPE_PAIR) {
+    return 0;
+  }
+
+  p = S->stack[idx].value.gc;
+  for(;;) {
+    sly_object_t cdr;
+
+    cdr = SLY_PAIR(p)->cdr;
+    if(cdr.type == SLY_TYPE_NIL) {
+      return 1;
+    } else if(cdr.type != SLY_TYPE_PAIR) {
+      return 0;
+    } else {
+      p = cdr.value.gc;
+    }
+  }
+}
+
 int sly_vectorp(sly_state_t* S, int idx)
 {
   return check_type(S, idx, SLY_TYPE_VECTOR);

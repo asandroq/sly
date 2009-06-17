@@ -73,6 +73,7 @@ void sly_pop(sly_state_t* S, uint32_t num);
 int sly_integerp(sly_state_t* S, int idx);
 int sly_numberp(sly_state_t* S, int idx);
 int sly_pairp(sly_state_t* S, int idx);
+int sly_listp(sly_state_t* S, int idx);
 int sly_vectorp(sly_state_t* S, int idx);
 int sly_procedurep(sly_state_t* S, int idx);
 

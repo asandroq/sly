@@ -65,12 +65,6 @@
 (define (cdddar x) (cdr (cdr (cdr (car x)))))
 (define (cddddr x) (cdr (cdr (cdr (cdr x)))))
 
-(define (list? l)
-  (cond
-   ((null? l) #t)
-   ((pair? l) (list? (cdr l)))
-   (else #f)))
-
 (define list (lambda args args))
 
 (define (length lst)

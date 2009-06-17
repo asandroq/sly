@@ -435,12 +435,29 @@ static void sly_io_write_i(sly_object_t* obj, int quote)
     printf("<#closure>");
     break;
 
-  case SLY_TYPE_PAIR:
+  case SLY_TYPE_PAIR: {
+    sly_object_t cdr;
+    sly_gcobject_t *p = obj->value.gc;
+
     printf("(");
-    sly_io_write(&(((sly_pair_t*)obj->value.gc)->car));
-    printf(" . ");
-    sly_io_write(&(((sly_pair_t*)obj->value.gc)->cdr));
+    for(;;) {
+    
+      sly_io_write(&(SLY_PAIR(p)->car));
+
+      cdr = SLY_PAIR(p)->cdr;
+      if(cdr.type == SLY_TYPE_NIL) {
+        break;
+      } else if(cdr.type != SLY_TYPE_PAIR) {
+        printf (" . ");
+        sly_io_write(&cdr);
+        break;
+      } else {
+        printf(" ");
+        p = cdr.value.gc;
+      }
+    }
     printf(")");
+  }
     break;
 
   case SLY_TYPE_CONTI:

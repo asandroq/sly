@@ -476,7 +476,9 @@ static void sly_io_write_i(sly_object_t* obj, int quote)
   case SLY_TYPE_VECTOR:
     printf("#(");
     for(i = 0; i < SLY_VECTOR(obj->value.gc)->size; i++) {
-      printf(" ");
+      if(i != 0) {
+        printf(" ");
+      }
       sly_io_write(SLY_VECTOR(obj->value.gc)->data + i);
     }
     printf(")");

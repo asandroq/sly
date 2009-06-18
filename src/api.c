@@ -487,7 +487,7 @@ void sly_vector_set(sly_state_t* S, uint32_t pos, int idx)
 void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
 {
   sly_object_t p;
-  uint32_t old_pc, first, proc;
+  uint32_t first, proc;
 
   proc = calc_index(S, idx);
   first = calc_index(S, -nr_args);
@@ -499,10 +499,8 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
   assert(S->stack[S->sp-1].type == SLY_TYPE_PAIR);
 #endif
 
-  old_pc = S->pc;
-
   /* creating fake frame */
-  sly_push_integer(S, 0);
+  sly_push_integer(S, S->pc);
   S->stack[S->sp++] = S->proc;
   sly_push_integer(S, S->fp);
 
@@ -528,7 +526,6 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
   S->stack[S->fp].value.fixnum = nr_args;
   S->accum = S->stack[proc];
   sly_vm_call(S);
-  S->pc = old_pc;
 
   S->stack[S->sp++] = S->accum;
 }

@@ -304,7 +304,7 @@ void sly_vm_call(sly_state_t* S)
  *        +=====================+
  *        |    previous frame   |
  */
-int sly_vm_run(sly_state_t* S)
+static int sly_vm_run(sly_state_t* S)
 {
   int go_on = 1, debug = 0;
 
@@ -317,7 +317,7 @@ int sly_vm_run(sly_state_t* S)
 
     if(debug) {
       sly_vm_dump(S);
-      getchar();
+      /*getchar();*/
     }
     assert(S->pc < S->code_size);
 

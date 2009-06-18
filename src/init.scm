@@ -107,7 +107,7 @@
      (else (error "reverse applied to non-list" lst)))))
 
 (define (list-tail ls k)
-  (if (= k 0)
+  (if (zero? 0)
       ls
       (list-tail (cdr ls) (sub1 k))))
 
@@ -153,12 +153,13 @@
   (lambda args
     (let* ((len (length args))
            (vec (make-vector len)))
-      (let loop ((i 0))
-        (if (= i len)
+      (let loop ((i 0)
+                 (args args))
+        (if (null? args)
             vec
-            (let ((arg (list-ref args i)))
-              (vector-set! vec i arg)
-              (loop (add1 i))))))))
+            (begin
+              (vector-set! vec i (car args))
+              (loop (add1 i) (cdr args))))))))
 
 ;; R5RS 6.4
 

@@ -21,6 +21,7 @@
  * THE SOFTWARE.
  */
 
+#include <stdio.h>
 #include <stddef.h>
 
 #include "sly.h"
@@ -341,7 +342,14 @@ static int write(sly_state_t* S)
 
   sly_write(S, 0);
 
-  return 1;
+  return 0;
+}
+
+static int newline(sly_state_t* S)
+{
+  printf("\n");
+
+  return 0;
 }
 
 static int error(sly_state_t* S)
@@ -365,6 +373,7 @@ static sly_reg_t lib_regs[] = {
   {"vector-set!", vector_set},
   {"apply", apply},
   {"write", write},
+  {"newline", newline},
   {"error", error},
   {NULL, NULL}
 };

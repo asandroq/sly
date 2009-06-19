@@ -242,30 +242,20 @@ static void return_from_call(sly_state_t* S)
   S->pc = (S->stack[--S->sp]).value.fixnum;
 }
 
-void sly_vm_call(sly_state_t* S)
+static void call_c_closure(sly_state_t* S, sly_closure_t *clos)
 {
-  sly_closure_t *clos;
+  int ret;
 
-  /* setting current procedure */
-  S->proc = S->accum;
-  clos  = SLY_CLOSURE(S->proc.value.gc);
+  /* arguments are already in position, do the call */
+  ret = (clos->entry_point.c)(S);
 
-  /* executing closure code */
-  if(clos->is_c) {
-    int ret;
-
-    /* arguments are already in position, do the call */
-    ret = (clos->entry_point.c)(S);
-
-    /* result is on top of stack */
+  /* result is on top of stack */
+  if(ret) {
     S->accum = S->stack[S->sp-1];
-
-    /* now must do a 'return' */
-    return_from_call(S);
-  } else {
-    /* just jump to closure code */
-    S->pc = clos->entry_point.scm;
   }
+
+  /* now must do a 'return' */
+  return_from_call(S);
 }
 
 #define SLY_SET_BOOL(cond)		\
@@ -496,7 +486,15 @@ static int sly_vm_run(sly_state_t* S)
       S->sp = S->fp + dw1 + 1;
       S->stack[S->fp].value.fixnum = dw1;
 
-      sly_vm_call(S);
+      /* setting active procedure */
+      S->proc = S->accum;
+
+      if(SLY_CLOSURE(S->proc.value.gc)->is_c) {
+        call_c_closure(S, SLY_CLOSURE(S->proc.value.gc));
+      } else {
+        /* just jump to closure code */
+        S->pc = SLY_CLOSURE(S->proc.value.gc)->entry_point.scm;
+      }
       break;
 
     case SLY_OP_CALL:
@@ -512,7 +510,15 @@ static int sly_vm_run(sly_state_t* S)
       S->fp = S->sp - dw1 - 1;
       S->stack[S->fp].value.fixnum = dw1;
 
-      sly_vm_call(S);
+      /* setting active procedure */
+      S->proc = S->accum;
+
+      if(SLY_CLOSURE(S->proc.value.gc)->is_c) {
+        call_c_closure(S, SLY_CLOSURE(S->proc.value.gc));
+      } else {
+        /* just jump to closure code */
+        S->pc = SLY_CLOSURE(S->proc.value.gc)->entry_point.scm;
+      }
       break;
 
     case SLY_OP_RETURN:
@@ -599,8 +605,6 @@ static int sly_vm_run(sly_state_t* S)
       break;
 
     case SLY_OP_HALT:
-      sly_io_write(&S->accum);
-      printf("\n");
       go_on = 0;
       break;
 
@@ -795,6 +799,17 @@ static int sly_vm_run(sly_state_t* S)
   }
 
   return 1;
+}
+
+void sly_vm_call(sly_state_t* S)
+{
+  if(SLY_CLOSURE(S->proc.value.gc)->is_c) {
+    call_c_closure(S, SLY_CLOSURE(S->proc.value.gc));
+  } else {
+    /* reenter the virtual machine */
+    S->pc = SLY_CLOSURE(S->proc.value.gc)->entry_point.scm;
+    sly_vm_run(S);
+  }
 }
 
 /*
@@ -1108,7 +1123,7 @@ int sly_load_file(sly_state_t* S, const char *fname)
   /* initial frame on stack with address of halt instruction */
   /* return address */
   (S->stack[S->sp  ]).type = SLY_TYPE_FIXNUM;
-  (S->stack[S->sp++]).value.fixnum = 0;
+  (S->stack[S->sp++]).value.fixnum = SLY_HALT_ADDRESS;
 
   /* saved procedure */
   S->stack[S->sp++] = S->proc;

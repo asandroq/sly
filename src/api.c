@@ -496,11 +496,11 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
   assert(nr_args > 0);
   assert(nr_args < S->sp - S->fp);
   assert(S->stack[proc].type == SLY_TYPE_CLOSURE);
-  assert(S->stack[S->sp-1].type == SLY_TYPE_PAIR);
+  assert(sly_listp(S, -1));
 #endif
 
   /* creating fake frame */
-  sly_push_integer(S, S->pc);
+  sly_push_integer(S, SLY_HALT_ADDRESS);
   S->stack[S->sp++] = S->proc;
   sly_push_integer(S, S->fp);
 
@@ -524,7 +524,7 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
 
   /* calling */
   S->stack[S->fp].value.fixnum = nr_args;
-  S->accum = S->stack[proc];
+  S->proc = S->stack[proc];
   sly_vm_call(S);
 
   S->stack[S->sp++] = S->accum;

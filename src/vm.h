@@ -103,10 +103,13 @@
 #define SLY_OP_CALL                  143
 #define SLY_OP_TAIL_CALL             144
 
+/* address of HALT instruction */
+#define SLY_HALT_ADDRESS               0
+
 /* dump the state of the VM to standard output */
 void sly_vm_dump(sly_state_t* S);
 
-/* calls a procedure */
-void sly_vm_call(sly_state_t *S);
+/* performs the call protocol */
+void sly_vm_call(sly_state_t* S);
 
 #endif

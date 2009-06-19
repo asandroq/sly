@@ -101,9 +101,12 @@ int sly_greater_than(sly_state_t* S, int idx1, int idx2);
 void sly_symbol_to_string(sly_state_t* S, int idx);
 
 /* arithmetic */
+void sly_invert(sly_state_t* S, int idx);
 void sly_unary_minus(sly_state_t* S, int idx);
 void sly_add(sly_state_t* S, uint32_t nr_numbers);
 void sly_subtract(sly_state_t* S, uint32_t nr_numbers);
+void sly_divide(sly_state_t* S, uint32_t nr_numbers);
+void sly_round(sly_state_t* S, int idx);
 
 /* number I/O */
 void sly_number_to_string(sly_state_t* S, int idx);

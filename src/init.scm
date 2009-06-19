@@ -145,6 +145,8 @@
                   (error "pair-list expected")))))
       (error "list expected")))
 
+(define assv assq)
+
 ;;
 ;; R5RS 6.3.6
 ;;
@@ -174,8 +176,9 @@
                             res)))
      (else (error "map applied to non-list")))))
 
-;; Temporary bizarre solution
+(define for-each map)
 
+;; Temporary bizarre solution
 (define gensym
   (let ((counter 0))
     (lambda ()

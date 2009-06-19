@@ -281,6 +281,17 @@ void sly_symbol_to_string(sly_state_t* S, int idx)
   S->stack[S->sp++].value.gc = str;
 }
 
+void sly_invert(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(numberp(S, idx));
+#endif
+
+  sly_push_integer(S, 1);
+}
+
 void sly_unary_minus(sly_state_t* S, int idx)
 {
   sly_fixnum_t res;
@@ -370,6 +381,59 @@ void sly_subtract(sly_state_t* S, uint32_t nr_nums)
     S->stack[S->sp].type = SLY_TYPE_FIXNUM;
     S->stack[S->sp++].value.fixnum = res;
   }
+}
+
+void sly_divide(sly_state_t* S, uint32_t nr_nums)
+{
+#ifdef SLY_DEBUG_API
+  assert(nr_nums < S->sp - S->fp);
+#endif
+
+  if(nr_nums == 1) {
+
+#ifdef SLY_DEBUG_API
+    assert(numberp(S, S->sp-1));
+#endif
+
+    S->stack[S->sp-1].value.fixnum = 1;
+  } else {
+    sly_fixnum_t res;
+    uint32_t i, first, last;
+
+    first = calc_index(S, -nr_nums);
+    last = calc_index(S, -1);
+
+#ifdef SLY_DEBUG_API
+    assert(numberp(S, first));
+#endif
+
+    res = S->stack[first].value.fixnum;
+
+    for(i = first + 1; i <= last; i++) {
+
+#ifdef SLY_DEBUG_API
+      assert(numberp(S, i));
+#endif
+
+      res /= S->stack[i].value.fixnum;
+    }
+
+    S->sp -= nr_nums;
+    S->stack[S->sp].type = SLY_TYPE_FIXNUM;
+    S->stack[S->sp++].value.fixnum = res;
+  }
+}
+
+void sly_round(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+    assert(numberp(S, idx));
+#endif
+
+    S->stack[S->sp].type = SLY_TYPE_FIXNUM;
+    S->stack[S->sp++].value.fixnum = S->stack[idx].value.fixnum;
 }
 
 void sly_number_to_string(sly_state_t* S, int idx)

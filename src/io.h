@@ -29,6 +29,9 @@
 
 char* sly_strdup(const char* str);
 
+typedef struct sly_inport_t  sly_inport_t;
+typedef struct sly_outport_t sly_outport_t;
+
 /*
  * A string buffer. This string buffer enlarges itself automatically to
  * accommodate new characters. It never shrinks.

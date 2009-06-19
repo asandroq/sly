@@ -25,9 +25,61 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "sly.h"
 #include "io.h"
+
+#define SLY_BUF_SIZE        2048
+
+/* port modes */
+#define SLY_PORT_BINARY     1
+#define SLY_PORT_TEXT       2
+
+/* port types */
+#define SLY_PORT_FILE       3
+
+/* I/O port "classes" */
+struct sly_inport_t {
+  uint8_t mode;
+  uint8_t type;
+
+  int (*peek_byte)(sly_inport_t *self, uint8_t *b);
+  int (*peek_char)(sly_inport_t *self, sly_char_t *c);
+
+  int (*read_byte)(sly_inport_t *self, uint8_t *b);
+  int (*read_char)(sly_inport_t *self, sly_char_t *c);
+};
+
+struct sly_outport_t {
+  uint8_t mode;
+  uint8_t type;
+
+  int (*flush)(sly_outport_t* self);
+  int (*write_byte)(sly_outport_t* self, uint8_t b);
+  int (*write_char)(sly_outport_t* self, sly_char_t c);
+};
+
+/* file ports */
+
+struct sly_file_inport_t {
+  sly_inport_t base;
+  int fd;
+};
+
+struct sly_file_outport_t {
+  sly_outport_t base;
+  int fd;
+  uint8_t pos;
+  uint8_t buf[SLY_BUF_SIZE];
+};
+
+typedef struct sly_file_inport_t  sly_file_inport_t;
+typedef struct sly_file_outport_t sly_file_outport_t;
+
+/*
+ * utilities
+ */
 
 char* sly_strdup(const char* str)
 {
@@ -141,6 +193,123 @@ const char* sly_sbuffer_string(sly_sbuffer_t* buffer)
 int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const char* str)
 {
   return strcmp(buffer->str, str) == 0;
+}
+
+/*
+ * file ports
+ */
+
+static int fp_flush(sly_file_outport_t *p)
+{
+  ssize_t ret;
+
+  ret = write(p->fd, p->buf, p->pos * sizeof(uint8_t));
+  if(ret < p->pos) {
+    return 0;
+  } else {
+    p->pos = 0;
+    return 1;
+  }
+}
+
+static int fp_write_byte(sly_file_outport_t *p, uint8_t b)
+{
+  p->buf[p->pos++] = b;
+
+  if(p->pos == SLY_BUF_SIZE) {
+    --p->pos;
+    return fp_flush(p);
+  } else {
+    return 1;
+  }
+}
+
+static int fp_write_char(sly_file_outport_t *p, sly_char_t c)
+{
+  p->buf[p->pos++] = (uint8_t)c;
+
+  if(p->pos == SLY_BUF_SIZE) {
+    --p->pos;
+    return fp_flush(p);
+  } else {
+    return 1;
+  }
+}
+
+/*
+ * generic port interface
+ */
+
+static uint8_t port_peek_byte(sly_state_t* S, sly_inport_t *p)
+{
+  uint8_t res;
+
+  if(p->peek_byte(p, &res)) {
+    return res;
+  } else {
+    sly_push_string(S, "cannot peek byte");
+    return (uint8_t)sly_error(S, 1);
+  }
+}
+
+static sly_char_t port_peek_char(sly_state_t* S, sly_inport_t *p)
+{
+  sly_char_t res;
+
+  if(p->peek_char(p, &res)) {
+    return res;
+  } else {
+    sly_push_string(S, "cannot peek char");
+    return (sly_char_t)sly_error(S, 1);
+  }
+}
+
+static uint8_t port_read_byte(sly_state_t* S, sly_inport_t *p)
+{
+  uint8_t res;
+
+  if(p->read_byte(p, &res)) {
+    return res;
+  } else {
+    sly_push_string(S, "cannot read byte");
+    return (uint8_t)sly_error(S, 1);
+  }
+}
+
+static sly_char_t port_read_char(sly_state_t* S, sly_inport_t *p)
+{
+  sly_char_t res;
+
+  if(p->read_char(p, &res)) {
+    return res;
+  } else {
+    sly_push_string(S, "cannot read char");
+    return (sly_char_t)sly_error(S, 1);
+  }
+}
+
+static void port_flush(sly_state_t* S, sly_outport_t *p)
+{
+  if(!p->flush(p)) {
+    sly_push_string(S, "cannot flush port");
+    sly_error(S, 1);
+  }
+}
+
+static void port_write_byte(sly_state_t* S, sly_outport_t *p, uint8_t b)
+{
+  if(!p->write_byte(p, b)) {
+    sly_push_string(S, "cannot write byte");
+    sly_error(S, 1);
+  }
+}
+
+static void port_write_char(sly_state_t* S, sly_outport_t *p, sly_char_t c)
+{
+  if(!p->write_char(p, c)) {
+    sly_push_string(S, "cannot write char");
+    sly_error(S, 1);
+  }
 }
 
 /*

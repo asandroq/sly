@@ -30,6 +30,9 @@
 #include <inttypes.h>
 #endif
 
+/* character type */
+typedef uint32_t sly_char_t;
+
 /* type of small integers */
 typedef uint32_t sly_fixnum_t;
 
@@ -74,12 +77,14 @@ int sly_integerp(sly_state_t* S, int idx);
 int sly_numberp(sly_state_t* S, int idx);
 int sly_pairp(sly_state_t* S, int idx);
 int sly_listp(sly_state_t* S, int idx);
+int sly_stringp(sly_state_t* S, int idx);
 int sly_vectorp(sly_state_t* S, int idx);
 int sly_procedurep(sly_state_t* S, int idx);
 
 /* push values onto the stack */
 void sly_push_value(sly_state_t* S, int idx);
 void sly_push_boolean(sly_state_t* S, int bool);
+void sly_push_char(sly_state_t* S, sly_char_t chr);
 void sly_push_integer(sly_state_t* S, sly_fixnum_t num);
 void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, uint32_t nr_vars);
 void sly_push_string(sly_state_t* S, const char* str);
@@ -89,6 +94,7 @@ void sly_push_vector(sly_state_t* S, uint32_t size);
 sly_fixnum_t sly_to_integer(sly_state_t* S, int idx);
 
 /* compare values on the stack */
+int sly_less_than(sly_state_t* S, int idx1, int idx2);
 int sly_greater_than(sly_state_t* S, int idx1, int idx2);
 
 /* convert values on stack */
@@ -108,9 +114,12 @@ void sly_car(sly_state_t* S, int idx);
 void sly_cdr(sly_state_t* S, int idx);
 
 /* strings */
+uint32_t sly_string_length(sly_state_t* S, int idx);
+sly_char_t sly_string_ref(sly_state_t* S, uint32_t pos, int idx);
 void sly_concat(sly_state_t* S, uint32_t nr_strings);
 
 /* vectors */
+uint32_t sly_vector_length(sly_state_t* S, int idx);
 void sly_vector_ref(sly_state_t* S, uint32_t pos, int idx);
 void sly_vector_set(sly_state_t* S, uint32_t pos, int idx);
 

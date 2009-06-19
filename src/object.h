@@ -60,7 +60,6 @@
 typedef struct sly_object_t sly_object_t;
 typedef struct sly_gcobject_t sly_gcobject_t;
 
-typedef uint32_t sly_char_t;
 typedef struct sly_box_t sly_box_t;
 typedef struct sly_closure_t sly_closure_t;
 typedef struct sly_pair_t sly_pair_t;

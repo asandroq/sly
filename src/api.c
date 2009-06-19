@@ -157,6 +157,11 @@ int sly_listp(sly_state_t* S, int idx)
   }
 }
 
+int sly_stringp(sly_state_t* S, int idx)
+{
+  return check_type(S, idx, SLY_TYPE_STRING);
+}
+
 int sly_vectorp(sly_state_t* S, int idx)
 {
   return check_type(S, idx, SLY_TYPE_VECTOR);
@@ -178,6 +183,12 @@ void sly_push_boolean(sly_state_t* S, int bool)
 {
   S->stack[S->sp].type = SLY_TYPE_BOOL;
   S->stack[S->sp++].value.bool = bool ? 1 : 0;
+}
+
+void sly_push_char(sly_state_t* S, sly_char_t c)
+{
+  S->stack[S->sp].type = SLY_TYPE_CHAR;
+  S->stack[S->sp++].value.chr = c;
 }
 
 void sly_push_integer(sly_state_t* S, sly_fixnum_t num)
@@ -231,6 +242,14 @@ sly_fixnum_t sly_to_integer(sly_state_t* S, int idx)
 #endif
 
   return S->stack[idx].value.fixnum;
+}
+
+int sly_less_than(sly_state_t* S, int idx1, int idx2)
+{
+  idx1 = calc_index(S, idx1);
+  idx2 = calc_index(S, idx2);
+
+  return S->stack[idx1].value.fixnum < S->stack[idx2].value.fixnum;
 }
 
 int sly_greater_than(sly_state_t* S, int idx1, int idx2)
@@ -408,6 +427,36 @@ void sly_cdr(sly_state_t* S, int idx)
   S->stack[S->sp++] = SLY_PAIR(S->stack[idx].value.gc)->cdr;
 }
 
+uint32_t sly_string_length(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_STRING);
+#endif
+
+  return SLY_STRING(S->stack[idx].value.gc)->size;
+}
+
+sly_char_t sly_string_ref(sly_state_t* S, uint32_t pos, int idx)
+{
+  sly_gcobject_t *str;
+
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_STRING);
+#endif
+
+  str = S->stack[idx].value.gc;
+
+#ifdef SLY_DEBUG_API
+  assert(pos < SLY_STRING(str)->size);
+#endif
+
+  return SLY_STRING(str)->chars[pos];
+}
+
 void sly_concat(sly_state_t* S, uint32_t nr_strs)
 {
 #ifdef SLY_DEBUG_API
@@ -444,6 +493,17 @@ void sly_concat(sly_state_t* S, uint32_t nr_strs)
     S->stack[S->sp].type = SLY_TYPE_STRING;
     S->stack[S->sp++].value.gc = str;
   }
+}
+
+uint32_t sly_vector_length(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_VECTOR);
+#endif
+
+  return SLY_VECTOR(S->stack[idx].value.gc)->size;
 }
 
 void sly_vector_ref(sly_state_t* S, uint32_t pos, int idx)

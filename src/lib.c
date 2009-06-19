@@ -31,9 +31,9 @@
  * R5RS 6.2.5
  */
 
-static int greater_than(sly_state_t* S)
+static int compare(sly_state_t* S, int c)
 {
-  int i, nargs = sly_get_top(S);
+  int i, ret, nargs = sly_get_top(S);
 
   if(nargs == 0) {
     sly_push_string(S, "cannot compare zero numbers");
@@ -47,7 +47,15 @@ static int greater_than(sly_state_t* S)
     }
   } else {
     for(i = 0; i < nargs - 1; i++) {
-      if(!sly_greater_than(S, i, i+1)) {
+      switch(c) {
+      case 0:
+        ret = sly_less_than(S, i, i+1);
+        break;
+      case 1:
+        ret = sly_greater_than(S, i, i+1);
+        break;
+      }
+      if(!ret) {
 	sly_push_boolean(S, 0);
 	return 1;
       }
@@ -56,6 +64,16 @@ static int greater_than(sly_state_t* S)
   }
 
   return 1;
+}
+
+static int less_than(sly_state_t* S)
+{
+  return compare(S, 0);
+}
+
+static int greater_than(sly_state_t* S)
+{
+  return compare(S, 1);
 }
 
 static int plus(sly_state_t* S)
@@ -206,6 +224,67 @@ static int symbol_to_string(sly_state_t* S)
  * R5RS 6.3.5
  */
 
+static int stringp(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(sly_stringp(S, 0)) {
+    sly_push_boolean(S, 1);
+  } else {
+    sly_push_boolean(S, 0);
+  }
+
+  return 1;
+}
+
+static int string_length(sly_state_t* S)
+{
+  uint32_t len;
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  len = sly_string_length(S, 0);
+  sly_push_integer(S, len);
+
+  return 1;
+}
+
+static int string_ref(sly_state_t* S)
+{
+  sly_char_t c;
+  int i, nargs = sly_get_top(S);
+
+  if(nargs != 2) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(!sly_stringp(S, 0)) {
+    sly_push_string(S, "cannot index non-string");
+    sly_error(S, 1);
+  }
+
+  if(!sly_integerp(S, 1)) {
+    sly_push_string(S, "cannot index string using a non-integer");
+    sly_error(S, 1);
+  }
+
+  i = sly_to_integer(S, 1);
+  c = sly_string_ref(S, i, 0);
+  sly_push_char(S, c);
+
+  return 1;
+}
+
 static int string_append(sly_state_t* S)
 {
   int nargs = sly_get_top(S);
@@ -248,6 +327,22 @@ static int make_vector(sly_state_t* S)
       sly_vector_set(S, i, -2);
     }
   }
+
+  return 1;
+}
+
+static int vector_length(sly_state_t* S)
+{
+  uint32_t len;
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  len = sly_vector_length(S, 0);
+  sly_push_integer(S, len);
 
   return 1;
 }
@@ -358,6 +453,7 @@ static int error(sly_state_t* S)
 }
 
 static sly_reg_t lib_regs[] = {
+  {"<", less_than},
   {">", greater_than},
   {"+", plus},
   {"-", minus},
@@ -367,8 +463,12 @@ static sly_reg_t lib_regs[] = {
   {"cdr", cdr},
   {"list?", listp},
   {"symbol->string", symbol_to_string},
+  {"string?", stringp},
+  {"string-length", string_length},
+  {"string-ref", string_ref},
   {"string-append", string_append},
   {"make-vector", make_vector},
+  {"vector-length", vector_length},
   {"vector-ref", vector_ref},
   {"vector-set!", vector_set},
   {"apply", apply},

@@ -168,6 +168,36 @@ sly_gcobject_t *sly_create_vector(sly_state_t *S, uint32_t size)
   return SLY_GCOBJECT(ret);
 }
 
+sly_gcobject_t *sly_create_inport_file(sly_state_t *S, FILE *in)
+{
+  sly_inport_file_t* ret;
+
+  ret = (sly_inport_file_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_INPORT_FILE);
+
+  if(ret) {
+    SLY_GCOBJECT(ret)->type = SLY_TYPE_INPUT_PORT;
+    SLY_INPORT(ret)->type = SLY_PORT_FILE;
+    ret->in = in;
+  }
+
+  return SLY_GCOBJECT(ret);
+}
+
+sly_gcobject_t *sly_create_outport_file(sly_state_t *S, FILE *out)
+{
+  sly_outport_file_t* ret;
+
+  ret = (sly_outport_file_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_OUTPORT_FILE);
+
+  if(ret) {
+    SLY_GCOBJECT(ret)->type = SLY_TYPE_OUTPUT_PORT;
+    SLY_OUTPORT(ret)->type = SLY_PORT_FILE;
+    ret->out = out;
+  }
+
+  return SLY_GCOBJECT(ret);
+}
+
 sly_object_t sly_create_symbol(sly_state_t* S, sly_string_t *str)
 {
   sly_object_t obj;

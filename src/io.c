@@ -22,6 +22,7 @@
  */
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,53 +30,7 @@
 
 #include "sly.h"
 #include "io.h"
-
-#define SLY_BUF_SIZE        2048
-
-/* port modes */
-#define SLY_PORT_BINARY     1
-#define SLY_PORT_TEXT       2
-
-/* port types */
-#define SLY_PORT_FILE       3
-
-/* I/O port "classes" */
-struct sly_inport_t {
-  uint8_t mode;
-  uint8_t type;
-
-  int (*peek_byte)(sly_inport_t *self, uint8_t *b);
-  int (*peek_char)(sly_inport_t *self, sly_char_t *c);
-
-  int (*read_byte)(sly_inport_t *self, uint8_t *b);
-  int (*read_char)(sly_inport_t *self, sly_char_t *c);
-};
-
-struct sly_outport_t {
-  uint8_t mode;
-  uint8_t type;
-
-  int (*flush)(sly_outport_t* self);
-  int (*write_byte)(sly_outport_t* self, uint8_t b);
-  int (*write_char)(sly_outport_t* self, sly_char_t c);
-};
-
-/* file ports */
-
-struct sly_file_inport_t {
-  sly_inport_t base;
-  int fd;
-};
-
-struct sly_file_outport_t {
-  sly_outport_t base;
-  int fd;
-  uint8_t pos;
-  uint8_t buf[SLY_BUF_SIZE];
-};
-
-typedef struct sly_file_inport_t  sly_file_inport_t;
-typedef struct sly_file_outport_t sly_file_outport_t;
+#include "object.h"
 
 /*
  * utilities
@@ -199,41 +154,63 @@ int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const char* str)
  * file ports
  */
 
-static int fp_flush(sly_file_outport_t *p)
+static int fp_flush(sly_outport_file_t *p)
 {
-  ssize_t ret;
+  int ret = fflush(p->out);
 
-  ret = write(p->fd, p->buf, p->pos * sizeof(uint8_t));
-  if(ret < p->pos) {
+  while(!ret) {
+    /* should I use a maximum number of tries? */
+    if(errno == EAGAIN || errno == EINTR) {
+      usleep(10000);
+      ret = fflush(p->out);
+    } else {
+      ret = 0;
+      break;
+    }
+  }
+
+  return ret;
+}
+
+static int fp_write_byte(sly_outport_file_t *p, uint8_t b)
+{
+  size_t ret = fwrite(&b, sizeof(uint8_t), 1, p->out);
+
+  return ret;
+}
+
+static int fp_write_char(sly_outport_file_t *p, sly_char_t c)
+{
+  size_t sz, ret;
+  uint8_t buf[4];
+
+  /* UTF-8 */
+  if(c < 0x80) {
+    sz = 1;
+    buf[0] = (uint8_t)c;
+  } else if(c < 0x800) {
+    sz = 2;
+    buf[0] = 0xC0 | (uint8_t)((c >>  6) & 0x1F);
+    buf[1] = 0x80 | (uint8_t)(c & 0x3F);
+  } else if(c < 0x10000) {
+    sz = 3;
+    buf[0] = 0xE0 | (uint8_t)((c >> 12) & 0x0F);
+    buf[1] = 0x80 | (uint8_t)((c >>  6) & 0x3F);
+    buf[2] = 0x80 | (uint8_t)(c & 0x3F);
+  } else if(c < 0x110000) {
+    sz = 4;
+    buf[0] = 0xF0 | (uint8_t)((c >> 18) & 0x07);
+    buf[1] = 0x80 | (uint8_t)((c >> 12) & 0x3F);
+    buf[2] = 0x80 | (uint8_t)((c >>  6) & 0x3F);
+    buf[3] = 0x80 | (uint8_t)(c & 0x3F);
+  } else {
+    /* bad character */
     return 0;
-  } else {
-    p->pos = 0;
-    return 1;
   }
-}
 
-static int fp_write_byte(sly_file_outport_t *p, uint8_t b)
-{
-  p->buf[p->pos++] = b;
+  ret = fwrite(buf, sizeof(uint8_t), sz, p->out);
 
-  if(p->pos == SLY_BUF_SIZE) {
-    --p->pos;
-    return fp_flush(p);
-  } else {
-    return 1;
-  }
-}
-
-static int fp_write_char(sly_file_outport_t *p, sly_char_t c)
-{
-  p->buf[p->pos++] = (uint8_t)c;
-
-  if(p->pos == SLY_BUF_SIZE) {
-    --p->pos;
-    return fp_flush(p);
-  } else {
-    return 1;
-  }
+  return ret < sz ? 0 : 1;
 }
 
 /*

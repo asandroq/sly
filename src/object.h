@@ -24,6 +24,8 @@
 #ifndef __SLY_OBJECT_H__
 #define __SLY_OBJECT_H__
 
+#include <stdio.h>
+
 #include "sly.h"
 
 /*
@@ -42,6 +44,11 @@
 #define SLY_TYPE_BOX             11
 #define SLY_TYPE_STRING          12
 #define SLY_TYPE_VECTOR          13
+#define SLY_TYPE_INPUT_PORT      14
+#define SLY_TYPE_OUTPUT_PORT     15
+
+/* port types */
+#define SLY_PORT_FILE             1
 
 #define SLY_SIZE_OF_BOX \
    (sizeof(sly_box_t))
@@ -55,6 +62,10 @@
    (sizeof(sly_string_t) + (n) * sizeof(sly_char_t))
 #define SLY_SIZE_OF_VECTOR(n) \
    (sizeof(sly_vector_t) + (n) * sizeof(sly_object_t))
+#define SLY_SIZE_OF_INPORT_FILE \
+   (sizeof(sly_inport_t))
+#define SLY_SIZE_OF_OUTPORT_FILE \
+   (sizeof(sly_outport_t))
 
 /* forward type declarations */
 typedef struct sly_object_t sly_object_t;
@@ -69,14 +80,24 @@ typedef struct sly_vector_t sly_vector_t;
 
 typedef struct sly_symbol_t sly_symbol_t;
 
+typedef struct sly_inport_t  sly_inport_t;
+typedef struct sly_outport_t sly_outport_t;
+typedef struct sly_inport_file_t  sly_inport_file_t;
+typedef struct sly_outport_file_t sly_outport_file_t;
+
 /* casts */
-#define SLY_GCOBJECT(obj) ((sly_gcobject_t*)(obj))
-#define SLY_BOX(obj)      ((sly_box_t*)(obj))
-#define SLY_CLOSURE(obj)  ((sly_closure_t*)(obj))
-#define SLY_PAIR(obj)     ((sly_pair_t*)(obj))
-#define SLY_CONTI(obj)    ((sly_conti_t*)(obj))
-#define SLY_STRING(obj)   ((sly_string_t*)(obj))
-#define SLY_VECTOR(obj)   ((sly_vector_t*)(obj))
+#define SLY_GCOBJECT(obj)       ((sly_gcobject_t*)(obj))
+#define SLY_BOX(obj)            ((sly_box_t*)(obj))
+#define SLY_CLOSURE(obj)        ((sly_closure_t*)(obj))
+#define SLY_PAIR(obj)           ((sly_pair_t*)(obj))
+#define SLY_CONTI(obj)          ((sly_conti_t*)(obj))
+#define SLY_STRING(obj)         ((sly_string_t*)(obj))
+#define SLY_VECTOR(obj)         ((sly_vector_t*)(obj))
+#define SLY_INPORT(obj)         ((sly_inport_t*)(obj))
+#define SLY_OUTPORT(obj)        ((sly_outport_t*)(obj))
+#define SLY_INPORT_FILE(obj)    ((sly_inport_file_t*)(obj))
+#define SLY_OUTPORT_FILE(obj)   ((sly_outport_file_t*)(obj))
+
 
 /* value types */
 struct sly_object_t {
@@ -141,6 +162,37 @@ struct sly_vector_t {
   sly_object_t data[0];
 };
 
+/* I/O port "classes" */
+struct sly_inport_t {
+  sly_gcobject_t base;
+  uint8_t type;
+
+  int (*peek_byte)(sly_inport_t *self, uint8_t *b);
+  int (*peek_char)(sly_inport_t *self, sly_char_t *c);
+
+  int (*read_byte)(sly_inport_t *self, uint8_t *b);
+  int (*read_char)(sly_inport_t *self, sly_char_t *c);
+};
+
+struct sly_outport_t {
+  sly_gcobject_t base;
+  uint8_t type;
+
+  int (*flush)(sly_outport_t* self);
+  int (*write_byte)(sly_outport_t* self, uint8_t b);
+  int (*write_char)(sly_outport_t* self, sly_char_t c);
+};
+
+struct sly_inport_file_t {
+  sly_inport_t base;
+  FILE *in;
+};
+
+struct sly_outport_file_t {
+  sly_outport_t base;
+  FILE *out;
+};
+
 /*
  * entry in the symbol table
  * symbols are not collected
@@ -167,6 +219,8 @@ sly_gcobject_t *sly_create_pair(sly_state_t *S);
 sly_gcobject_t *sly_create_conti(sly_state_t *S, uint32_t stack_size);
 sly_gcobject_t *sly_create_string(sly_state_t *S, const char* str, uint32_t size);
 sly_gcobject_t *sly_create_vector(sly_state_t *S, uint32_t size);
+sly_gcobject_t *sly_create_inport_file(sly_state_t *S, FILE* in);
+sly_gcobject_t *sly_create_outport_file(sly_state_t *S, FILE* out);
 
 sly_object_t sly_create_symbol(sly_state_t* S, sly_string_t* str);
 

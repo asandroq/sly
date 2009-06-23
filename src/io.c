@@ -243,13 +243,14 @@ static int fp_flush(sly_ofport_t *p)
 
 #else
 
-static int fp_flush(sly_ofport_t *p)
+static int fp_flush(sly_oport_t *p_)
 {
-  size_t pos = 0;
-  ssize_t ret = -1;
+  size_t pos;
+  ssize_t ret;
+  sly_ofport_t *p = SLY_OFPORT(p_);
 
   /* should I use a maximum number of tries? */
-  for(;;) {
+  for(pos = 0;;) {
     ret = write(p->out, &p->buffer[pos], p->size);
 
     if(ret < 0) {
@@ -271,10 +272,12 @@ static int fp_flush(sly_ofport_t *p)
 
 #endif
 
-static int fp_write_byte(sly_ofport_t *p, uint8_t b)
+static int fp_write_byte(sly_oport_t *p_, uint8_t b)
 {
+  sly_ofport_t *p = SLY_OFPORT(p_);
+
   if(p->size == SLY_PORT_BUF_SIZE) {
-    if(!fp_flush(p)) {
+    if(!fp_flush(p_)) {
       return 0;
     }
   }
@@ -284,10 +287,11 @@ static int fp_write_byte(sly_ofport_t *p, uint8_t b)
   return 1;
 }
 
-static int fp_write_char(sly_ofport_t *p, sly_char_t c)
+static int fp_write_char(sly_oport_t *p_, sly_char_t c)
 {
   int ret;
   uint8_t sz, buf[4];
+  sly_ofport_t *p = SLY_OFPORT(p_);
 
   switch(SLY_PORT(p)->char_enc) {
   case SLY_CHAR_ENC_UTF8:
@@ -306,19 +310,18 @@ static int fp_write_char(sly_ofport_t *p, sly_char_t c)
 
   if(ret) {
     if(SLY_PORT_BUF_SIZE - p->size < sz) {
-      if(!fp_flush(p)) {
+      if(!fp_flush(p_)) {
         return 0;
       }
     }
 
-    for(ret = 0; ret < sz; ret++) {
-      p->buffer[p->size++] = buf[ret];
-    }
+    memcpy(&p->buffer[p->size], buf, sz * sizeof(uint8_t));
+    p->size += sz;
   } else {
     return 0;
   }
 
-  return 1;
+  return ret;
 }
 
 /*
@@ -629,132 +632,148 @@ sly_object_t sly_io_read(sly_state_t *S)
  * writer
  */
 
-static void write_string(sly_string_t* s, int quote)
+static void write_c_string(sly_state_t *S, const char* s, sly_oport_t *port)
 {
-  uint32_t i, c;
+  const char *p;
 
-  if(quote) {
-    printf("\"");
-  }
-
-  for(i = 0; i < s->size; i++) {
-    c = s->chars[i];
-    printf("%c", c > 31 && c < 128 ? c : '#');
-  }
-
-  if(quote) {
-    printf("\"");
+  for(p = s; p; p++) {
+    port_write_char(S, port, (sly_char_t)*p);
   }
 }
 
-static void sly_io_write_i(sly_object_t* obj, int quote)
+static void write_string(sly_state_t *S, sly_string_t* s, sly_oport_t *port, int quote)
 {
   uint32_t i;
+
+  if(quote) {
+    port_write_char(S, port, (sly_char_t)'"');
+  }
+
+  for(i = 0; i < s->size; i++) {
+    port_write_char(S, port, s->chars[i]);
+  }
+
+  if(quote) {
+    port_write_char(S, port, (sly_char_t)'"');
+  }
+}
+
+static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
+                           sly_oport_t *port, int quote)
+{
+  uint32_t i;
+  char buf[64];
 
   switch(obj->type) {
 
   case SLY_TYPE_UNDEF:
-    printf("<#undef>");
+    write_c_string(S, "<#undef>", port);
     break;
 
   case SLY_TYPE_NIL:
-    printf("()");
+    write_c_string(S, "()", port);
     break;
 
   case SLY_TYPE_BOOL:
+    port_write_char(S, port, (sly_char_t)'#');
     if(obj->value.bool) {
-      printf("#t");
+      port_write_char(S, port, (sly_char_t)'t');
     } else {
-      printf("#f");
+      port_write_char(S, port, (sly_char_t)'f');
     }
     break;
 
   case SLY_TYPE_FIXNUM:
-    printf("%d", obj->value.fixnum);
+    snprintf(buf, 64, "%d", obj->value.fixnum);
+    write_c_string(S, buf, port);
     break;
 
   case SLY_TYPE_CHAR:
     if(quote) {
-      printf("#\\%c", obj->value.chr);
-    } else {
-      printf("%c", obj->value.chr);
+      port_write_char(S, port, (sly_char_t)'#');
+      port_write_char(S, port, (sly_char_t)'\\');
     }
+
+    port_write_char(S, port, obj->value.chr);
     break;
 
   case SLY_TYPE_SYMBOL:
-    write_string(obj->value.symbol->str, 0);
+    write_string(S, obj->value.symbol->str, port, 0);
     break;
 
   case SLY_TYPE_CLOSURE:
-    printf("<#closure>");
+    write_c_string(S, "<#closure>", port);
     break;
 
   case SLY_TYPE_PAIR: {
     sly_object_t cdr;
     sly_gcobject_t *p = obj->value.gc;
 
-    printf("(");
+    port_write_char(S, port, (sly_char_t)'(');
     for(;;) {
     
-      sly_io_write(&(SLY_PAIR(p)->car));
+      sly_io_write(S, &(SLY_PAIR(p)->car), port);
 
       cdr = SLY_PAIR(p)->cdr;
       if(cdr.type == SLY_TYPE_NIL) {
         break;
       } else if(cdr.type != SLY_TYPE_PAIR) {
-        printf (" . ");
-        sly_io_write(&cdr);
+        write_c_string(S, " . ", port);
+        sly_io_write(S, &cdr, port);
         break;
       } else {
-        printf(" ");
+        port_write_char(S, port, (sly_char_t)' ');
         p = cdr.value.gc;
       }
     }
-    printf(")");
+    port_write_char(S, port, (sly_char_t)')');
   }
     break;
 
   case SLY_TYPE_CONTI:
-    printf("<#continuation %u>", SLY_CONTI(obj->value.gc)->size);
+    snprintf(buf, 64, "<#continuation %u>", SLY_CONTI(obj->value.gc)->size);
+    write_c_string(S, buf, port);
     break;
 
   case SLY_TYPE_BOX:
-    printf("#&");
-    sly_io_write(&(SLY_BOX(obj->value.gc)->value));
+    write_c_string(S, "#&", port);
+    sly_io_write(S, &(SLY_BOX(obj->value.gc)->value), port);
     break;
 
   case SLY_TYPE_STRING:
-    write_string(SLY_STRING(obj->value.gc), quote);
+    write_string(S, SLY_STRING(obj->value.gc), port, quote);
     break;
 
   case SLY_TYPE_VECTOR:
-    printf("#(");
+    write_c_string(S, "#(", port);
     for(i = 0; i < SLY_VECTOR(obj->value.gc)->size; i++) {
       if(i != 0) {
-        printf(" ");
+        port_write_char(S, port, (sly_char_t)' ');
       }
-      sly_io_write(SLY_VECTOR(obj->value.gc)->data + i);
+      sly_io_write(S, SLY_VECTOR(obj->value.gc)->data + i, port);
     }
-    printf(")");
+    write_c_string(S, ")", port);
     break;
 
   default:
-    printf("Unknown type!");
+    write_c_string(S, "Unknown type!", port);
   }
+
+  port_flush(S, port);
 }
 
-void sly_io_write(sly_object_t *obj)
+void sly_io_write(sly_state_t *S, sly_object_t *obj, sly_oport_t *port)
 {
-  sly_io_write_i(obj, 1);
+  sly_io_write_i(S, obj, port, 1);
 }
 
-void sly_io_write_symbol(sly_symbol_t *sym)
+void sly_io_write_symbol(sly_state_t *S, sly_symbol_t *sym, sly_oport_t *port)
 {
-  write_string(sym->str, 0);
+  write_string(S, sym->str, port, 0);
 }
 
-void sly_io_display(sly_object_t* obj)
+void sly_io_display(sly_state_t *S, sly_object_t *obj, sly_oport_t *port)
 {
-  sly_io_write_i(obj, 0);
+  sly_io_write_i(S, obj, port, 0);
 }
 

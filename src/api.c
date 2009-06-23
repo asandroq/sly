@@ -63,22 +63,25 @@ static uint32_t calc_index(sly_state_t* S, int idx)
   return idx;
 }
 
-int sly_error(sly_state_t* S, int num)
+int sly_error(sly_state_t* S, uint32_t num)
 {
-  if(num > 0 && num < (int)S->sp) {
-    int i;
+  int i;
 
-    /* error objects are on top of stack */
-    num = -num;
-    printf("Error: ");
-    for(i = num; i < 0; ++i) {
-      sly_display(S, i);
-    }
-    printf("\n");
+#ifdef SLY_DEBUG_API
+  assert(num < S->sp - S->fp);
+#endif
 
-    S->sp += num;
+  /* get current error port */
+  sly_current_error_port(S);
+
+  /* error objects are on top of stack */
+  printf("Error: ");
+  for(i = -num-1; i < 1; ++i) {
+    sly_display(S, i, -1);
   }
+  printf("\n");
 
+  S->sp -= num;
   sly_vm_dump(S);
 
   sly_close(S);
@@ -654,18 +657,28 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
   S->stack[S->sp++] = S->accum;
 }
 
-void sly_write(sly_state_t* S, int idx)
+void sly_write(sly_state_t* S, int idx1, int idx2)
 {
-  idx = calc_index(S, idx);
+  idx1 = calc_index(S, idx1);
+  idx2 = calc_index(S, idx2);
 
-  sly_io_write(&S->stack[idx]);
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx2].type = SLY_TYPE_OUTPUT_PORT);
+#endif
+
+  sly_io_write(S, &S->stack[idx1], SLY_OPORT(S->stack[idx2].value.gc));
 }
 
-void sly_display(sly_state_t* S, int idx)
+void sly_display(sly_state_t* S, int idx1, int idx2)
 {
-  idx = calc_index(S, idx);
+  idx1 = calc_index(S, idx1);
+  idx2 = calc_index(S, idx2);
 
-  sly_io_display(&S->stack[idx]);
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx2].type = SLY_TYPE_OUTPUT_PORT);
+#endif
+
+  sly_io_display(S, &S->stack[idx1], SLY_OPORT(S->stack[idx2].value.gc));
 }
 
 void sly_set_global(sly_state_t* S, const char* name)

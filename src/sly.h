@@ -60,7 +60,7 @@ void sly_close(sly_state_t* S);
  * shows the top nr elements of the stack and
  * then aborts
  */
-int sly_error(sly_state_t* S, int nr);
+int sly_error(sly_state_t* S, uint32_t nr);
 
 /*
  * register several functions as globals
@@ -135,8 +135,8 @@ void sly_vector_set(sly_state_t* S, uint32_t pos, int idx);
 void sly_apply(sly_state_t* S, int idx, uint32_t nr_args);
 
 /* I/O */
-void sly_write(sly_state_t* S, int idx);
-void sly_display(sly_state_t* S, int idx);
+void sly_write(sly_state_t* S, int idx1, int idx2);
+void sly_display(sly_state_t* S, int idx1, int idx2);
 
 /* sets the current object on top of the stack as a global */
 void sly_set_global(sly_state_t* S, const char* name);

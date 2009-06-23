@@ -52,6 +52,81 @@ char* sly_strdup(const char* str)
 }
 
 /*
+ * char encodings
+ */
+
+static int char2utf8(sly_char_t c, uint8_t *buf, uint8_t *sz)
+{
+  int ret = 1;
+
+  if(c < 0x80) {
+    *sz = 1;
+    buf[0] = (uint8_t)c;
+  } else if(c < 0x800) {
+    *sz = 2;
+    buf[0] = 0xC0 | (uint8_t)((c >>  6) & 0x1F);
+    buf[1] = 0x80 | (uint8_t)(c & 0x3F);
+  } else if(c > 0xD7FF && c < 0xE000) {
+    /* this range is for surrogates */
+    ret = 0;
+  } else if(c < 0x10000) {
+    *sz = 3;
+    buf[0] = 0xE0 | (uint8_t)((c >> 12) & 0x0F);
+    buf[1] = 0x80 | (uint8_t)((c >>  6) & 0x3F);
+    buf[2] = 0x80 | (uint8_t)(c & 0x3F);
+  } else if(c < 0x110000) {
+    *sz = 4;
+    buf[0] = 0xF0 | (uint8_t)((c >> 18) & 0x07);
+    buf[1] = 0x80 | (uint8_t)((c >> 12) & 0x3F);
+    buf[2] = 0x80 | (uint8_t)((c >>  6) & 0x3F);
+    buf[3] = 0x80 | (uint8_t)(c & 0x3F);
+  } else {
+    ret = 0;
+  }
+
+  return ret;
+}
+
+static int char2utf16(sly_char_t c, uint16_t *buf, uint8_t *sz)
+{
+  int ret = 1;
+
+  if(c > 0xD7FF && c < 0xE000) {
+    /* this range is for surrogates */
+    ret = 0;
+  } else if(c < 0xFFFF) {
+    *sz = 1;
+    buf[0] = (uint16_t)c;
+  } else if(c < 0x110000) {
+    *sz = 2;
+    c -= 0x10000;
+    buf[0] = 0xD800 | (uint16_t)((c >> 10) & 0x3FF);
+    buf[1] = 0xDC00 | (uint16_t)(c & 0x3FF);
+  } else {
+    ret = 0;
+  }
+
+  return ret;
+}
+
+static int char2latin1(sly_char_t c, uint8_t *buf, uint8_t *sz)
+{
+  int ret = 1;
+
+  *sz = 1;
+  if(c < 0x100) {
+    buf[0] = (uint8_t)c;
+  } else if(c > 0xD7FF && c < 0xE000) {
+    /* this range is for surrogates */
+    ret = 0;
+  } else {
+    buf[0] = 191; /* inverted question mark */
+  }
+
+  return ret;
+}
+
+/*
  * A string buffer
  */
 
@@ -154,7 +229,7 @@ int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const char* str)
  * file ports
  */
 
-static int fp_flush(sly_outport_file_t *p)
+static int fp_flush(sly_ofport_t *p)
 {
   int ret = fflush(p->out);
 
@@ -172,43 +247,36 @@ static int fp_flush(sly_outport_file_t *p)
   return ret;
 }
 
-static int fp_write_byte(sly_outport_file_t *p, uint8_t b)
+static int fp_write_byte(sly_ofport_t *p, uint8_t b)
 {
   size_t ret = fwrite(&b, sizeof(uint8_t), 1, p->out);
 
   return ret;
 }
 
-static int fp_write_char(sly_outport_file_t *p, sly_char_t c)
+static int fp_write_char(sly_ofport_t *p, sly_char_t c)
 {
-  size_t sz, ret;
-  uint8_t buf[4];
+  int ret;
+  uint8_t sz, buf[4];
 
-  /* UTF-8 */
-  if(c < 0x80) {
-    sz = 1;
-    buf[0] = (uint8_t)c;
-  } else if(c < 0x800) {
-    sz = 2;
-    buf[0] = 0xC0 | (uint8_t)((c >>  6) & 0x1F);
-    buf[1] = 0x80 | (uint8_t)(c & 0x3F);
-  } else if(c < 0x10000) {
-    sz = 3;
-    buf[0] = 0xE0 | (uint8_t)((c >> 12) & 0x0F);
-    buf[1] = 0x80 | (uint8_t)((c >>  6) & 0x3F);
-    buf[2] = 0x80 | (uint8_t)(c & 0x3F);
-  } else if(c < 0x110000) {
-    sz = 4;
-    buf[0] = 0xF0 | (uint8_t)((c >> 18) & 0x07);
-    buf[1] = 0x80 | (uint8_t)((c >> 12) & 0x3F);
-    buf[2] = 0x80 | (uint8_t)((c >>  6) & 0x3F);
-    buf[3] = 0x80 | (uint8_t)(c & 0x3F);
-  } else {
-    /* bad character */
-    return 0;
+  switch(SLY_PORT(p)->char_enc) {
+  case SLY_CHAR_ENC_UTF8:
+    ret = char2utf8(c, buf, &sz);
+    break;
+  case SLY_CHAR_ENC_UTF16:
+    ret = char2utf16(c, (uint16_t*)buf, &sz);
+    break;
+  case SLY_CHAR_ENC_LATIN1:
+    ret = char2latin1(c, buf, &sz);
+    break;
+  default:
+    ret = 0;
+    break;
   }
 
-  ret = fwrite(buf, sizeof(uint8_t), sz, p->out);
+  if(ret) {
+    ret = fwrite(buf, sizeof(uint8_t), sz, p->out);
+  }
 
   return ret < sz ? 0 : 1;
 }
@@ -217,7 +285,7 @@ static int fp_write_char(sly_outport_file_t *p, sly_char_t c)
  * generic port interface
  */
 
-static uint8_t port_peek_byte(sly_state_t* S, sly_inport_t *p)
+static uint8_t port_peek_byte(sly_state_t* S, sly_iport_t *p)
 {
   uint8_t res;
 
@@ -229,7 +297,7 @@ static uint8_t port_peek_byte(sly_state_t* S, sly_inport_t *p)
   }
 }
 
-static sly_char_t port_peek_char(sly_state_t* S, sly_inport_t *p)
+static sly_char_t port_peek_char(sly_state_t* S, sly_iport_t *p)
 {
   sly_char_t res;
 
@@ -241,7 +309,7 @@ static sly_char_t port_peek_char(sly_state_t* S, sly_inport_t *p)
   }
 }
 
-static uint8_t port_read_byte(sly_state_t* S, sly_inport_t *p)
+static uint8_t port_read_byte(sly_state_t* S, sly_iport_t *p)
 {
   uint8_t res;
 
@@ -253,7 +321,7 @@ static uint8_t port_read_byte(sly_state_t* S, sly_inport_t *p)
   }
 }
 
-static sly_char_t port_read_char(sly_state_t* S, sly_inport_t *p)
+static sly_char_t port_read_char(sly_state_t* S, sly_iport_t *p)
 {
   sly_char_t res;
 
@@ -265,7 +333,7 @@ static sly_char_t port_read_char(sly_state_t* S, sly_inport_t *p)
   }
 }
 
-static void port_flush(sly_state_t* S, sly_outport_t *p)
+static void port_flush(sly_state_t* S, sly_oport_t *p)
 {
   if(!p->flush(p)) {
     sly_push_string(S, "cannot flush port");
@@ -273,7 +341,7 @@ static void port_flush(sly_state_t* S, sly_outport_t *p)
   }
 }
 
-static void port_write_byte(sly_state_t* S, sly_outport_t *p, uint8_t b)
+static void port_write_byte(sly_state_t* S, sly_oport_t *p, uint8_t b)
 {
   if(!p->write_byte(p, b)) {
     sly_push_string(S, "cannot write byte");
@@ -281,7 +349,7 @@ static void port_write_byte(sly_state_t* S, sly_outport_t *p, uint8_t b)
   }
 }
 
-static void port_write_char(sly_state_t* S, sly_outport_t *p, sly_char_t c)
+static void port_write_char(sly_state_t* S, sly_oport_t *p, sly_char_t c)
 {
   if(!p->write_char(p, c)) {
     sly_push_string(S, "cannot write char");

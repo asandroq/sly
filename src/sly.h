@@ -30,6 +30,11 @@
 #include <inttypes.h>
 #endif
 
+/* character encodings */
+#define SLY_CHAR_ENC_UTF8         1
+#define SLY_CHAR_ENC_UTF16        2
+#define SLY_CHAR_ENC_LATIN1       3
+
 /* character type */
 typedef uint32_t sly_char_t;
 

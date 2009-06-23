@@ -95,10 +95,10 @@ static int char2utf16(sly_char_t c, uint16_t *buf, uint8_t *sz)
     /* this range is for surrogates */
     ret = 0;
   } else if(c < 0xFFFF) {
-    *sz = 1;
+    *sz = 2;
     buf[0] = (uint16_t)c;
   } else if(c < 0x110000) {
-    *sz = 2;
+    *sz = 4;
     c -= 0x10000;
     buf[0] = 0xD800 | (uint16_t)((c >> 10) & 0x3FF);
     buf[1] = 0xDC00 | (uint16_t)(c & 0x3FF);
@@ -229,29 +229,59 @@ int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const char* str)
  * file ports
  */
 
+#ifdef _WIN32
+
 static int fp_flush(sly_ofport_t *p)
 {
-  int ret = fflush(p->out);
+  BOOL ret;
+  DWORD nwritten;
 
-  while(!ret) {
-    /* should I use a maximum number of tries? */
-    if(errno == EAGAIN || errno == EINTR) {
-      usleep(10000);
-      ret = fflush(p->out);
-    } else {
-      ret = 0;
-      break;
+  ret = WriteFile(p->out, p->buffer, p->size, &nwritten, NULL);
+
+  return ret ? 1 : 0;
+}
+
+#else
+
+static int fp_flush(sly_ofport_t *p)
+{
+  size_t pos = 0;
+  ssize_t ret = -1;
+
+  /* should I use a maximum number of tries? */
+  for(;;) {
+    ret = write(p->out, &p->buffer[pos], p->size);
+
+    if(ret < 0) {
+      if(errno == EAGAIN) {
+        usleep(10000);
+      } else if(errno == EINTR) {
+        pos += ret;
+        p->size -= ret;
+        usleep(10000);
+      } else {
+        break;
+      }
     }
   }
 
-  return ret;
+  p->size = 0;
+  return ret < 0 ? 0 : 1;
 }
+
+#endif
 
 static int fp_write_byte(sly_ofport_t *p, uint8_t b)
 {
-  size_t ret = fwrite(&b, sizeof(uint8_t), 1, p->out);
+  if(p->size == SLY_PORT_BUF_SIZE) {
+    if(!fp_flush(p)) {
+      return 0;
+    }
+  }
 
-  return ret;
+  p->buffer[p->size++] = b;
+
+  return 1;
 }
 
 static int fp_write_char(sly_ofport_t *p, sly_char_t c)
@@ -275,10 +305,20 @@ static int fp_write_char(sly_ofport_t *p, sly_char_t c)
   }
 
   if(ret) {
-    ret = fwrite(buf, sizeof(uint8_t), sz, p->out);
+    if(SLY_PORT_BUF_SIZE - p->size < sz) {
+      if(!fp_flush(p)) {
+        return 0;
+      }
+    }
+
+    for(ret = 0; ret < sz; ret++) {
+      p->buffer[p->size++] = buf[ret];
+    }
+  } else {
+    return 0;
   }
 
-  return ret < sz ? 0 : 1;
+  return 1;
 }
 
 /*

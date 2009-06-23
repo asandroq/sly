@@ -47,9 +47,7 @@
 #define SLY_TYPE_INPUT_PORT      14
 #define SLY_TYPE_OUTPUT_PORT     15
 
-/* port types */
-#define SLY_TYPE_PORT_FILE        1
-
+/* sizes for GC */
 #define SLY_SIZE_OF_BOX \
    (sizeof(sly_box_t))
 #define SLY_SIZE_OF_PAIR \
@@ -66,6 +64,19 @@
    (sizeof(sly_ifport_t))
 #define SLY_SIZE_OF_OFPORT \
    (sizeof(sly_ofport_t))
+
+/* port types */
+#define SLY_TYPE_PORT_FILE          1
+
+/* port buffer size */
+#define SLY_PORT_BUF_SIZE         512
+
+/* file descriptors */
+#ifdef _WIN32
+typedef HANDLE sly_file_t;
+#else
+typedef int sly_file_t;
+#endif
 
 /* forward type declarations */
 typedef struct sly_object_t sly_object_t;
@@ -191,12 +202,16 @@ struct sly_oport_t {
 
 struct sly_ifport_t {
   sly_iport_t base;
-  FILE *in;
+  sly_file_t in;
+  uint32_t size;
+  uint8_t buffer[SLY_PORT_BUF_SIZE];
 };
 
 struct sly_ofport_t {
   sly_oport_t base;
-  FILE *out;
+  sly_file_t out;
+  uint32_t size;
+  uint8_t buffer[SLY_PORT_BUF_SIZE];
 };
 
 /*

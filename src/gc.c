@@ -103,6 +103,22 @@ static uint32_t sizeof_gcobj(sly_gcobject_t* obj)
     size = SLY_SIZE_OF_VECTOR(SLY_VECTOR(obj)->size);
     break;
 
+  case SLY_TYPE_INPUT_PORT:
+    if(SLY_PORT(obj)->type == SLY_TYPE_PORT_FILE) {
+      size = SLY_SIZE_OF_IFPORT;
+    } else {
+      size = 0;
+    }
+    break;
+
+  case SLY_TYPE_OUTPUT_PORT:
+    if(SLY_PORT(obj)->type == SLY_TYPE_PORT_FILE) {
+      size = SLY_SIZE_OF_OFPORT;
+    } else {
+      size = 0;
+    }
+    break;
+
   default:
     size = 0;
   }

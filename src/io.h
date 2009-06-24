@@ -44,12 +44,19 @@ const char* sly_sbuffer_string(sly_sbuffer_t* buffer);
 int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const char* str);
 
 /*
- * writer
+ * ports
  */
 
 sly_gcobject_t *sly_io_create_stdin(sly_state_t *S);
 sly_gcobject_t *sly_io_create_stdout(sly_state_t *S);
 sly_gcobject_t *sly_io_create_stderr(sly_state_t *S);
+
+void sly_io_close_input_port(sly_state_t *S, sly_iport_t *port);
+void sly_io_close_output_port(sly_state_t *S, sly_oport_t *port);
+
+/*
+ * writer
+ */
 
 void sly_io_newline(sly_state_t *S, sly_oport_t *port);
 

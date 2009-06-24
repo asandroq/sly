@@ -835,6 +835,64 @@ sly_gcobject_t *sly_io_create_stderr(sly_state_t *S)
   return sly_io_create_ofport(S, file);
 }
 
+void sly_io_close_input_port(sly_state_t *S, sly_iport_t *port)
+{
+  if(SLY_PORT(port)->type == SLY_TYPE_PORT_FILE) {
+#ifdef _WIN32
+    BOOL ret;
+
+    ret = CloseHandle(SLY_IFPORT(port)->in);
+    if(!ret) {
+      sly_push_string(S, "cannot close input port");
+      sly_error(S, 1);
+    }
+#else
+    int ret;
+
+  close_in_again:
+    ret = close(SLY_IFPORT(port)->in);
+    if(ret < 0) {
+      if(errno == EINTR) {
+        usleep(10000);
+        goto close_in_again;
+      } else {
+        sly_push_string(S, "cannot close input port");
+        sly_error(S, 1);
+      }
+    }
+#endif
+  }
+}
+
+void sly_io_close_output_port(sly_state_t *S, sly_oport_t *port)
+{
+  if(SLY_PORT(port)->type == SLY_TYPE_PORT_FILE) {
+#ifdef _WIN32
+    BOOL ret;
+
+    ret = CloseHandle(SLY_OFPORT(port)->out);
+    if(!ret) {
+      sly_push_string(S, "cannot close output port");
+      sly_error(S, 1);
+    }
+#else
+    int ret;
+
+  close_out_again:
+    ret = close(SLY_OFPORT(port)->out);
+    if(ret < 0) {
+      if(errno == EINTR) {
+        usleep(10000);
+        goto close_out_again;
+      } else {
+        sly_push_string(S, "cannot close output port");
+        sly_error(S, 1);
+      }
+    }
+#endif
+  }
+}
+
 void sly_io_write_c_string(sly_state_t *S, const char* s, sly_oport_t *port)
 {
   const char *p;

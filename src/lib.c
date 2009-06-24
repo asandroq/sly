@@ -456,6 +456,172 @@ static int apply(sly_state_t* S)
   return 1;
 }
 
+/*
+ * R5RS 6.6.1
+ */
+
+static int input_portp(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(sly_input_portp(S, 0)) {
+    sly_push_boolean(S, 1);
+  } else {
+    sly_push_boolean(S, 0);
+  }
+
+  return 1;
+}
+
+static int output_portp(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(sly_output_portp(S, 0)) {
+    sly_push_boolean(S, 1);
+  } else {
+    sly_push_boolean(S, 0);
+  }
+
+  return 1;
+}
+
+static int current_input_port(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 0) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  sly_push_current_input_port(S);
+
+  return 1;
+}
+
+static int current_output_port(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 0) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  sly_push_current_output_port(S);
+
+  return 1;
+}
+
+static int current_error_port(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 0) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  sly_push_current_error_port(S);
+
+  return 1;
+}
+
+static int open_input_file(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(!sly_stringp(S, 0)) {
+    sly_push_string(S, "file name must be a string: ");
+    sly_push_value(S, 0);
+    sly_error(S, 2);
+  }
+
+  sly_open_input_file(S, 0);
+
+  return 1;
+}
+
+static int open_output_file(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(!sly_stringp(S, 0)) {
+    sly_push_string(S, "file name must be a string: ");
+    sly_push_value(S, 0);
+    sly_error(S, 2);
+  }
+
+  sly_open_output_file(S, 0);
+
+  return 1;
+}
+
+static int close_input_port(sly_state_t *S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(!sly_input_portp(S, 0)) {
+    sly_push_string(S, "cannot close non-input port");
+    sly_push_value(S, 0);
+    sly_error(S, 2);
+  }
+
+  sly_close_input_port(S, 0);
+
+  return 0;
+}
+
+static int close_output_port(sly_state_t *S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(!sly_output_portp(S, 0)) {
+    sly_push_string(S, "cannot close non-output port");
+    sly_push_value(S, 0);
+    sly_error(S, 2);
+  }
+
+  sly_close_output_port(S, 0);
+
+  return 0;
+}
+
+/*
+ * R5RS 6.6.3
+ */
+
 static int write(sly_state_t* S)
 {
   int nargs = sly_get_top(S);
@@ -474,6 +640,24 @@ static int write(sly_state_t* S)
   return 0;
 }
 
+static int display(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1 && nargs != 2) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(nargs == 1) {
+    sly_push_current_output_port(S);
+  }
+
+  sly_display(S, 0, 1);
+
+  return 0;
+}
+
 static int newline(sly_state_t* S)
 {
   int nargs = sly_get_top(S);
@@ -488,6 +672,30 @@ static int newline(sly_state_t* S)
   }
 
   sly_newline(S, 0);
+
+  return 0;
+}
+
+static int write_char(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1 && nargs != 2) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(!sly_charp(S, 0)) {
+    sly_push_string(S, "cannot write non-char: ");
+    sly_push_value(S, 0);
+    sly_error(S, 2);
+  }
+
+  if(nargs == 1) {
+    sly_push_current_output_port(S);
+  }
+
+  sly_display(S, 0, 1);
 
   return 0;
 }
@@ -519,8 +727,19 @@ static sly_reg_t lib_regs[] = {
   {"vector-ref", vector_ref},
   {"vector-set!", vector_set},
   {"apply", apply},
+  {"input-port?", input_portp},
+  {"output-port?", output_portp},
+  {"current-input-port", current_input_port},
+  {"current-output-port", current_output_port},
+  {"current-error-port", current_error_port},
+  {"open-input-file", open_input_file},
+  {"open-output-file", open_output_file},
+  {"close-input-port", close_input_port},
+  {"close-output-port", close_output_port},
   {"write", write},
+  {"display", display},
   {"newline", newline},
+  {"write-char", write_char},
   {"error", error},
   {NULL, NULL}
 };

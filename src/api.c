@@ -115,6 +115,11 @@ static int check_type(sly_state_t* S, int idx, int type)
   return S->stack[idx].type == type;
 }
 
+int sly_charp(sly_state_t* S, int idx)
+{
+  return check_type(S, idx, SLY_TYPE_CHAR);
+}
+
 int sly_integerp(sly_state_t* S, int idx)
 {
   return check_type(S, idx, SLY_TYPE_FIXNUM);
@@ -172,6 +177,16 @@ int sly_vectorp(sly_state_t* S, int idx)
 int sly_procedurep(sly_state_t* S, int idx)
 {
   return check_type(S, idx, SLY_TYPE_CLOSURE);
+}
+
+int sly_input_portp(sly_state_t* S, int idx)
+{
+  return check_type(S, idx, SLY_TYPE_INPUT_PORT);
+}
+
+int sly_output_portp(sly_state_t* S, int idx)
+{
+  return check_type(S, idx, SLY_TYPE_OUTPUT_PORT);
 }
 
 void sly_push_value(sly_state_t* S, int idx)
@@ -679,7 +694,7 @@ void sly_newline(sly_state_t* S, int idx)
   idx = calc_index(S, idx);
 
 #ifdef SLY_DEBUG_API
-  assert(S->stack[idx].type = SLY_TYPE_OUTPUT_PORT);
+  assert(S->stack[idx].type == SLY_TYPE_OUTPUT_PORT);
 #endif
 
   sly_io_newline(S, SLY_OPORT(S->stack[idx].value.gc));
@@ -691,7 +706,7 @@ void sly_write(sly_state_t* S, int idx1, int idx2)
   idx2 = calc_index(S, idx2);
 
 #ifdef SLY_DEBUG_API
-  assert(S->stack[idx2].type = SLY_TYPE_OUTPUT_PORT);
+  assert(S->stack[idx2].type == SLY_TYPE_OUTPUT_PORT);
 #endif
 
   sly_io_write(S, &S->stack[idx1], SLY_OPORT(S->stack[idx2].value.gc));
@@ -703,10 +718,46 @@ void sly_display(sly_state_t* S, int idx1, int idx2)
   idx2 = calc_index(S, idx2);
 
 #ifdef SLY_DEBUG_API
-  assert(S->stack[idx2].type = SLY_TYPE_OUTPUT_PORT);
+  assert(S->stack[idx2].type == SLY_TYPE_OUTPUT_PORT);
 #endif
 
   sly_io_display(S, &S->stack[idx1], SLY_OPORT(S->stack[idx2].value.gc));
+}
+
+void sly_open_input_file(sly_state_t* S, int idx)
+{
+}
+
+void sly_open_output_file(sly_state_t* S, int idx)
+{
+}
+
+void sly_close_input_port(sly_state_t* S, int idx)
+{
+  sly_gcobject_t *port;
+
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_INPUT_PORT);
+#endif
+
+  port = S->stack[idx].value.gc;
+  sly_io_close_input_port(S, SLY_IPORT(port));
+}
+
+void sly_close_output_port(sly_state_t* S, int idx)
+{
+  sly_gcobject_t *port;
+
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_OUTPUT_PORT);
+#endif
+
+  port = S->stack[idx].value.gc;
+  sly_io_close_output_port(S, SLY_OPORT(port));
 }
 
 void sly_set_global(sly_state_t* S, const char* name)

@@ -78,6 +78,7 @@ int sly_get_top(sly_state_t* S);
 void sly_pop(sly_state_t* S, uint32_t num);
 
 /* type predicates */
+int sly_charp(sly_state_t* S, int idx);
 int sly_integerp(sly_state_t* S, int idx);
 int sly_numberp(sly_state_t* S, int idx);
 int sly_pairp(sly_state_t* S, int idx);
@@ -85,6 +86,8 @@ int sly_listp(sly_state_t* S, int idx);
 int sly_stringp(sly_state_t* S, int idx);
 int sly_vectorp(sly_state_t* S, int idx);
 int sly_procedurep(sly_state_t* S, int idx);
+int sly_input_portp(sly_state_t* S, int idx);
+int sly_output_portp(sly_state_t* S, int idx);
 
 /* push values onto the stack */
 void sly_push_value(sly_state_t* S, int idx);
@@ -142,6 +145,10 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args);
 void sly_newline(sly_state_t* S, int idx);
 void sly_write(sly_state_t* S, int idx1, int idx2);
 void sly_display(sly_state_t* S, int idx1, int idx2);
+void sly_open_input_file(sly_state_t* S, int idx);
+void sly_open_output_file(sly_state_t* S, int idx);
+void sly_close_input_port(sly_state_t* S, int idx);
+void sly_close_output_port(sly_state_t* S, int idx);
 
 /* sets the current object on top of the stack as a global */
 void sly_set_global(sly_state_t* S, const char* name);

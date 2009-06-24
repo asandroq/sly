@@ -178,6 +178,20 @@
 
 (define for-each map)
 
+;; R5RS 6.6.1
+
+(define (call-with-input-file file proc)
+  (let* ((port (open-input-file file))
+         (result (proc port)))
+    (close-input-port port)
+    result))
+
+(define (call-with-output-file file proc)
+  (let* ((port (open-output-file file))
+         (result (proc port)))
+    (close-output-port port)
+    result))
+
 ;; Temporary bizarre solution
 (define gensym
   (let ((counter 0))

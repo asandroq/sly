@@ -24,6 +24,7 @@
 #include <stdlib.h>
 
 #include "sly.h"
+#include "io.h"
 #include "vm.h"
 #include "state.h"
 
@@ -101,7 +102,10 @@ static sly_state_t* sly_create_state(void)
     return NULL;
   }
 
-  /* store */
+  /*
+   * store
+   */
+
   gc_data.S = S;
   gc_data.state = 0;
   gc_data.count = 0;
@@ -112,17 +116,22 @@ static sly_state_t* sly_create_state(void)
   S->pc = 0;
   S->fp = 0;
 
-  /* code */
+  /*
+   * code
+   */
+
   S->code_size = 1;
   S->code = (uint32_t*)malloc(sizeof(uint32_t));
   if(S->code == NULL) {
     free(S);
     return NULL;
   }
-  /* instruction to halt execution always at address 0 */
-  S->code[0] = (uint32_t) SLY_OP_HALT;
+  S->code[SLY_HALT_ADDRESS] = (uint32_t) SLY_OP_HALT;
 
-  /* stack */
+  /*
+   * stack
+   */
+
   S->sp = 0;
   S->stack = (sly_object_t*)malloc(sizeof(sly_object_t) * 1024);
   if(S->stack) {
@@ -133,16 +142,44 @@ static sly_state_t* sly_create_state(void)
     return NULL;
   }
 
+  /*
+   * pushing on the stack the fundamental ports
+   * this may seem a bootstrapping problem
+   * but the store is already set
+   */
+  S->sp = 0;
+  S->stack[0].type = SLY_TYPE_INPUT_PORT;
+  S->stack[0].value.gc = sly_io_create_stdin(S);
+  S->sp = 1;
+  S->stack[1].type = SLY_TYPE_OUTPUT_PORT;
+  S->stack[1].value.gc = sly_io_create_stdout(S);
+  S->sp = 2;
+  S->stack[2].type = SLY_TYPE_OUTPUT_PORT;
+  S->stack[2].value.gc = sly_io_create_stderr(S);
+  S->sp = 3;
+
+  /*
+   * symbol table
+   */
+
   S->symbol_table = NULL;
+
+  /*
+   * constants
+   */
 
   S->consts = NULL;
   S->nr_consts = 0;
 
-  /* globals */
+  /*
+   * globals
+   */
   S->global_env.size = 0;
   S->global_env.vars = NULL;
 
-  /* registers */
+  /*
+   * registers
+   */
   S->proc.type = SLY_TYPE_UNDEF;
   S->accum.type = SLY_TYPE_UNDEF;
 

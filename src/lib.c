@@ -460,19 +460,34 @@ static int write(sly_state_t* S)
 {
   int nargs = sly_get_top(S);
 
-  if(nargs != 1) {
+  if(nargs != 1 && nargs != 2) {
     sly_push_string(S, "wrong number of arguments");
     sly_error(S, 1);
   }
 
-  sly_write(S, 0);
+  if(nargs == 1) {
+    sly_push_current_output_port(S);
+  }
+
+  sly_write(S, 0, 1);
 
   return 0;
 }
 
 static int newline(sly_state_t* S)
 {
-  printf("\n");
+  int nargs = sly_get_top(S);
+
+  if(nargs != 0 && nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(nargs == 0) {
+    sly_push_current_output_port(S);
+  }
+
+  sly_newline(S, 0);
 
   return 0;
 }

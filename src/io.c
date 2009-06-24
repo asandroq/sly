@@ -22,11 +22,17 @@
  */
 
 #include <ctype.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <errno.h>
 #include <unistd.h>
+#endif
 
 #include "sly.h"
 #include "io.h"
@@ -249,23 +255,25 @@ static int fp_flush(sly_oport_t *p_)
   ssize_t ret;
   sly_ofport_t *p = SLY_OFPORT(p_);
 
-  /* should I use a maximum number of tries? */
-  for(pos = 0;;) {
-    ret = write(p->out, &p->buffer[pos], p->size);
+  pos = 0;
 
-    if(ret < 0) {
-      if(errno == EAGAIN) {
-        usleep(10000);
-      } else if(errno == EINTR) {
-        pos += ret;
-        p->size -= ret;
-        usleep(10000);
-      } else {
-        break;
-      }
+ write_again:
+  ret = write(p->out, &p->buffer[pos], p->size);
+
+  if(ret < 0) {
+    if(errno == EAGAIN) {
+      usleep(10000);
+    } else if(errno == EINTR) {
+      pos += ret;
+      p->size -= ret;
+      usleep(10000);
+    } else {
+      goto write_out;
     }
+    goto write_again;
   }
 
+ write_out:
   p->size = 0;
   return ret < 0 ? 0 : 1;
 }
@@ -632,15 +640,6 @@ sly_object_t sly_io_read(sly_state_t *S)
  * writer
  */
 
-static void write_c_string(sly_state_t *S, const char* s, sly_oport_t *port)
-{
-  const char *p;
-
-  for(p = s; p; p++) {
-    port_write_char(S, port, (sly_char_t)*p);
-  }
-}
-
 static void write_string(sly_state_t *S, sly_string_t* s, sly_oport_t *port, int quote)
 {
   uint32_t i;
@@ -667,11 +666,11 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
   switch(obj->type) {
 
   case SLY_TYPE_UNDEF:
-    write_c_string(S, "<#undef>", port);
+    sly_io_write_c_string(S, "<#undef>", port);
     break;
 
   case SLY_TYPE_NIL:
-    write_c_string(S, "()", port);
+    sly_io_write_c_string(S, "()", port);
     break;
 
   case SLY_TYPE_BOOL:
@@ -685,7 +684,7 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
 
   case SLY_TYPE_FIXNUM:
     snprintf(buf, 64, "%d", obj->value.fixnum);
-    write_c_string(S, buf, port);
+    sly_io_write_c_string(S, buf, port);
     break;
 
   case SLY_TYPE_CHAR:
@@ -702,7 +701,7 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
     break;
 
   case SLY_TYPE_CLOSURE:
-    write_c_string(S, "<#closure>", port);
+    sly_io_write_c_string(S, "<#closure>", port);
     break;
 
   case SLY_TYPE_PAIR: {
@@ -718,7 +717,7 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
       if(cdr.type == SLY_TYPE_NIL) {
         break;
       } else if(cdr.type != SLY_TYPE_PAIR) {
-        write_c_string(S, " . ", port);
+        sly_io_write_c_string(S, " . ", port);
         sly_io_write(S, &cdr, port);
         break;
       } else {
@@ -732,11 +731,11 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
 
   case SLY_TYPE_CONTI:
     snprintf(buf, 64, "<#continuation %u>", SLY_CONTI(obj->value.gc)->size);
-    write_c_string(S, buf, port);
+    sly_io_write_c_string(S, buf, port);
     break;
 
   case SLY_TYPE_BOX:
-    write_c_string(S, "#&", port);
+    sly_io_write_c_string(S, "#&", port);
     sly_io_write(S, &(SLY_BOX(obj->value.gc)->value), port);
     break;
 
@@ -745,26 +744,104 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
     break;
 
   case SLY_TYPE_VECTOR:
-    write_c_string(S, "#(", port);
+    sly_io_write_c_string(S, "#(", port);
     for(i = 0; i < SLY_VECTOR(obj->value.gc)->size; i++) {
       if(i != 0) {
         port_write_char(S, port, (sly_char_t)' ');
       }
       sly_io_write(S, SLY_VECTOR(obj->value.gc)->data + i, port);
     }
-    write_c_string(S, ")", port);
+    sly_io_write_c_string(S, ")", port);
+    break;
+
+  case SLY_TYPE_INPUT_PORT:
+    sly_io_write_c_string(S, "<#input port>", port);
+    break;
+
+  case SLY_TYPE_OUTPUT_PORT:
+    sly_io_write_c_string(S, "<#output port>", port);
     break;
 
   default:
-    write_c_string(S, "Unknown type!", port);
+    sly_io_write_c_string(S, "Unknown type!", port);
   }
-
-  port_flush(S, port);
 }
 
-void sly_io_write(sly_state_t *S, sly_object_t *obj, sly_oport_t *port)
+sly_gcobject_t *sly_io_create_ifport(sly_state_t *S, sly_file_t file)
 {
-  sly_io_write_i(S, obj, port, 1);
+  sly_gcobject_t *port;
+
+  port = sly_create_ifport(S);
+
+  /*SLY_IPORT(port)->read_byte = fp_read_byte;
+    SLY_IPORT(port)->read_char = fp_read_char;*/
+
+  SLY_IFPORT(port)->in = file;
+
+  return port;
+}
+
+sly_gcobject_t *sly_io_create_ofport(sly_state_t *S, sly_file_t file)
+{
+  sly_gcobject_t *port;
+
+  port = sly_create_ofport(S);
+
+  SLY_OPORT(port)->flush = fp_flush;
+  SLY_OPORT(port)->write_byte = fp_write_byte;
+  SLY_OPORT(port)->write_char = fp_write_char;
+
+  SLY_OFPORT(port)->out = file;
+
+  return port;
+}
+
+sly_gcobject_t *sly_io_create_stdin(sly_state_t *S)
+{
+  sly_file_t file;
+
+#ifdef _WIN32
+  file = GetStdHandle(STD_INPUT_HANDLE);
+#else
+  file = STDIN_FILENO;
+#endif
+
+  return sly_io_create_ifport(S, file);
+}
+
+sly_gcobject_t *sly_io_create_stdout(sly_state_t *S)
+{
+  sly_file_t file;
+
+#ifdef _WIN32
+  file = GetStdHandle(STD_OUTPUT_HANDLE);
+#else
+  file = STDOUT_FILENO;
+#endif
+
+  return sly_io_create_ofport(S, file);
+}
+
+sly_gcobject_t *sly_io_create_stderr(sly_state_t *S)
+{
+  sly_file_t file;
+
+#ifdef _WIN32
+  file = GetStdHandle(STD_ERROR_HANDLE);
+#else
+  file = STDERR_FILENO;
+#endif
+
+  return sly_io_create_ofport(S, file);
+}
+
+void sly_io_write_c_string(sly_state_t *S, const char* s, sly_oport_t *port)
+{
+  const char *p;
+
+  for(p = s; *p; p++) {
+    port_write_char(S, port, (sly_char_t)*p);
+  }
 }
 
 void sly_io_write_symbol(sly_state_t *S, sly_symbol_t *sym, sly_oport_t *port)
@@ -772,8 +849,25 @@ void sly_io_write_symbol(sly_state_t *S, sly_symbol_t *sym, sly_oport_t *port)
   write_string(S, sym->str, port, 0);
 }
 
+void sly_io_newline(sly_state_t *S, sly_oport_t *port)
+{
+#ifdef _WIN32
+  port_write_char(S, port, (sly_char_t)'\r');
+#endif
+  port_write_char(S, port, (sly_char_t)'\n');
+
+  port_flush(S, port);
+}
+
+void sly_io_write(sly_state_t *S, sly_object_t *obj, sly_oport_t *port)
+{
+  sly_io_write_i(S, obj, port, 1);
+  port_flush(S, port);
+}
+
 void sly_io_display(sly_state_t *S, sly_object_t *obj, sly_oport_t *port)
 {
   sly_io_write_i(S, obj, port, 0);
+  port_flush(S, port);
 }
 

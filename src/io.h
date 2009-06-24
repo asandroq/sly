@@ -47,9 +47,16 @@ int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const char* str);
  * writer
  */
 
-void sly_io_write(sly_state_t *S, sly_object_t *obj, sly_oport_t *port);
+sly_gcobject_t *sly_io_create_stdin(sly_state_t *S);
+sly_gcobject_t *sly_io_create_stdout(sly_state_t *S);
+sly_gcobject_t *sly_io_create_stderr(sly_state_t *S);
+
+void sly_io_newline(sly_state_t *S, sly_oport_t *port);
+
+void sly_io_write_c_string(sly_state_t *S, const char *str, sly_oport_t *port);
 void sly_io_write_symbol(sly_state_t *S, sly_symbol_t *sym, sly_oport_t *port);
 
+void sly_io_write(sly_state_t *S, sly_object_t *obj, sly_oport_t *port);
 void sly_io_display(sly_state_t *S, sly_object_t *obj, sly_oport_t *port);
 
 #endif

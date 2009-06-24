@@ -71,12 +71,11 @@ int sly_error(sly_state_t* S, uint32_t num)
   assert(num < S->sp - S->fp);
 #endif
 
-  /* get current error port */
-  sly_current_error_port(S);
+  sly_push_current_error_port(S);
 
   /* error objects are on top of stack */
   printf("Error: ");
-  for(i = -num-1; i < 1; ++i) {
+  for(i = -num-1; i < -1; ++i) {
     sly_display(S, i, -1);
   }
   printf("\n");
@@ -655,6 +654,35 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
   sly_vm_call(S);
 
   S->stack[S->sp++] = S->accum;
+}
+
+void sly_push_current_input_port(sly_state_t *S)
+{
+  /* for now, I'll grab the port at a fixed address */
+  S->stack[S->sp++] = S->stack[0];
+}
+
+void sly_push_current_output_port(sly_state_t *S)
+{
+  /* for now, I'll grab the port at a fixed address */
+  S->stack[S->sp++] = S->stack[1];
+}
+
+void sly_push_current_error_port(sly_state_t *S)
+{
+  /* for now, I'll grab the port at a fixed address */
+  S->stack[S->sp++] = S->stack[2];
+}
+
+void sly_newline(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type = SLY_TYPE_OUTPUT_PORT);
+#endif
+
+  sly_io_newline(S, SLY_OPORT(S->stack[idx].value.gc));
 }
 
 void sly_write(sly_state_t* S, int idx1, int idx2)

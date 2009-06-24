@@ -178,21 +178,34 @@ static void disassemble(sly_state_t* S)
 void sly_vm_dump(sly_state_t* S)
 {
   uint32_t i;
+  char buf[64];
+  sly_oport_t *port;
 
-  printf("Instruction: ");
+  port = SLY_OPORT(S->stack[2].value.gc);
+
+  sly_io_write_c_string(S, "Instruction: ", port);
   dump_instr(S->code[S->pc]);
-  printf("\n");
+  sly_io_newline(S, port);
 
-  printf("Registers:\n");
-  printf("\taccum: "); sly_io_write(&S->accum); printf("\n");
-  printf("\tclosure: "); sly_io_write(&S->proc); printf("\n");
-  printf("\tPC: %d\n", S->pc);
-  printf("\tFP: %d\n", S->fp);
+  sly_io_write_c_string(S, "Registers:", port);
+  sly_io_newline(S, port);
+  sly_io_write_c_string(S, "\taccum: ", port);
+  sly_io_write(S, &S->accum, port);
+  sly_io_newline(S, port);
+  sly_io_write_c_string(S, "\tclosure: ", port);
+  sly_io_write(S, &S->proc, port);
+  sly_io_newline(S, port);
+  snprintf(buf, 64, "\tPC: %d", S->pc);
+  sly_io_write_c_string(S, buf, port);
+  sly_io_newline(S, port);
+  snprintf(buf, 64, "\tFP: %d", S->fp);
+  sly_io_write_c_string(S, buf, port);
+  sly_io_newline(S, port);
 
   printf("Stack:");
   for(i = 0; i < S->sp; i++) {
     printf(" ");
-    sly_io_write(S->stack + i);
+    sly_io_write(S, S->stack + i, port);
   }
 
   printf("\n\n");

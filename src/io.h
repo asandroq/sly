@@ -1,6 +1,6 @@
 /*
  * The Sly Scheme I/O
- * Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
+ * Copyright © 2009 Alex Queiroz <asandroq@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -42,6 +42,14 @@ void sly_sbuffer_assign(sly_sbuffer_t* buffer, const char* str);
 void sly_sbuffer_add(sly_sbuffer_t* buffer, char c);
 const char* sly_sbuffer_string(sly_sbuffer_t* buffer);
 int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const char* str);
+
+/*
+ * strings
+ */
+
+uint8_t *sly_io_to_latin1(sly_state_t *S, sly_string_t *str);
+uint8_t *sly_io_to_utf8(sly_state_t *S, sly_string_t *str);
+sly_ucs2_t *sly_io_to_utf16(sly_state_t *S, sly_string_t *str);
 
 /*
  * ports

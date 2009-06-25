@@ -1,6 +1,6 @@
 /*
  * The Sly Scheme API
- * Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
+ * Copyright © 2009 Alex Queiroz <asandroq@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -259,6 +259,64 @@ sly_fixnum_t sly_to_integer(sly_state_t* S, int idx)
 #endif
 
   return S->stack[idx].value.fixnum;
+}
+
+sly_char_t* sly_to_string(sly_state_t* S, int idx)
+{
+  uint32_t size;
+  sly_char_t *ret;
+  sly_string_t *str;
+
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_STRING);
+#endif
+
+  size = str->size;
+  ret = (sly_char_t*)malloc((size+1) * sizeof(sly_char_t));
+  if(!ret) {
+    sly_push_string(S, "could not allocate memory");
+    sly_error(S, 1);
+  }
+
+  ret[size] = '\0';
+  memcpy(ret, str->chars, size * sizeof(sly_char_t));
+
+  return ret;
+}
+
+uint8_t* sly_to_string_latin1(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_STRING);
+#endif
+  
+  return sly_io_to_latin1(S, SLY_STRING(S->stack[idx].value.gc));
+}
+
+uint8_t* sly_to_string_utf8(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_STRING);
+#endif
+
+  return sly_io_to_utf8(S, SLY_STRING(S->stack[idx].value.gc));
+}
+
+sly_ucs2_t* sly_to_string_utf16(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_STRING);
+#endif
+
+  return sly_io_to_utf16(S, SLY_STRING(S->stack[idx].value.gc));
 }
 
 int sly_less_than(sly_state_t* S, int idx1, int idx2)

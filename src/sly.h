@@ -1,6 +1,6 @@
 /*
  * The Sly Scheme compiler
- * Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
+ * Copyright © 2009 Alex Queiroz <asandroq@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -35,8 +35,10 @@
 #define SLY_CHAR_ENC_UTF16        2
 #define SLY_CHAR_ENC_LATIN1       3
 
-/* character type */
-typedef uint32_t sly_char_t;
+/* character types */
+typedef uint16_t sly_ucs2_t;
+typedef uint32_t sly_ucs4_t;
+typedef sly_ucs4_t sly_char_t;
 
 /* type of small integers */
 typedef uint32_t sly_fixnum_t;
@@ -104,6 +106,11 @@ void sly_push_current_error_port(sly_state_t *S);
 
 /* get values from the stack */
 sly_fixnum_t sly_to_integer(sly_state_t* S, int idx);
+
+sly_char_t* sly_to_string(sly_state_t* S, int idx);
+uint8_t* sly_to_string_latin1(sly_state_t* S, int idx);
+uint8_t* sly_to_string_utf8(sly_state_t* S, int idx);
+sly_ucs2_t* sly_to_string_utf16(sly_state_t* S, int idx);
 
 /* compare values on the stack */
 int sly_less_than(sly_state_t* S, int idx1, int idx2);

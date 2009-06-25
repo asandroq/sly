@@ -1,6 +1,6 @@
 /*
  * The Sly Scheme system
- * Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
+ * Copyright © 2009 Alex Queiroz <asandroq@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -145,7 +145,8 @@ static sly_state_t* sly_create_state(void)
   /*
    * pushing on the stack the fundamental ports
    * this may seem a bootstrapping problem
-   * but the store is already set
+   * but the store is already set, only care
+   * with the stack pointer is needed
    */
   S->sp = 0;
   S->stack[0].type = SLY_TYPE_INPUT_PORT;

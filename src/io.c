@@ -32,6 +32,9 @@
 #else
 #include <errno.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #endif
 
 #include "sly.h"
@@ -949,7 +952,27 @@ sly_gcobject_t *sly_io_create_stderr(sly_state_t *S)
   return sly_io_create_ofport(S, file);
 }
 
-void sly_io_close_input_port(sly_state_t *S, sly_iport_t *port)
+sly_ifport_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str)
+{
+  sly_file_t file;
+
+#ifdef _WIN32
+#else
+  const char *fname;
+
+  fname = string2latin1(str);
+  if(!fname) {
+    sly_push_string(S, "cannot convert file name");
+    sly_error(S, 1);
+  }
+#endif
+}
+
+sly_ofport_t *sly_io_open_ofile(sly_state_t *S, sly_string_t *str)
+{
+}
+
+void sly_io_close_iport(sly_state_t *S, sly_iport_t *port)
 {
   if(SLY_PORT(port)->type == SLY_TYPE_PORT_FILE) {
 #ifdef _WIN32
@@ -978,7 +1001,7 @@ void sly_io_close_input_port(sly_state_t *S, sly_iport_t *port)
   }
 }
 
-void sly_io_close_output_port(sly_state_t *S, sly_oport_t *port)
+void sly_io_close_oport(sly_state_t *S, sly_oport_t *port)
 {
   if(SLY_PORT(port)->type == SLY_TYPE_PORT_FILE) {
 #ifdef _WIN32

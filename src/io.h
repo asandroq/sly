@@ -59,8 +59,11 @@ sly_gcobject_t *sly_io_create_stdin(sly_state_t *S);
 sly_gcobject_t *sly_io_create_stdout(sly_state_t *S);
 sly_gcobject_t *sly_io_create_stderr(sly_state_t *S);
 
-void sly_io_close_input_port(sly_state_t *S, sly_iport_t *port);
-void sly_io_close_output_port(sly_state_t *S, sly_oport_t *port);
+sly_ifport_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str);
+sly_ofport_t *sly_io_open_ofile(sly_state_t *S, sly_string_t *str);
+
+void sly_io_close_iport(sly_state_t *S, sly_iport_t *port);
+void sly_io_close_oport(sly_state_t *S, sly_oport_t *port);
 
 /*
  * writer

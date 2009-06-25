@@ -784,10 +784,34 @@ void sly_display(sly_state_t* S, int idx1, int idx2)
 
 void sly_open_input_file(sly_state_t* S, int idx)
 {
+  sly_ifport_t *port;
+
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_STRING);
+#endif
+
+  port = sly_io_open_ifile(S, SLY_STRING(S->stack[idx].value.gc));
+
+  S->stack[S->sp].type = SLY_TYPE_INPUT_PORT;
+  S->stack[S->sp++].value.gc = SLY_GCOBJECT(port);
 }
 
 void sly_open_output_file(sly_state_t* S, int idx)
 {
+  sly_ofport_t *port;
+
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_STRING);
+#endif
+
+  port = sly_io_open_ofile(S, SLY_STRING(S->stack[idx].value.gc));
+
+  S->stack[S->sp].type = SLY_TYPE_OUTPUT_PORT;
+  S->stack[S->sp++].value.gc = SLY_GCOBJECT(port);
 }
 
 void sly_close_input_port(sly_state_t* S, int idx)
@@ -801,7 +825,7 @@ void sly_close_input_port(sly_state_t* S, int idx)
 #endif
 
   port = S->stack[idx].value.gc;
-  sly_io_close_input_port(S, SLY_IPORT(port));
+  sly_io_close_iport(S, SLY_IPORT(port));
 }
 
 void sly_close_output_port(sly_state_t* S, int idx)
@@ -815,7 +839,7 @@ void sly_close_output_port(sly_state_t* S, int idx)
 #endif
 
   port = S->stack[idx].value.gc;
-  sly_io_close_output_port(S, SLY_OPORT(port));
+  sly_io_close_oport(S, SLY_OPORT(port));
 }
 
 void sly_set_global(sly_state_t* S, const char* name)

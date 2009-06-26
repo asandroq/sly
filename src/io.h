@@ -1,6 +1,6 @@
 /*
  * The Sly Scheme I/O
- * Copyright © 2009 Alex Queiroz <asandroq@gmail.com>
+ * Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -59,8 +59,8 @@ sly_gcobject_t *sly_io_create_stdin(sly_state_t *S);
 sly_gcobject_t *sly_io_create_stdout(sly_state_t *S);
 sly_gcobject_t *sly_io_create_stderr(sly_state_t *S);
 
-sly_ifport_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str);
-sly_ofport_t *sly_io_open_ofile(sly_state_t *S, sly_string_t *str);
+sly_ifport_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str, uint8_t char_enc);
+sly_ofport_t *sly_io_open_ofile(sly_state_t *S, sly_string_t *str, uint8_t char_enc);
 
 void sly_io_close_iport(sly_state_t *S, sly_iport_t *port);
 void sly_io_close_oport(sly_state_t *S, sly_oport_t *port);

@@ -1,6 +1,6 @@
 /*
  * The Sly Scheme I/O
- * Copyright © 2009 Alex Queiroz <asandroq@gmail.com>
+ * Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -41,6 +41,13 @@
 #include "io.h"
 #include "object.h"
 
+#define SLY_IO_PAUSE                10000
+
+#define SLY_UCS_LEFT_QUOTE          0x201C
+#define SLY_UCS_RIGHT_QUOTE         0x201D
+#define SLY_UCS_ELLIPSIS            0x2026
+#define SLY_UCS_FRACTION_SLASH      0x2044
+
 /*
  * utilities
  */
@@ -63,6 +70,8 @@ char* sly_strdup(const char* str)
 /*
  * char encodings
  */
+
+typedef int (*sly_from_char_t)(sly_char_t,uint8_t*,uint8_t*);
 
 static int char2utf8(sly_char_t c, uint8_t *buf, uint8_t *sz)
 {
@@ -118,30 +127,57 @@ static int char2utf16(sly_char_t c, uint16_t *buf, uint8_t *sz)
   return ret;
 }
 
-static int char2latin1(sly_char_t c, uint8_t *out)
+static int char2latin1(sly_char_t c, uint8_t *buf, uint8_t *sz)
 {
   int ret = 1;
 
+  *sz = 1;
   if(c < 0x100) {
-    *out = (uint8_t)c;
+    buf[0] = (uint8_t)c;
+  } else if(c > 0x1FFF && c < 0x200B) {
+    /* several compatibility spaces */
+    buf[0] = (uint8_t)' ';
+  } else if(c == SLY_UCS_LEFT_QUOTE ||
+            c == SLY_UCS_RIGHT_QUOTE) {
+    buf[0] = (uint8_t)'"';
+  } else if(c == SLY_UCS_ELLIPSIS) {
+    *sz = 3;
+    buf[0] = buf[1] = buf[2] = '.';
+  } else if(c == SLY_UCS_FRACTION_SLASH) {
+    buf[0] = (uint8_t)'/';
   } else if(c > 0xD7FF && c < 0xE000) {
     /* this range is for surrogates */
     ret = 0;
   } else {
-    *out = 191; /* inverted question mark */
+    buf[0] = 191; /* inverted question mark */
   }
 
   return ret;
 }
 
-static uint8_t* string2utf8(sly_string_t *str)
+static uint8_t* from_string(sly_string_t *str, uint8_t char_enc)
 {
   uint32_t i, size;
   uint8_t *ret, sz, buf[4];
+  sly_from_char_t func;
+
+  switch(char_enc) {
+  case SLY_CHAR_ENC_UTF8:
+    func = char2utf8;
+    break;
+  case SLY_CHAR_ENC_UTF16:
+    func = (sly_from_char_t)char2utf16;
+    break;
+  case SLY_CHAR_ENC_LATIN1:
+    func = char2latin1;
+    break;
+  default:
+    return NULL;
+  }
 
   /* calculating size of final string */
   for(size = 0, i = 0; i < str->size; i++, size += sz) {
-    if(!char2utf8(str->chars[i], buf, &sz)) {
+    if(!func(str->chars[i], buf, &sz)) {
       return NULL;
     }
   }
@@ -153,58 +189,9 @@ static uint8_t* string2utf8(sly_string_t *str)
 
   ret[size] = '\0';
   for(size = 0, i = 0; i < str->size; i++, size += sz) {
-    char2utf8(str->chars[i], buf, &sz);
+    func(str->chars[i], buf, &sz);
     memcpy(&ret[size], buf, sz * sizeof(uint8_t));
   }
-
-  return ret;
-}
-
-static sly_ucs2_t* string2utf16(sly_string_t *str)
-{
-  uint16_t buf[2];
-  uint32_t i, size;
-  uint8_t *ret, sz;
-
-  /* calculating size of final string */
-  for(size = 0, i = 0; i < str->size; i++, size += sz) {
-    if(!char2utf16(str->chars[i], buf, &sz)) {
-      return NULL;
-    }
-  }
-
-  ret = (uint8_t*)malloc((size+1) * sizeof(uint8_t));
-  if(!ret) {
-    return NULL;
-  }
-
-  ret[size] = '\0';
-  for(size = 0, i = 0; i < str->size; i++, size += sz) {
-    char2utf16(str->chars[i], buf, &sz);
-    memcpy(&ret[size], buf, sz * sizeof(uint8_t));
-  }
-
-  return (sly_ucs2_t*)ret;
-}
-
-static uint8_t* string2latin1(sly_string_t *str)
-{
-  uint32_t i;
-  uint8_t *ret;
-
-  ret = (uint8_t*)malloc((str->size+1) * sizeof(uint8_t));
-  if(!ret) {
-    return NULL;
-  }
-
-  for(i = 0; i < str->size; i++) {
-    if(!char2latin1(str->chars[i], &ret[i])) {
-      /* error in conversion */
-      free(ret);
-      return NULL;
-    }
-  }
-  ret[str->size] = '\0';
 
   return ret;
 }
@@ -328,29 +315,13 @@ static int fp_flush(sly_ofport_t *p)
 
 static int fp_flush(sly_oport_t *p_)
 {
-  size_t pos;
   ssize_t ret;
   sly_ofport_t *p = SLY_OFPORT(p_);
 
-  pos = 0;
+  do {
+    ret = write(p->out, p->buffer, p->size);
+  } while(ret < 0 && (errno == EAGAIN || errno == EINTR));
 
- write_again:
-  ret = write(p->out, &p->buffer[pos], p->size);
-
-  if(ret < 0) {
-    if(errno == EAGAIN) {
-      usleep(10000);
-    } else if(errno == EINTR) {
-      pos += ret;
-      p->size -= ret;
-      usleep(10000);
-    } else {
-      goto write_out;
-    }
-    goto write_again;
-  }
-
- write_out:
   p->size = 0;
   return ret < 0 ? 0 : 1;
 }
@@ -386,8 +357,7 @@ static int fp_write_char(sly_oport_t *p_, sly_char_t c)
     ret = char2utf16(c, (uint16_t*)buf, &sz);
     break;
   case SLY_CHAR_ENC_LATIN1:
-    sz = 1;
-    ret = char2latin1(c, buf);
+    ret = char2latin1(c, buf, &sz);
     break;
   default:
     ret = 0;
@@ -723,7 +693,7 @@ static void write_string(sly_state_t *S, sly_string_t* s, sly_oport_t *port, int
   uint32_t i;
 
   if(quote) {
-    port_write_char(S, port, (sly_char_t)'"');
+    port_write_char(S, port, SLY_UCS_LEFT_QUOTE);
   }
 
   for(i = 0; i < s->size; i++) {
@@ -731,7 +701,7 @@ static void write_string(sly_state_t *S, sly_string_t* s, sly_oport_t *port, int
   }
 
   if(quote) {
-    port_write_char(S, port, (sly_char_t)'"');
+    port_write_char(S, port, SLY_UCS_RIGHT_QUOTE);
   }
 }
 
@@ -849,7 +819,7 @@ uint8_t *sly_io_to_latin1(sly_state_t *S, sly_string_t *str)
 {
   uint8_t *ret;
 
-  ret = string2latin1(str);
+  ret = from_string(str, SLY_CHAR_ENC_LATIN1);
   if(!ret) {
     sly_push_string(S, "error converting string to latin-1");
     sly_error(S, 1);
@@ -862,7 +832,7 @@ uint8_t *sly_io_to_utf8(sly_state_t *S, sly_string_t *str)
 {
   uint8_t *ret;
 
-  ret = string2utf8(str);
+  ret = from_string(str, SLY_CHAR_ENC_UTF8);
   if(!ret) {
     sly_push_string(S, "error converting string to UTF-8");
     sly_error(S, 1);
@@ -875,7 +845,7 @@ sly_ucs2_t *sly_io_to_utf16(sly_state_t *S, sly_string_t *str)
 {
   sly_ucs2_t *ret;
 
-  ret = string2utf16(str);
+  ret = (sly_ucs2_t*)from_string(str, SLY_CHAR_ENC_UTF16);
   if(!ret) {
     sly_push_string(S, "error converting string to UTF-16");
     sly_error(S, 1);
@@ -952,7 +922,7 @@ sly_gcobject_t *sly_io_create_stderr(sly_state_t *S)
   return sly_io_create_ofport(S, file);
 }
 
-sly_ifport_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str)
+sly_ifport_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str, uint8_t char_enc)
 {
   sly_file_t file;
 
@@ -960,7 +930,7 @@ sly_ifport_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str)
 #else
   const char *fname;
 
-  fname = string2latin1(str);
+  fname = from_string(str, char_enc);
   if(!fname) {
     sly_push_string(S, "cannot convert file name");
     sly_error(S, 1);
@@ -968,7 +938,7 @@ sly_ifport_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str)
 #endif
 }
 
-sly_ofport_t *sly_io_open_ofile(sly_state_t *S, sly_string_t *str)
+sly_ofport_t *sly_io_open_ofile(sly_state_t *S, sly_string_t *str, uint8_t char_enc)
 {
 }
 

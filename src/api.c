@@ -1,6 +1,6 @@
 /*
  * The Sly Scheme API
- * Copyright © 2009 Alex Queiroz <asandroq@gmail.com>
+ * Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -792,7 +792,7 @@ void sly_open_input_file(sly_state_t* S, int idx)
   assert(S->stack[idx].type == SLY_TYPE_STRING);
 #endif
 
-  port = sly_io_open_ifile(S, SLY_STRING(S->stack[idx].value.gc));
+  port = sly_io_open_ifile(S, SLY_STRING(S->stack[idx].value.gc), SLY_CHAR_ENC_LATIN1);
 
   S->stack[S->sp].type = SLY_TYPE_INPUT_PORT;
   S->stack[S->sp++].value.gc = SLY_GCOBJECT(port);
@@ -808,7 +808,7 @@ void sly_open_output_file(sly_state_t* S, int idx)
   assert(S->stack[idx].type == SLY_TYPE_STRING);
 #endif
 
-  port = sly_io_open_ofile(S, SLY_STRING(S->stack[idx].value.gc));
+  port = sly_io_open_ofile(S, SLY_STRING(S->stack[idx].value.gc), SLY_CHAR_ENC_LATIN1);
 
   S->stack[S->sp].type = SLY_TYPE_OUTPUT_PORT;
   S->stack[S->sp++].value.gc = SLY_GCOBJECT(port);

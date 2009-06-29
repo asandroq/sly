@@ -301,18 +301,80 @@ int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const char* str)
 
 #ifdef _WIN32
 
-static int fp_flush(sly_ofport_t *p)
+static int fp_fill(sly_iport_t *p_)
+{
+  BOOL ret;
+  DWORD nread;
+  sly_ifport_t *p = SLY_IFPORT(p_);
+
+  ret = ReadFile(p->in, p->buffer, SLY_PORT_BUF_SIZE, &nread, NULL);
+
+  if(ret) {
+    p->beg = 0;
+    p->end = nread - 1;
+    return 1;
+  } else {
+    if(GetLastError() == ERROR_HANDLE_EOF) {
+      p->beg = 0;
+      p->end = nread - 1;
+      return 2;
+    } else {
+      return 0;
+    }
+  }
+}
+
+static int fp_flush(sly_oport_t *p_)
 {
   BOOL ret;
   DWORD nwritten;
+  sly_ofport_t *p = SLY_OFPORT(p_);
 
-  ret = WriteFile(p->out, p->buffer, p->size, &nwritten, NULL);
-  p->size = 0;
+  ret = WriteFile(p->out,
+                  &p->buffer[p->beg],
+                  p->end - p->beg + 1,
+                  &nwritten,
+                  NULL);
+  if(ret) {
+    p->beg += nwritten - 1;
+    if(p->beg == p->end) {
+      /* reset buffer if empty */
+      p->beg = p->end = 0;
+    }
+  }
 
   return ret ? 1 : 0;
 }
 
 #else
+
+static int fp_fill(sly_iport_t *p_)
+{
+  ssize_t ret;
+  sly_ifport_t *p = SLY_IFPORT(p_);
+
+ fill_again:
+  ret = read(p->in,
+             p->buffer,
+             SLY_PORT_BUF_SIZE);
+  if(ret < 0 && (errno == EAGAIN || errno == EINTR)) {
+    usleep(SLY_IO_PAUSE);
+    goto fill_again;
+  }
+
+  if(ret < 0) {
+    /* error */
+    return -1;
+  } else if(ret == 0) {
+    /* end of file */
+    p->beg = p->end = 0;
+    return 2;
+  } else {
+    p->beg = 0;
+    p->end = ret - 1;
+    return 1;
+  }
+}
 
 static int fp_flush(sly_oport_t *p_)
 {
@@ -320,13 +382,22 @@ static int fp_flush(sly_oport_t *p_)
   sly_ofport_t *p = SLY_OFPORT(p_);
 
  flush_again:
-  ret = write(p->out, p->buffer, p->size);
+  ret = write(p->out,
+              &p->buffer[p->beg],
+              p->end - p->beg);
   if(ret < 0 && (errno == EAGAIN || errno == EINTR)) {
     usleep(SLY_IO_PAUSE);
     goto flush_again;
   }
 
-  p->size = 0;
+  if(ret > 0) {
+    p->beg += ret - 1;
+    if(p->beg == p->end) {
+      /* reset buffer if empty */
+      p->beg = p->end = 0;
+    }
+  }
+
   return ret < 0 ? 0 : 1;
 }
 
@@ -336,13 +407,13 @@ static int fp_write_byte(sly_oport_t *p_, uint8_t b)
 {
   sly_ofport_t *p = SLY_OFPORT(p_);
 
-  if(p->size == SLY_PORT_BUF_SIZE) {
+  while(p->end == SLY_PORT_BUF_SIZE) {
     if(!fp_flush(p_)) {
       return 0;
     }
   }
 
-  p->buffer[p->size++] = b;
+  p->buffer[p->end++] = b;
 
   return 1;
 }
@@ -369,14 +440,14 @@ static int fp_write_char(sly_oport_t *p_, sly_char_t c)
   }
 
   if(ret) {
-    if(SLY_PORT_BUF_SIZE - p->size < sz) {
+    while(SLY_PORT_BUF_SIZE - p->end < sz) {
       if(!fp_flush(p_)) {
         return 0;
       }
     }
 
-    memcpy(&p->buffer[p->size], buf, sz * sizeof(uint8_t));
-    p->size += sz;
+    memcpy(&p->buffer[p->end], buf, sz * sizeof(uint8_t));
+    p->end += sz;
   } else {
     return 0;
   }

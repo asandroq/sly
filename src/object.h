@@ -203,14 +203,16 @@ struct sly_oport_t {
 struct sly_ifport_t {
   sly_iport_t base;
   sly_file_t in;
-  uint32_t size;
+  uint32_t beg;
+  uint32_t end;
   uint8_t buffer[SLY_PORT_BUF_SIZE];
 };
 
 struct sly_ofport_t {
   sly_oport_t base;
   sly_file_t out;
-  uint32_t size;
+  uint32_t beg;
+  uint32_t end;
   uint8_t buffer[SLY_PORT_BUF_SIZE];
 };
 

@@ -784,7 +784,7 @@ void sly_display(sly_state_t* S, int idx1, int idx2)
 
 void sly_open_input_file(sly_state_t* S, int idx)
 {
-  sly_ifport_t *port;
+  sly_gcobject_t *port;
 
   idx = calc_index(S, idx);
 
@@ -795,12 +795,12 @@ void sly_open_input_file(sly_state_t* S, int idx)
   port = sly_io_open_ifile(S, SLY_STRING(S->stack[idx].value.gc), SLY_CHAR_ENC_LATIN1);
 
   S->stack[S->sp].type = SLY_TYPE_INPUT_PORT;
-  S->stack[S->sp++].value.gc = SLY_GCOBJECT(port);
+  S->stack[S->sp++].value.gc = port;
 }
 
 void sly_open_output_file(sly_state_t* S, int idx)
 {
-  sly_ofport_t *port;
+  sly_gcobject_t *port;
 
   idx = calc_index(S, idx);
 
@@ -811,7 +811,7 @@ void sly_open_output_file(sly_state_t* S, int idx)
   port = sly_io_open_ofile(S, SLY_STRING(S->stack[idx].value.gc), SLY_CHAR_ENC_LATIN1);
 
   S->stack[S->sp].type = SLY_TYPE_OUTPUT_PORT;
-  S->stack[S->sp++].value.gc = SLY_GCOBJECT(port);
+  S->stack[S->sp++].value.gc = port;
 }
 
 void sly_close_input_port(sly_state_t* S, int idx)

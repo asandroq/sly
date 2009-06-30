@@ -337,7 +337,7 @@ static int fp_flush(sly_oport_t *p_)
                   NULL);
   if(ret) {
     p->beg += nwritten - 1;
-    if(p->beg == p->end) {
+    if(p->beg == p->end - 1) {
       /* reset buffer if empty */
       p->beg = p->end = 0;
     }
@@ -392,7 +392,7 @@ static int fp_flush(sly_oport_t *p_)
 
   if(ret > 0) {
     p->beg += ret - 1;
-    if(p->beg == p->end) {
+    if(p->beg == p->end - 1) {
       /* reset buffer if empty */
       p->beg = p->end = 0;
     }

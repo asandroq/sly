@@ -39,9 +39,9 @@ typedef struct sly_sbuffer_t sly_sbuffer_t;
 sly_sbuffer_t* sly_sbuffer_new(void);
 void sly_sbuffer_destroy(sly_sbuffer_t* buffer);
 void sly_sbuffer_assign(sly_sbuffer_t* buffer, const char* str);
-void sly_sbuffer_add(sly_sbuffer_t* buffer, char c);
-const char* sly_sbuffer_string(sly_sbuffer_t* buffer);
-int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const char* str);
+void sly_sbuffer_add(sly_sbuffer_t* buffer, sly_char_t c);
+const sly_char_t* sly_sbuffer_string(sly_sbuffer_t* buffer);
+int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const sly_char_t* str);
 
 /*
  * strings

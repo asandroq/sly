@@ -203,10 +203,10 @@ static uint8_t* from_string(sly_string_t *str, uint8_t char_enc)
 struct sly_sbuffer_t {
   size_t pos;
   size_t size;
-  char *str;
+  sly_char_t *str;
 };
 
-sly_sbuffer_t* sly_sbuffer_new(void)
+sly_sbuffer_t* sly_io_create_sbuffer(void)
 {
   sly_sbuffer_t *ret;
 
@@ -218,7 +218,7 @@ sly_sbuffer_t* sly_sbuffer_new(void)
   /* most identifiers are small */
   ret->pos = 0;
   ret->size = 32;
-  ret->str = (char*) malloc(ret->size * sizeof(char));
+  ret->str = (sly_char_t*) malloc(ret->size * sizeof(sly_char_t));
   if(ret->str == NULL) {
     free(ret);
     return NULL;
@@ -228,7 +228,7 @@ sly_sbuffer_t* sly_sbuffer_new(void)
   return ret;
 }
 
-void sly_sbuffer_destroy(sly_sbuffer_t* buffer)
+void sly_io_destroy_sbuffer(sly_sbuffer_t* buffer)
 {
   if(buffer != NULL) {
     if(buffer->str != NULL) {
@@ -240,13 +240,13 @@ void sly_sbuffer_destroy(sly_sbuffer_t* buffer)
 
 void sly_sbuffer_assign(sly_sbuffer_t* buffer, const char* str)
 {
-  size_t len;
+  size_t i, len;
 
   len = strlen(str) + 1;
   if(len > buffer->size) {
-    char *t;
+    sly_char_t *t;
 
-    t = (char*) realloc(buffer->str, len * sizeof(char));
+    t = (sly_char_t*) realloc(buffer->str, len * sizeof(sly_char_t));
     if(t == NULL) {
       return;
     }
@@ -254,22 +254,25 @@ void sly_sbuffer_assign(sly_sbuffer_t* buffer, const char* str)
     buffer->size = len;
   }
 
+  for(i = 0; i < len; i++) {
+    buffer->str[i] = str[i];
+  }
   buffer->pos = len - 1;
-  strncpy(buffer->str, str, len);
+  buffer->str[len] = '\0';
 }
 
-void sly_sbuffer_add(sly_sbuffer_t* buffer, char c)
+void sly_sbuffer_add(sly_sbuffer_t* buffer, sly_char_t c)
 {
   if(buffer == NULL) {
     return;
   }
 
   if(buffer->pos == buffer->size - 1) {
-    char *t;
+    sly_char_t *t;
     size_t size;
 
     size = buffer->size * 3 / 2;
-    t = (char*) realloc(buffer->str, size * sizeof(char));
+    t = (sly_char_t*) realloc(buffer->str, size * sizeof(sly_char_t));
     if(t == NULL) {
       return;
     }
@@ -281,7 +284,7 @@ void sly_sbuffer_add(sly_sbuffer_t* buffer, char c)
   buffer->str[buffer->pos] = '\0';
 }
 
-const char* sly_sbuffer_string(sly_sbuffer_t* buffer)
+const sly_char_t* sly_sbuffer_string(sly_sbuffer_t* buffer)
 {
   if(buffer != NULL) {
     return buffer->str;
@@ -290,9 +293,10 @@ const char* sly_sbuffer_string(sly_sbuffer_t* buffer)
   }
 }
 
-int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const char* str)
+
+int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const sly_char_t* str)
 {
-  return strcmp(buffer->str, str) == 0;
+  return memcmp(buffer->str, str, buffer->size) == 0;
 }
 
 /*
@@ -745,16 +749,14 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, FILE* in, sly_obje
   }
 }
 
-sly_object_t sly_io_read(sly_state_t *S)
+sly_object_t sly_io_read(sly_state_t *S, sly_iport_t *p)
 {
-  FILE *in;
   sly_object_t ret;
   sly_sbuffer_t *buffer;
 
-  in = stdin;
-  buffer = sly_sbuffer_new();
-  sly_io_read_i(S, buffer, in, &ret);
-  sly_sbuffer_destroy(buffer);
+  buffer = sly_io_create_sbuffer();
+  sly_io_read_i(S, buffer, p, &ret);
+  sly_io_destroy_sbuffer(buffer);
 
   return ret;
 }

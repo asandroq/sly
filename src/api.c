@@ -232,12 +232,18 @@ void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, uint32_t nr_vars)
 
 void sly_push_string(sly_state_t* S, const char* str)
 {
-  sly_object_t obj;
+  uint32_t i, len;
+  sly_gcobject_t *obj;
 
-  obj.type = SLY_TYPE_STRING;
-  obj.value.gc = sly_create_string(S, str, 0);
+  len = strlen(str);
 
-  S->stack[S->sp++] = obj;
+  obj = sly_create_string(S, NULL, len);
+  for(i = 0; i < len; i++) {
+    SLY_STRING(obj)->chars[i] = (sly_char_t)str[i];
+  }
+
+  S->stack[S->sp].type = SLY_TYPE_STRING;
+  S->stack[S->sp++].value.gc = obj;
 }
 
 void sly_push_vector(sly_state_t* S, uint32_t size)
@@ -513,7 +519,8 @@ void sly_round(sly_state_t* S, int idx)
 
 void sly_number_to_string(sly_state_t* S, int idx)
 {
-  char tmp[20];
+  char tmp[64];
+  uint32_t i, len;
   sly_gcobject_t *str;
 
   idx = calc_index(S, idx);
@@ -522,8 +529,13 @@ void sly_number_to_string(sly_state_t* S, int idx)
   assert(S->stack[idx].type == SLY_TYPE_FIXNUM);
 #endif
 
-  snprintf(tmp, 20, "%d", S->stack[idx].value.fixnum);
-  str = sly_create_string(S, tmp, 0);
+  snprintf(tmp, 64, "%d", S->stack[idx].value.fixnum);
+  len = strlen(tmp);
+
+  str = sly_create_string(S, NULL, len);
+  for(i = 0; i < len; i++) {
+    SLY_STRING(str)->chars[i] = (sly_char_t)tmp[i];
+  }
 
   S->stack[S->sp].type = SLY_TYPE_STRING;
   S->stack[S->sp++].value.gc = str;
@@ -845,10 +857,16 @@ void sly_close_output_port(sly_state_t* S, int idx)
 void sly_set_global(sly_state_t* S, const char* name)
 {
   int idx;
+  uint32_t i, len;
   sly_object_t sym;
   sly_gcobject_t *str;
 
-  str = sly_create_string(S, name, 0);
+  len = strlen(name);
+  str = sly_create_string(S, NULL, len);
+  for(i = 0; i < len; i++) {
+    SLY_STRING(str)->chars[i] = (sly_char_t)name[i];
+  }
+
   sym = sly_create_symbol(S, SLY_STRING(str));
 
   /* is the global already there? */

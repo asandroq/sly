@@ -118,13 +118,9 @@ sly_gcobject_t *sly_create_conti(sly_state_t *S, uint32_t stack_size)
   return SLY_GCOBJECT(ret);
 }
 
-sly_gcobject_t *sly_create_string(sly_state_t *S, const char* str, uint32_t size)
+sly_gcobject_t *sly_create_string(sly_state_t *S, const sly_char_t* str, uint32_t size)
 {
   sly_string_t *ret;
-
-  if(str != NULL) {
-    size = strlen(str);
-  }
 
   ret = (sly_string_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_STRING(size));
 
@@ -136,7 +132,7 @@ sly_gcobject_t *sly_create_string(sly_state_t *S, const char* str, uint32_t size
 
     if(str) {
       for(i = 0; i < size; i++) {
-	ret->chars[i] = (sly_char_t)str[i];
+	ret->chars[i] = str[i];
       }
     } else {
       for(i = 0; i < size; i++) {

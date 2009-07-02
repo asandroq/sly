@@ -49,6 +49,15 @@
 #define SLY_UCS_FRACTION_SLASH      0x2044
 
 /*
+ * some string constants
+ */
+
+static const sly_char_t false_str[]    = {'#', 'f', '\0'};
+static const sly_char_t true_str[]     = {'#', 't', '\0'};
+static const sly_char_t space_str[]    = {'#', '\\', 's', 'p', 'a', 'c', 'e', '\0'};
+static const sly_char_t newline_str[]  = {'#', '\\', 'n', 'e', 'w', 'l', 'i', 'n', 'e', '\0'};
+
+/*
  * utilities
  */
 
@@ -675,20 +684,20 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, FILE* in, sly_obje
   if(c == '#') {
     ungetc(c, in);
     read_till_delimiter(in, buf);
-    if(sly_sbuffer_equalp(buf, "#f")) {
+    if(sly_sbuffer_equalp(buf, false_str)) {
       /* boolean false */
       res->type = SLY_TYPE_BOOL;
       res->value.bool = 0;
-    } else if(sly_sbuffer_equalp(buf, "#t")) {
+    } else if(sly_sbuffer_equalp(buf, true_str)) {
       /* boolean true */
       res->type = SLY_TYPE_BOOL;
       res->value.bool = 1;
     } else if(buf->str[1] == '\\') {
       /* character */
       res->type = SLY_TYPE_CHAR;
-      if(sly_sbuffer_equalp(buf, "#\\space")) {
+      if(sly_sbuffer_equalp(buf, space_str)) {
 	res->value.chr = ' ';
-      } else if(sly_sbuffer_equalp(buf, "#\\newline")) {
+      } else if(sly_sbuffer_equalp(buf, newline_str)) {
 	res->value.chr = '\n';
       } else if(buf->size == 3) {
 	res->value.chr = buf->str[2];

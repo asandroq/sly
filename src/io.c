@@ -48,6 +48,9 @@
 #define SLY_UCS_ELLIPSIS            0x2026
 #define SLY_UCS_FRACTION_SLASH      0x2044
 
+/* using the Unicode private range */
+#define SLY_UCS_EOF                 0xF000
+
 /*
  * some string constants
  */
@@ -56,31 +59,13 @@ static const sly_char_t false_str[]    = {'#', 'f', '\0'};
 static const sly_char_t true_str[]     = {'#', 't', '\0'};
 static const sly_char_t space_str[]    = {'#', '\\', 's', 'p', 'a', 'c', 'e', '\0'};
 static const sly_char_t newline_str[]  = {'#', '\\', 'n', 'e', 'w', 'l', 'i', 'n', 'e', '\0'};
-
-/*
- * utilities
- */
-
-char* sly_strdup(const char* str)
-{
-  char *ret;
-  size_t len;
-
-  len = strlen(str) + 1;
-  ret = (char*) malloc(len * sizeof(char));
-  if(ret == NULL) {
-    return NULL;
-  }
-  strncpy(ret, str, len);
-
-  return ret;
-}
+static const sly_char_t ellipsis_str[]  = {'.', '.', '.', '\0'};
 
 /*
  * char encodings
  */
 
-typedef int (*sly_from_char_t)(sly_char_t,uint8_t*,uint8_t*);
+/*typedef int (*sly_from_char_t)(sly_char_t,uint8_t*,uint8_t*);*/
 
 static int char2utf8(sly_char_t c, uint8_t *buf, uint8_t *sz)
 {
@@ -114,9 +99,10 @@ static int char2utf8(sly_char_t c, uint8_t *buf, uint8_t *sz)
   return ret;
 }
 
-static int char2utf16(sly_char_t c, uint16_t *buf, uint8_t *sz)
+static int char2utf16(sly_char_t c, uint8_t *buf_, uint8_t *sz)
 {
   int ret = 1;
+  uint16_t *buf = (uint16_t*)buf_;
 
   if(c > 0xD7FF && c < 0xE000) {
     /* this range is for surrogates */
@@ -168,14 +154,14 @@ static uint8_t* from_string(sly_string_t *str, uint8_t char_enc)
 {
   uint32_t i, size;
   uint8_t *ret, sz, buf[4];
-  sly_from_char_t func;
+  int (*func)(sly_char_t,uint8_t*,uint8_t*);
 
   switch(char_enc) {
   case SLY_CHAR_ENC_UTF8:
     func = char2utf8;
     break;
   case SLY_CHAR_ENC_UTF16:
-    func = (sly_from_char_t)char2utf16;
+    func = char2utf16;
     break;
   case SLY_CHAR_ENC_LATIN1:
     func = char2latin1;
@@ -442,7 +428,7 @@ static int fp_write_char(sly_oport_t *p_, sly_char_t c)
     ret = char2utf8(c, buf, &sz);
     break;
   case SLY_CHAR_ENC_UTF16:
-    ret = char2utf16(c, (uint16_t*)buf, &sz);
+    ret = char2utf16(c, buf, &sz);
     break;
   case SLY_CHAR_ENC_LATIN1:
     ret = char2latin1(c, buf, &sz);
@@ -577,7 +563,7 @@ static void read_till_delimiter(FILE* in, sly_sbuffer_t* buf)
   ungetc(c, in);
 }
 
-static void parse_number(const char *str, sly_object_t *res)
+static void parse_number(const sly_char_t *str, sly_object_t *res)
 {
   int i, base, is_exact;
 
@@ -647,28 +633,28 @@ static void parse_number(const char *str, sly_object_t *res)
   
 }
 
-static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, FILE* in, sly_object_t* res)
+static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, sly_object_t* res)
 {
-  int c;
+  sly_char_t c;
   sly_gcobject_t *obj;
 
   res->type = SLY_TYPE_NIL;
 
-  c = getc(in);
+  c = port_peek_char(S, in);
   while(isspace(c) || c == ';') {
     /* eating up whitespace and comments */
     while(isspace(c)) {
-      c = getc(in);
+      c = port_read_char(S, in);
     }
 
     if(c == ';') {
       while(c != '\n') {
-	c = getc(in);
+	c = port_read_char(S, in);
       }
     }
   }
 
-  if(c == EOF) {
+  if(c == SLY_UCS_EOF) {
     res->type = SLY_TYPE_EOF;
     return;
   }
@@ -732,7 +718,7 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, FILE* in, sly_obje
 	/* number */
 	parse_number(buf->str, res);
       }
-    } else if(strcmp(buf->str, "...") == 0) {
+    } else if(sly_sbuffer_equalp(buf, ellipsis_str)) {
       obj = sly_create_string(S, buf->str, 0);
       *res = sly_create_symbol(S, SLY_STRING(obj));
     } else {

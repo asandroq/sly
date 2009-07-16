@@ -50,6 +50,7 @@
 
 /* using the Unicode private range */
 #define SLY_UCS_EOF                 0xF000
+#define SLY_UCS_NO_CHAR             0xF001
 
 /*
  * some string constants
@@ -295,100 +296,20 @@ int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const sly_char_t* str)
  * file ports
  */
 
-#ifdef _WIN32
+struct fp_priv {
+  FILE *f;
+  sly_char_t chr;
+};
 
-static int fp_fill(sly_iport_t *p_)
+static int fpi_finish(sly_iport_t *self)
 {
-  BOOL ret;
-  DWORD nread;
-  sly_ifport_t *p = SLY_IFPORT(p_);
+  FILE *f = ((struct fp_priv*)SLY_PORT(self)->private)->f;
 
-  ret = ReadFile(p->in, p->buffer, SLY_PORT_BUF_SIZE, &nread, NULL);
-
-  if(ret) {
-    p->size = nread;
-    return 1;
-  } else {
-    if(GetLastError() == ERROR_HANDLE_EOF) {
-      p->size = 0;
-      return 2;
-    } else {
-      p->size = 0;
-      return 0;
-    }
-  }
-}
-
-static int fp_flush(sly_oport_t *p_)
-{
-  BOOL ret;
-  DWORD nwritten;
-  sly_ofport_t *p = SLY_OFPORT(p_);
-
-  ret = WriteFile(p->out, p->buffer, p->size, &nwritten, NULL);
-  p->size = 0;
-
-  return ret ? 1 : 0;
-}
-
-#else
-
-static int fp_fill(sly_iport_t *p_)
-{
-  ssize_t ret;
-  sly_ifport_t *p = SLY_IFPORT(p_);
-
- fill_again:
-  ret = read(p->in,
-             p->buffer,
-             SLY_PORT_BUF_SIZE);
-  if(ret < 0 && (errno == EAGAIN || errno == EINTR)) {
-    usleep(SLY_IO_PAUSE);
-    goto fill_again;
-  }
-
-  if(ret < 0) {
-    /* error */
-    return -1;
-  } else if(ret == 0) {
-    /* end of file */
-    return 2;
-  } else {
-    p->size = ret;
-    return 1;
-  }
-}
-
-static int fp_flush(sly_oport_t *p_)
-{
-  ssize_t ret;
-  sly_ofport_t *p = SLY_OFPORT(p_);
-
- flush_again:
-  ret = write(p->out, p->buffer, p->size);
-  if(ret < 0 && (errno == EAGAIN || errno == EINTR)) {
-    usleep(SLY_IO_PAUSE);
-    goto flush_again;
-  }
-
-  if(ret > 0) {
-    p->size = 0;
-  }
-
-  return ret < 0 ? 0 : 1;
-}
-
-#endif
-
-static int fp_peek_byte(sly_iport_t *self, uint8_t *b)
-{
+  free(SLY_PORT(self)->private);
+  return fclose(f) == 0;
 }
 
 static int fp_peek_char(sly_iport_t *self, sly_char_t *c)
-{
-}
-
-static int fp_read_byte(sly_iport_t *self, uint8_t *b)
 {
 }
 
@@ -396,26 +317,24 @@ static int fp_read_char(sly_iport_t *self, sly_char_t *c)
 {
 }
 
-static int fp_write_byte(sly_oport_t *p_, uint8_t b)
+static int fpo_finish(sly_oport_t *self)
 {
-  sly_ofport_t *p = SLY_OFPORT(p_);
+  FILE *f = ((struct fp_priv*)SLY_PORT(self)->private)->f;
 
-  if(p->size == SLY_PORT_BUF_SIZE) {
-    if(!fp_flush(p_)) {
-      return 0;
-    }
-  }
-
-  p->buffer[p->size++] = b;
-
-  return 1;
+  free(SLY_PORT(self)->private);
+  return fclose(f) == 0;
 }
 
-static int fp_write_char(sly_oport_t *p_, sly_char_t c)
+static int fp_flush(sly_oport_t *p)
+{
+  return fflush(((struct fp_priv*)SLY_PORT(p)->private)->f) == 0;
+}
+
+static int fp_write_char(sly_oport_t *p, sly_char_t c)
 {
   int ret;
+  FILE *f;
   uint8_t sz, buf[4];
-  sly_ofport_t *p = SLY_OFPORT(p_);
 
   switch(SLY_PORT(p)->char_enc) {
   case SLY_CHAR_ENC_UTF8:
@@ -433,16 +352,8 @@ static int fp_write_char(sly_oport_t *p_, sly_char_t c)
   }
 
   if(ret) {
-    if(SLY_PORT_BUF_SIZE - p->size < sz) {
-      if(!fp_flush(p_)) {
-        return 0;
-      }
-    }
-
-    memcpy(&p->buffer[p->size], buf, sz * sizeof(uint8_t));
-    p->size += sz;
-  } else {
-    return 0;
+    f = ((struct fp_priv*)SLY_PORT(p)->private)->f;
+    fwrite(buf, sizeof(uint8_t), sz, f);
   }
 
   return ret;
@@ -451,18 +362,6 @@ static int fp_write_char(sly_oport_t *p_, sly_char_t c)
 /*
  * generic port interface
  */
-
-static uint8_t port_peek_byte(sly_state_t* S, sly_iport_t *p)
-{
-  uint8_t res;
-
-  if(p->peek_byte(p, &res)) {
-    return res;
-  } else {
-    sly_push_string(S, "cannot peek byte");
-    return (uint8_t)sly_error(S, 1);
-  }
-}
 
 static sly_char_t port_peek_char(sly_state_t* S, sly_iport_t *p)
 {
@@ -473,18 +372,6 @@ static sly_char_t port_peek_char(sly_state_t* S, sly_iport_t *p)
   } else {
     sly_push_string(S, "cannot peek char");
     return (sly_char_t)sly_error(S, 1);
-  }
-}
-
-static uint8_t port_read_byte(sly_state_t* S, sly_iport_t *p)
-{
-  uint8_t res;
-
-  if(p->read_byte(p, &res)) {
-    return res;
-  } else {
-    sly_push_string(S, "cannot read byte");
-    return (uint8_t)sly_error(S, 1);
   }
 }
 
@@ -504,14 +391,6 @@ static void port_flush(sly_state_t* S, sly_oport_t *p)
 {
   if(!p->flush(p)) {
     sly_push_string(S, "cannot flush port");
-    sly_error(S, 1);
-  }
-}
-
-static void port_write_byte(sly_state_t* S, sly_oport_t *p, uint8_t b)
-{
-  if(!p->write_byte(p, b)) {
-    sly_push_string(S, "cannot write byte");
     sly_error(S, 1);
   }
 }
@@ -920,164 +799,65 @@ sly_ucs2_t *sly_io_to_utf16(sly_state_t *S, sly_string_t *str)
   return ret;
 }
 
-sly_gcobject_t *sly_io_create_ifport(sly_state_t *S, sly_file_t file)
+sly_gcobject_t *sly_io_create_ifport(sly_state_t *S, FILE* file)
 {
   sly_gcobject_t *port;
+  struct fp_priv *priv;
 
-  port = sly_create_ifport(S);
+  port = sly_create_iport(S);
+  priv = (struct fp_priv*)malloc(sizeof(struct fp_priv));
 
-  SLY_IPORT(port)->peek_byte = fp_peek_byte;
+  priv->f = file;
+  priv->chr = SLY_UCS_NO_CHAR;
+  SLY_PORT(port)->private = priv;
+  SLY_PORT(port)->type = SLY_TYPE_PORT_FILE;
+
+  SLY_IPORT(port)->finish = fpi_finish;
   SLY_IPORT(port)->peek_char = fp_peek_char;
-  SLY_IPORT(port)->read_byte = fp_read_byte;
   SLY_IPORT(port)->read_char = fp_read_char;
 
-  SLY_IFPORT(port)->in = file;
-
   return port;
 }
 
-sly_gcobject_t *sly_io_create_ofport(sly_state_t *S, sly_file_t file)
+sly_gcobject_t *sly_io_create_ofport(sly_state_t *S, FILE* file)
 {
   sly_gcobject_t *port;
+  struct fp_priv *priv;
 
-  port = sly_create_ofport(S);
+  port = sly_create_oport(S);
+  priv = (struct fp_priv*)malloc(sizeof(struct fp_priv));
 
+  priv->f = file;
+  priv->chr = SLY_UCS_NO_CHAR;
+  SLY_PORT(port)->private = priv;
+  SLY_PORT(port)->type = SLY_TYPE_PORT_FILE;
+
+  SLY_OPORT(port)->finish = fpo_finish;
   SLY_OPORT(port)->flush = fp_flush;
-  SLY_OPORT(port)->write_byte = fp_write_byte;
   SLY_OPORT(port)->write_char = fp_write_char;
-
-  SLY_OFPORT(port)->out = file;
 
   return port;
 }
 
-#ifdef _WIN32
-
 sly_gcobject_t *sly_io_create_stdin(sly_state_t *S)
 {
-  sly_file_t file;
-
-  file = GetStdHandle(STD_INPUT_HANDLE);
-
-  return sly_io_create_ifport(S, file);
+  return sly_io_create_ifport(S, stdin);
 }
 
 sly_gcobject_t *sly_io_create_stdout(sly_state_t *S)
 {
-  sly_file_t file;
-
-  file = GetStdHandle(STD_OUTPUT_HANDLE);
-
-  return sly_io_create_ofport(S, file);
+  return sly_io_create_ofport(S, stdout);
 }
 
 sly_gcobject_t *sly_io_create_stderr(sly_state_t *S)
 {
-  sly_file_t file;
-
-  file = GetStdHandle(STD_ERROR_HANDLE);
-
-  return sly_io_create_ofport(S, file);
-}
-
-sly_gcobject_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str, uint8_t char_enc)
-{
-  sly_file_t file;
-  sly_ucs2_t *fname;
-
-  fname = from_string(str, SLY_CHAR_ENC_UTF16);
-
-  file = CreateFileW(fname, GENERIC_READ, FILE_SHARE_READ,
-                     NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-  if(file == INVALID_HANDLE_VALUE) {
-    sly_push_string(S, "cannot open input file: ");
-    sly_push_string(S, fname);
-    free(fname);
-    sly_error(S, 2);
-  }
-
-  return sly_io_create_ifport(S, file);
-}
-
-sly_gcobject_t *sly_io_open_ofile(sly_state_t *S, sly_string_t *str, uint8_t char_enc)
-{
-  sly_file_t file;
-  sly_ucs2_t *fname;
-
-  fname = from_string(str, SLY_CHAR_ENC_UTF16);
-
-  file = CreateFileW(fname, GENERIC_WRITE, 0,
-                     NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-  if(file == INVALID_HANDLE_VALUE) {
-    sly_push_string(S, "cannot open output file: ");
-    sly_push_string(S, fname);
-    free(fname);
-    sly_error(S, 2);
-  }
-
-  return sly_io_create_ofport(S, file);
-}
-
-void sly_io_close_iport(sly_state_t *S, sly_iport_t *port)
-{
-  if(SLY_PORT(port)->type == SLY_TYPE_PORT_FILE) {
-    int ret;
-    BOOL ret;
-
-    ret = CloseHandle(SLY_IFPORT(port)->in);
-    if(!ret) {
-      sly_push_string(S, "cannot close input port");
-      sly_error(S, 1);
-    }
-  }
-}
-
-void sly_io_close_oport(sly_state_t *S, sly_oport_t *port)
-{
-  if(SLY_PORT(port)->type == SLY_TYPE_PORT_FILE) {
-    BOOL ret;
-
-    ret = CloseHandle(SLY_OFPORT(port)->out);
-    if(!ret) {
-      sly_push_string(S, "cannot close output port");
-      sly_error(S, 1);
-    }
-  }
-}
-
-#else
-
-sly_gcobject_t *sly_io_create_stdin(sly_state_t *S)
-{
-  sly_file_t file;
-
-  file = STDIN_FILENO;
-
-  return sly_io_create_ifport(S, file);
-}
-
-sly_gcobject_t *sly_io_create_stdout(sly_state_t *S)
-{
-  sly_file_t file;
-
-  file = STDOUT_FILENO;
-
-  return sly_io_create_ofport(S, file);
-}
-
-sly_gcobject_t *sly_io_create_stderr(sly_state_t *S)
-{
-  sly_file_t file;
-
-  file = STDERR_FILENO;
-
-  return sly_io_create_ofport(S, file);
+  return sly_io_create_ofport(S, stderr);
 }
 
 sly_gcobject_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str, uint8_t char_enc)
 {
   char *fname;
-  sly_file_t file;
+  FILE *file;
 
   fname = from_string(str, char_enc);
   if(!fname) {
@@ -1085,8 +865,8 @@ sly_gcobject_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str, uint8_t cha
     sly_error(S, 1);
   }
 
-  file = open(fname, O_RDONLY | O_LARGEFILE | O_NONBLOCK);
-  if(file < 0) {
+  file = fopen(fname, "rb");
+  if(!file) {
     sly_push_string(S, "cannot open input file: ");
     sly_push_string(S, fname);
     free(fname);
@@ -1100,7 +880,7 @@ sly_gcobject_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str, uint8_t cha
 sly_gcobject_t *sly_io_open_ofile(sly_state_t *S, sly_string_t *str, uint8_t char_enc)
 {
   char *fname;
-  sly_file_t file;
+  FILE *file;
 
   fname = from_string(str, char_enc);
   if(!fname) {
@@ -1108,8 +888,8 @@ sly_gcobject_t *sly_io_open_ofile(sly_state_t *S, sly_string_t *str, uint8_t cha
     sly_error(S, 1);
   }
 
-  file = open(fname, O_WRONLY | O_LARGEFILE | O_NONBLOCK | O_CREAT);
-  if(file < 0) {
+  file = fopen(fname, "wb");
+  if(!file) {
     sly_push_string(S, "cannot open output file: ");
     sly_push_string(S, fname);
     free(fname);
@@ -1122,43 +902,21 @@ sly_gcobject_t *sly_io_open_ofile(sly_state_t *S, sly_string_t *str, uint8_t cha
 
 void sly_io_close_iport(sly_state_t *S, sly_iport_t *port)
 {
-  if(SLY_PORT(port)->type == SLY_TYPE_PORT_FILE) {
-    int ret;
+  S = S;
 
-  close_in_again:
-    ret = close(SLY_IFPORT(port)->in);
-    if(ret < 0) {
-      if(errno == EINTR) {
-        usleep(SLY_IO_PAUSE);
-        goto close_in_again;
-      } else {
-        sly_push_string(S, "cannot close input port");
-        sly_error(S, 1);
-      }
-    }
+  if(SLY_PORT(port)->type == SLY_TYPE_PORT_FILE) {
+    fclose(((struct fp_priv*)SLY_PORT(port)->private)->f);
   }
 }
 
 void sly_io_close_oport(sly_state_t *S, sly_oport_t *port)
 {
-  if(SLY_PORT(port)->type == SLY_TYPE_PORT_FILE) {
-    int ret;
+  S = S;
 
-  close_out_again:
-    ret = close(SLY_OFPORT(port)->out);
-    if(ret < 0) {
-      if(errno == EINTR) {
-        usleep(SLY_IO_PAUSE);
-        goto close_out_again;
-      } else {
-        sly_push_string(S, "cannot close output port");
-        sly_error(S, 1);
-      }
-    }
+  if(SLY_PORT(port)->type == SLY_TYPE_PORT_FILE) {
+    fclose(((struct fp_priv*)SLY_PORT(port)->private)->f);
   }
 }
-
-#endif
 
 void sly_io_write_c_string(sly_state_t *S, const char* s, sly_oport_t *port)
 {

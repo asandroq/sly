@@ -60,10 +60,10 @@
    (sizeof(sly_string_t) + (n) * sizeof(sly_char_t))
 #define SLY_SIZE_OF_VECTOR(n) \
    (sizeof(sly_vector_t) + (n) * sizeof(sly_object_t))
-#define SLY_SIZE_OF_IFPORT \
-   (sizeof(sly_ifport_t))
-#define SLY_SIZE_OF_OFPORT \
-   (sizeof(sly_ofport_t))
+#define SLY_SIZE_OF_IPORT \
+   (sizeof(sly_iport_t))
+#define SLY_SIZE_OF_OPORT \
+   (sizeof(sly_oport_t))
 
 /* port types */
 #define SLY_TYPE_PORT_FILE          1
@@ -94,8 +94,6 @@ typedef struct sly_symbol_t sly_symbol_t;
 typedef struct sly_port_t      sly_port_t;
 typedef struct sly_iport_t     sly_iport_t;
 typedef struct sly_oport_t     sly_oport_t;
-typedef struct sly_ifport_t    sly_ifport_t;
-typedef struct sly_ofport_t    sly_ofport_t;
 
 /* casts */
 #define SLY_GCOBJECT(obj)      ((sly_gcobject_t*)(obj))
@@ -108,9 +106,6 @@ typedef struct sly_ofport_t    sly_ofport_t;
 #define SLY_PORT(obj)          ((sly_port_t*)(obj))
 #define SLY_IPORT(obj)         ((sly_iport_t*)(obj))
 #define SLY_OPORT(obj)         ((sly_oport_t*)(obj))
-#define SLY_IFPORT(obj)        ((sly_ifport_t*)(obj))
-#define SLY_OFPORT(obj)        ((sly_ofport_t*)(obj))
-
 
 /* value types */
 struct sly_object_t {
@@ -178,40 +173,39 @@ struct sly_vector_t {
 /* I/O port "classes" */
 struct sly_port_t {
   sly_gcobject_t base;
+
+  /* port type */
   uint8_t type;
+
+  /* if this port was copied in the last GC cycle */
+  uint8_t copied;
+
+  /* character encoding of this port */
   uint8_t char_enc;
+
+  /* pointer to the next objects that needs finalisation */
+  sly_gcobject_t *next;
+
+  /* private port data */
+  void *private;
 };
 
 struct sly_iport_t {
   sly_port_t base;
 
-  int (*peek_byte)(sly_iport_t *self, uint8_t *b);
-  int (*peek_char)(sly_iport_t *self, sly_char_t *c);
+  int (*finish)(sly_iport_t *self);
 
-  int (*read_byte)(sly_iport_t *self, uint8_t *b);
+  int (*peek_char)(sly_iport_t *self, sly_char_t *c);
   int (*read_char)(sly_iport_t *self, sly_char_t *c);
 };
 
 struct sly_oport_t {
   sly_port_t base;
 
+  int (*finish)(sly_oport_t *self);
+
   int (*flush)(sly_oport_t* self);
-  int (*write_byte)(sly_oport_t* self, uint8_t b);
   int (*write_char)(sly_oport_t* self, sly_char_t c);
-};
-
-struct sly_ifport_t {
-  sly_iport_t base;
-  sly_file_t in;
-  uint32_t size;
-  uint8_t buffer[SLY_PORT_BUF_SIZE];
-};
-
-struct sly_ofport_t {
-  sly_oport_t base;
-  sly_file_t out;
-  uint32_t size;
-  uint8_t buffer[SLY_PORT_BUF_SIZE];
 };
 
 /*
@@ -240,8 +234,8 @@ sly_gcobject_t *sly_create_pair(sly_state_t *S);
 sly_gcobject_t *sly_create_conti(sly_state_t *S, uint32_t stack_size);
 sly_gcobject_t *sly_create_string(sly_state_t *S, const sly_char_t* str, uint32_t size);
 sly_gcobject_t *sly_create_vector(sly_state_t *S, uint32_t size);
-sly_gcobject_t *sly_create_ifport(sly_state_t *S);
-sly_gcobject_t *sly_create_ofport(sly_state_t *S);
+sly_gcobject_t *sly_create_iport(sly_state_t *S);
+sly_gcobject_t *sly_create_oport(sly_state_t *S);
 
 sly_object_t sly_create_symbol(sly_state_t* S, sly_string_t* str);
 

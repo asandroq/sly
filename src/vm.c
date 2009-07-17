@@ -234,6 +234,8 @@ void sly_vm_dump(sly_state_t* S)
 
 static void check_alloc(sly_state_t *S, void* ptr)
 {
+  S = S;
+
   if(ptr == NULL) {
     fprintf(stderr, "sly: Out of memory!\n");
     abort();

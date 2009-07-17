@@ -309,12 +309,142 @@ static int fpi_finish(sly_iport_t *self)
   return fclose(f) == 0;
 }
 
-static int fp_peek_char(sly_iport_t *self, sly_char_t *c)
+static int fp_read_char_utf8(sly_iport_t *self, sly_char_t *c)
 {
+  FILE* f;
+  uint8_t b1, b2[3];
+
+  f = ((struct fp_priv*)SLY_PORT(self)->private)->f;
+  if(fread(&b1, sizeof(uint8_t), 1, f) < 1) {
+    return 0;
+  }
+
+  if(b1 >= 0xC0) {
+    if(b1 < 0xE0) {
+      if(fread(b2, sizeof(uint8_t), 1, f) < 1) {
+        return 0;
+      }
+      if((b2[0] & 0xC0) == 0x80) {
+        *c = ((b1 & 0x1F) << 6) | (b2[0] & 0x3F);
+      } else {
+        return 0;
+      }
+    } else if(b1 < 0xF0) {
+      if(fread(b2, sizeof(uint8_t), 2, f) < 2) {
+        return 0;
+      }
+      if(((b2[0] & 0xC0) == 0x80) && ((b2[1] & 0xC0) == 0x80)) {
+        *c = ((b1 & 0x0F) << 12) |
+             ((b2[0] & 0x3F) << 6) |
+              (b2[1] & 0x3F);
+      } else {
+        return 0;
+      }
+    } else if(b1 <= 0xF4) {
+      if(fread(b2, sizeof(uint8_t), 3, f) < 3) {
+        return 0;
+      }
+      if(((b1 == 0xF4 && ((b2[0] & 0xF0) == 0x80)) ||
+          ((b2[0] & 0xC0) == 0x80)) &&
+          ((b2[1] & 0xC0) == 0x80) &&
+          ((b2[2] & 0xC0) == 0x80)) {
+        *c = ((b1 & 0x7) << 18) |
+             ((b2[0] & 0x3F) << 12) |
+             ((b2[1] & 0x3F) << 6) |
+              (b2[2] & 0x3F);
+      } else {
+        return 0;
+      }
+    } else {
+      return 0;
+    }
+  } else if(b1 & 0x80) {
+    return 0;
+  } else {
+    *c = (sly_char_t)b1;
+  }
+
+  return 1;
+}
+
+static int fp_read_char_utf16(sly_iport_t *self, sly_char_t *c)
+{
+  FILE* f;
+  uint8_t *b1, *b2;
+  sly_ucs2_t c1, c2;
+
+  b1 = (uint8_t*)&c1;
+  b2 = (uint8_t*)&c2;
+
+  f = ((struct fp_priv*)SLY_PORT(self)->private)->f;
+  if(fread(b1, sizeof(uint8_t), 2, f) < 2) {
+    return 0;
+  }
+
+  if((c1 & 0xFC00) != 0xD800) {
+    /* non-surrogate */
+    *c = (sly_char_t)c1;
+  } else {
+    if(fread(b2, sizeof(uint8_t), 2, f) < 2) {
+      return 0;
+    }
+
+    if((c2 & 0xFC00) != 0xDC00) {
+      /* broken surrogate pair */
+      return 0;
+    }
+
+    *c = (((c1 & 0x3FF) << 10) | (c2 & 0x3FF)) + 0x10000;
+  }
+
+  return 1;
+}
+
+static int fp_read_char_latin1(sly_iport_t *self, sly_char_t *c)
+{
+  FILE* f;
+  uint8_t b;
+
+  f = ((struct fp_priv*)SLY_PORT(self)->private)->f;
+  if(fread(&b, sizeof(uint8_t), 1, f) < 1) {
+    return 0;
+  }
+
+  *c = (sly_char_t)b;
+
+  return 1;
 }
 
 static int fp_read_char(sly_iport_t *self, sly_char_t *c)
 {
+  switch(SLY_PORT(self)->char_enc) {
+  case SLY_CHAR_ENC_UTF8:
+    return fp_read_char_utf8(self, c);
+
+  case SLY_CHAR_ENC_UTF16:
+    return fp_read_char_utf16(self, c);
+
+  case SLY_CHAR_ENC_LATIN1:
+    return fp_read_char_latin1(self, c);
+
+  default:
+    return 0;
+  }
+}
+
+static int fp_peek_char(sly_iport_t *self, sly_char_t *c)
+{
+  struct fp_priv *p = (struct fp_priv*)SLY_PORT(self)->private;
+
+  if(p->chr == SLY_UCS_NO_CHAR) {
+    if(!fp_read_char(self, &p->chr)) {
+      return 0;
+    }
+  }
+
+  *c = p->chr;
+
+  return 1;
 }
 
 static int fpo_finish(sly_oport_t *self)
@@ -353,7 +483,9 @@ static int fp_write_char(sly_oport_t *p, sly_char_t c)
 
   if(ret) {
     f = ((struct fp_priv*)SLY_PORT(p)->private)->f;
-    fwrite(buf, sizeof(uint8_t), sz, f);
+    if(fwrite(buf, sizeof(uint8_t), sz, f) < sz) {
+      return 0;
+    }
   }
 
   return ret;

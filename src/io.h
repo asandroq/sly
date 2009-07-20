@@ -74,6 +74,8 @@ void sly_io_newline(sly_state_t *S, sly_oport_t *port);
 void sly_io_write_c_string(sly_state_t *S, const char *str, sly_oport_t *port);
 void sly_io_write_symbol(sly_state_t *S, sly_symbol_t *sym, sly_oport_t *port);
 
+sly_object_t sly_io_read(sly_state_t *S, sly_iport_t *port);
+
 void sly_io_write(sly_state_t *S, sly_object_t *obj, sly_oport_t *port);
 void sly_io_display(sly_state_t *S, sly_object_t *obj, sly_oport_t *port);
 

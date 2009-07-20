@@ -43,6 +43,15 @@
 
 #define SLY_IO_PAUSE                10000
 
+#define SLY_UCS_CHAR_TAB            0x0009
+#define SLY_UCS_LINE_FEED           0x000A
+#define SLY_UCS_LINE_TAB            0x000B
+#define SLY_UCS_FORM_FEED           0x000C
+#define SLY_UCS_CAR_RETURN          0x000D
+#define SLY_UCS_SPACE               0x0020
+#define SLY_UCS_NEXT_LINE           0x0085
+#define SLY_UCS_LINE_SEP            0x2028
+#define SLY_UCS_PARA_SEP            0x0029
 #define SLY_UCS_LEFT_QUOTE          0x201C
 #define SLY_UCS_RIGHT_QUOTE         0x201D
 #define SLY_UCS_ELLIPSIS            0x2026
@@ -53,14 +62,49 @@
 #define SLY_UCS_NO_CHAR             0xF001
 
 /*
+ * character sets
+ */
+static const sly_char_t pec_begin_set[] = {'+', '-', '.', '\0'};
+static const sly_char_t sym_begin_set[] = {'!', '$', '%', '&', '*', '/',
+                                           ':', '<', '=', '>', '?', '^',
+                                           '_', '~', '\0'};
+
+/*
  * some string constants
  */
 
-static const sly_char_t false_str[]    = {'#', 'f', '\0'};
-static const sly_char_t true_str[]     = {'#', 't', '\0'};
-static const sly_char_t space_str[]    = {'#', '\\', 's', 'p', 'a', 'c', 'e', '\0'};
-static const sly_char_t newline_str[]  = {'#', '\\', 'n', 'e', 'w', 'l', 'i', 'n', 'e', '\0'};
+static const sly_char_t false_str[]     = {'#', 'f', '\0'};
+static const sly_char_t true_str[]      = {'#', 't', '\0'};
+static const sly_char_t space_str[]     = {'#', '\\', 's', 'p', 'a', 'c', 'e', '\0'};
+static const sly_char_t newline_str[]   = {'#', '\\', 'n', 'e', 'w', 'l', 'i', 'n', 'e', '\0'};
 static const sly_char_t ellipsis_str[]  = {'.', '.', '.', '\0'};
+
+static int is_line_ending(sly_char_t c)
+{
+  return c == SLY_UCS_LINE_FEED || c == SLY_UCS_CAR_RETURN ||
+         c == SLY_UCS_NEXT_LINE || c == SLY_UCS_LINE_SEP;
+}
+
+static int is_space(sly_char_t c)
+{
+  return is_line_ending(c) || c == SLY_UCS_SPACE ||
+         (c >= SLY_UCS_CHAR_TAB && c <= SLY_UCS_CAR_RETURN) ||
+         (c > 0x1FFF && c < 0x200B);
+}
+
+static int is_char_in_set(sly_char_t c, const sly_char_t *set)
+{
+  const sly_char_t *p;
+
+  p = set;
+  while(*p != 0) {
+    if(c == *p) {
+      return 1;
+    }
+  }
+
+  return 0;
+}
 
 /*
  * char encodings
@@ -289,7 +333,7 @@ const sly_char_t* sly_sbuffer_string(sly_sbuffer_t* buffer)
 
 int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const sly_char_t* str)
 {
-  return memcmp(buffer->str, str, buffer->size) == 0;
+  return memcmp(buffer->str, str, buffer->size * sizeof(sly_char_t)) == 0;
 }
 
 /*
@@ -316,13 +360,23 @@ static int fp_read_char_utf8(sly_iport_t *self, sly_char_t *c)
 
   f = ((struct fp_priv*)SLY_PORT(self)->private)->f;
   if(fread(&b1, sizeof(uint8_t), 1, f) < 1) {
-    return 0;
+    if(feof(f)) {
+      *c = SLY_UCS_EOF;
+      return 1;
+    } else {
+      return 0;
+    }
   }
 
   if(b1 >= 0xC0) {
     if(b1 < 0xE0) {
       if(fread(b2, sizeof(uint8_t), 1, f) < 1) {
-        return 0;
+        if(feof(f)) {
+          *c = SLY_UCS_EOF;
+          return 1;
+        } else {
+          return 0;
+        }
       }
       if((b2[0] & 0xC0) == 0x80) {
         *c = ((b1 & 0x1F) << 6) | (b2[0] & 0x3F);
@@ -331,7 +385,12 @@ static int fp_read_char_utf8(sly_iport_t *self, sly_char_t *c)
       }
     } else if(b1 < 0xF0) {
       if(fread(b2, sizeof(uint8_t), 2, f) < 2) {
-        return 0;
+        if(feof(f)) {
+          *c = SLY_UCS_EOF;
+          return 1;
+        } else {
+          return 0;
+        }
       }
       if(((b2[0] & 0xC0) == 0x80) && ((b2[1] & 0xC0) == 0x80)) {
         *c = ((b1 & 0x0F) << 12) |
@@ -342,7 +401,12 @@ static int fp_read_char_utf8(sly_iport_t *self, sly_char_t *c)
       }
     } else if(b1 <= 0xF4) {
       if(fread(b2, sizeof(uint8_t), 3, f) < 3) {
-        return 0;
+        if(feof(f)) {
+          *c = SLY_UCS_EOF;
+          return 1;
+        } else {
+          return 0;
+        }
       }
       if(((b1 == 0xF4 && ((b2[0] & 0xF0) == 0x80)) ||
           ((b2[0] & 0xC0) == 0x80)) &&
@@ -378,7 +442,12 @@ static int fp_read_char_utf16(sly_iport_t *self, sly_char_t *c)
 
   f = ((struct fp_priv*)SLY_PORT(self)->private)->f;
   if(fread(b1, sizeof(uint8_t), 2, f) < 2) {
-    return 0;
+    if(feof(f)) {
+      *c = SLY_UCS_EOF;
+      return 1;
+    } else {
+      return 0;
+    }
   }
 
   if((c1 & 0xFC00) != 0xD800) {
@@ -386,7 +455,12 @@ static int fp_read_char_utf16(sly_iport_t *self, sly_char_t *c)
     *c = (sly_char_t)c1;
   } else {
     if(fread(b2, sizeof(uint8_t), 2, f) < 2) {
-      return 0;
+      if(feof(f)) {
+        *c = SLY_UCS_EOF;
+        return 1;
+      } else {
+        return 0;
+      }
     }
 
     if((c2 & 0xFC00) != 0xDC00) {
@@ -407,7 +481,12 @@ static int fp_read_char_latin1(sly_iport_t *self, sly_char_t *c)
 
   f = ((struct fp_priv*)SLY_PORT(self)->private)->f;
   if(fread(&b, sizeof(uint8_t), 1, f) < 1) {
-    return 0;
+    if(feof(f)) {
+      *c = SLY_UCS_EOF;
+      return 1;
+    } else {
+      return 0;
+    }
   }
 
   *c = (sly_char_t)b;
@@ -415,7 +494,7 @@ static int fp_read_char_latin1(sly_iport_t *self, sly_char_t *c)
   return 1;
 }
 
-static int fp_read_char(sly_iport_t *self, sly_char_t *c)
+static int fp_read_once(sly_iport_t *self, sly_char_t *c)
 {
   switch(SLY_PORT(self)->char_enc) {
   case SLY_CHAR_ENC_UTF8:
@@ -432,12 +511,30 @@ static int fp_read_char(sly_iport_t *self, sly_char_t *c)
   }
 }
 
+static int fp_read_char(sly_iport_t *self, sly_char_t *c)
+{
+  struct fp_priv *p = (struct fp_priv*)SLY_PORT(self)->private;
+
+  if(p->chr == SLY_UCS_NO_CHAR) {
+    if(!fp_read_once(self, &p->chr)) {
+      return 0;
+    }
+  }
+
+  *c = p->chr;
+  if(!fp_read_once(self, &p->chr)) {
+    return 0;
+  }
+
+  return 1;
+}
+
 static int fp_peek_char(sly_iport_t *self, sly_char_t *c)
 {
   struct fp_priv *p = (struct fp_priv*)SLY_PORT(self)->private;
 
   if(p->chr == SLY_UCS_NO_CHAR) {
-    if(!fp_read_char(self, &p->chr)) {
+    if(!fp_read_once(self, &p->chr)) {
       return 0;
     }
   }
@@ -539,42 +636,94 @@ static void port_write_char(sly_state_t* S, sly_oport_t *p, sly_char_t c)
  * reader
  */
 
-static void read_string(FILE* in, sly_sbuffer_t* buf)
+static void read_string(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t* buf)
 {
-  int c;
+  sly_char_t c;
+
+  /* remove left quote */
+  port_read_char(S, in);
   
-  c = getc(in);
+  c = port_read_char(S, in);
   sly_sbuffer_assign(buf, "");
+
   while(c != '"') {
-    if(c == EOF) {
-      /* ERROR */
+
+    if(c == SLY_UCS_EOF) {
+      sly_push_string(S, "unterminated string");
+      sly_error(S, 1);
     }
+
+    if(c == '\\') {
+      c = port_read_char(S, in);
+
+      if(c == SLY_UCS_EOF) {
+        sly_push_string(S, "unterminated string");
+        sly_error(S, 1);
+      }
+
+      switch(c) {
+      case 'a':
+        c = '\a';
+        break;
+
+      case 'b':
+        c = '\b';
+        break;
+
+      case 't':
+        c = '\t';
+        break;
+
+      case 'n':
+        c = '\n';
+        break;
+
+      case 'v':
+        c = '\v';
+        break;
+
+      case 'f':
+        c = '\f';
+        break;
+
+      case 'r':
+        c = '\r';
+        break;
+      }
+    }
+
     sly_sbuffer_add(buf, c);
-    c = getc(in);
+    c = port_read_char(S, in);
   };
 }
 
-static void read_till_delimiter(FILE* in, sly_sbuffer_t* buf)
+static void read_till_delimiter(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t* buf)
 {
-  int c;
+  sly_char_t c;
 
-  c = getc(in);
   sly_sbuffer_assign(buf, "");
-  while(c != ' ' && c != '\n' && c != '(' &&
-	c != ')' && c != '"'  && c != ';' && c != EOF) {
+
+  c = port_read_char(S, in);
+  sly_sbuffer_add(buf, c);
+
+  c = port_peek_char(S, in);
+  while(!is_space(c) && c != SLY_UCS_EOF &&
+        c != '(' && c != ')' && c != '"'  && c != ';') {
     sly_sbuffer_add(buf, c);
-    c = getc(in);
+    port_read_char(S, in);
+    c = port_peek_char(S, in);
   };
-  ungetc(c, in);
 }
 
-static void parse_number(const sly_char_t *str, sly_object_t *res)
+static void parse_number(sly_sbuffer_t *buf, sly_object_t *res)
 {
+  sly_char_t *str;
   int i, base, is_exact;
 
   i = 0;
   base = -1;
   is_exact = -1;
+  str = buf->str;
 
   fprintf(stderr, "%c\n", str[i]);
   /* are there prefixes? */
@@ -643,38 +792,40 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
   sly_char_t c;
   sly_gcobject_t *obj;
 
-  res->type = SLY_TYPE_NIL;
+  res->type = SLY_TYPE_UNDEF;
 
   c = port_peek_char(S, in);
-  while(isspace(c) || c == ';') {
+  while(is_space(c) || c == ';') {
     /* eating up whitespace and comments */
-    while(isspace(c)) {
-      c = port_read_char(S, in);
+    while(is_space(c)) {
+      port_read_char(S, in);
+      c = port_peek_char(S, in);
     }
 
     if(c == ';') {
-      while(c != '\n') {
+      while(!is_line_ending(c)) {
 	c = port_read_char(S, in);
       }
+      c = port_peek_char(S, in);
     }
   }
 
   if(c == SLY_UCS_EOF) {
+    port_read_char(S, in);
     res->type = SLY_TYPE_EOF;
     return;
   }
 
   /* strings */
   if(c == '"') {
-    read_string(in, buf);
+    read_string(S, in, buf);
     res->type = SLY_TYPE_STRING;
-    res->value.gc = sly_create_string(S, sly_sbuffer_string(buf), 0);
+    res->value.gc = sly_create_string(S, sly_sbuffer_string(buf), buf->size);
     return;
   }
 
   if(c == '#') {
-    ungetc(c, in);
-    read_till_delimiter(in, buf);
+    read_till_delimiter(S, in, buf);
     if(sly_sbuffer_equalp(buf, false_str)) {
       /* boolean false */
       res->type = SLY_TYPE_BOOL;
@@ -687,9 +838,9 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
       /* character */
       res->type = SLY_TYPE_CHAR;
       if(sly_sbuffer_equalp(buf, space_str)) {
-	res->value.chr = ' ';
+	res->value.chr = SLY_UCS_SPACE;
       } else if(sly_sbuffer_equalp(buf, newline_str)) {
-	res->value.chr = '\n';
+	res->value.chr = SLY_UCS_LINE_FEED;
       } else if(buf->size == 3) {
 	res->value.chr = buf->str[2];
       } else {
@@ -703,48 +854,45 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
 	      buf->str[1] == 'o' ||
 	      buf->str[1] == 'x') {
       /* number */
-      parse_number(buf->str, res);
+      parse_number(buf, res);
     } else {
-      /* ERROR */
-      res->type = SLY_TYPE_NIL;
+      sly_push_string(S, "unknown read syntax");
+      sly_error(S, 1);
     }
     return;
   }
 
   /* symbols */
-  if(strchr("+-.", c)) {
-    ungetc(c, in);
-    read_till_delimiter(in, buf);
+  if(is_char_in_set(c, pec_begin_set)) {
+    read_till_delimiter(S, in, buf);
     if(buf->str[0] == '+' || buf->str[0] == '-') {
       if(buf->size == 1) {
-	obj = sly_create_string(S, buf->str, 0);
+	obj = sly_create_string(S, buf->str, buf->size);
 	*res = sly_create_symbol(S, SLY_STRING(obj));
       } else {
 	/* number */
-	parse_number(buf->str, res);
+	parse_number(buf, res);
       }
     } else if(sly_sbuffer_equalp(buf, ellipsis_str)) {
-      obj = sly_create_string(S, buf->str, 0);
+      obj = sly_create_string(S, buf->str, buf->size);
       *res = sly_create_symbol(S, SLY_STRING(obj));
     } else {
-      /* ERROR */
-      res->type = SLY_TYPE_NIL;
+      sly_push_string(S, "unknown read syntax");
+      sly_error(S, 1);
     }
     return;
   }
 
-  if(strchr("!$%&*/:<=>?^_~", c) || isalpha(c)) {
-    ungetc(c, in);
-    read_till_delimiter(in, buf);
-    obj = sly_create_string(S, buf->str, 0);
+  if(is_char_in_set(c, sym_begin_set) || isalpha(c)) {
+    read_till_delimiter(S, in, buf);
+    obj = sly_create_string(S, buf->str, buf->size);
     *res = sly_create_symbol(S, SLY_STRING(obj));
     return;
   }
 
   if(isdigit(c)) {
     /* base 10 number */
-    ungetc(c, in);
-    parse_number(buf->str, res);
+    parse_number(buf, res);
     return;
   }
 }

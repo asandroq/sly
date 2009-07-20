@@ -770,6 +770,20 @@ void sly_newline(sly_state_t* S, int idx)
   sly_io_newline(S, SLY_OPORT(S->stack[idx].value.gc));
 }
 
+void sly_read(sly_state_t* S, int idx)
+{
+  sly_object_t obj;
+
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_INPUT_PORT);
+#endif
+
+  obj = sly_io_read(S, SLY_IPORT(S->stack[idx].value.gc));
+  S->stack[S->sp++] = obj;
+}
+
 void sly_write(sly_state_t* S, int idx1, int idx2)
 {
   idx1 = calc_index(S, idx1);

@@ -622,6 +622,24 @@ static int close_output_port(sly_state_t *S)
  * R5RS 6.6.3
  */
 
+static int read(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 0 && nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(nargs == 0) {
+    sly_push_current_input_port(S);
+  }
+
+  sly_read(S, 0);
+
+  return 1;
+}
+
 static int write(sly_state_t* S)
 {
   int nargs = sly_get_top(S);
@@ -736,6 +754,7 @@ static sly_reg_t lib_regs[] = {
   {"open-output-file", open_output_file},
   {"close-input-port", close_input_port},
   {"close-output-port", close_output_port},
+  {"read", read},
   {"write", write},
   {"display", display},
   {"newline", newline},

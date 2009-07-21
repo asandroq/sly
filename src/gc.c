@@ -47,33 +47,6 @@ struct sly_forward_t {
   sly_gcobject_t *ref;
 };
 
-int sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud)
-{
-  /* alloc heap */
-  S->from_space = malloc(SLY_INITIAL_SPACE_SIZE * 2);
-  if(S->from_space == NULL) {
-    return 0;
-  }
-
-  S->size = 0;
-  S->os_address = S->from_space;
-  S->capacity = SLY_INITIAL_SPACE_SIZE;
-  S->to_space = S->from_space + (SLY_INITIAL_SPACE_SIZE);
-
-  S->roots_cb = cb;
-  S->roots_cb_data = ud;
-
-  return 1;
-}
-
-void sly_gc_finish(sly_store_t *S)
-{
-  free(S->os_address);
-  S->size = S->capacity = 0;
-  S->from_space = S->to_space = NULL;
-  S->roots_cb = S->roots_cb_data = NULL;
-}
-
 static uint32_t sizeof_gcobj(sly_gcobject_t* obj)
 {
   uint32_t size;
@@ -134,7 +107,15 @@ static void copy_object(sly_store_t* S, sly_object_t* obj)
     return;
   }
 
-  /* copying */
+  /*
+   * when copied, ports must be marked so they
+   * won't be finalised on the next phase
+   */
+  if(obj->value.gc->type == SLY_TYPE_INPUT_PORT ||
+     obj->value.gc->type == SLY_TYPE_OUTPUT_PORT) {
+    SLY_PORT(obj->value.gc)->copied = 1;
+  }
+
   to = S->to_space + S->size;
   size = sizeof_gcobj(obj->value.gc);
   memcpy(to, obj->value.gc, size);
@@ -144,6 +125,24 @@ static void copy_object(sly_store_t* S, sly_object_t* obj)
   obj->value.gc->type = SLY_FORWARD_TAG;
   ((sly_forward_t*)obj->value.gc)->ref = to;
   obj->value.gc = to;
+}
+
+static void collect_ports(sly_store_t *S)
+{
+  /*sly_port_t *p, *prev;*/
+
+  if(!S->ports) {
+    return;
+  }
+
+  /*
+    for(prev = p = S->ports; p; p = p->next) {
+    if(SLY_GCOBJECT(p)->type == SLY_FORWARD_TAG) {
+    prev->next = ((sly_forward_t*)p)->ref;
+    prev = p;
+    }
+    }
+  */
 }
 
 static void collect_garbage(sly_store_t* S)
@@ -214,6 +213,8 @@ static void collect_garbage(sly_store_t* S)
   S->from_space = S->to_space;
   S->to_space = scan;
 
+  collect_ports(S);
+
   /*fprintf(stderr, "GC before: %d after: %d\n\n", old_size, S->size);*/
 }
 
@@ -248,6 +249,35 @@ static int expand_store(sly_store_t* S)
   }
 }
 
+int sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud)
+{
+  /* alloc heap */
+  S->from_space = malloc(SLY_INITIAL_SPACE_SIZE * 2);
+  if(S->from_space == NULL) {
+    return 0;
+  }
+
+  S->size = 0;
+  S->os_address = S->from_space;
+  S->capacity = SLY_INITIAL_SPACE_SIZE;
+  S->to_space = S->from_space + (SLY_INITIAL_SPACE_SIZE);
+
+  S->ports = NULL;
+
+  S->roots_cb = cb;
+  S->roots_cb_data = ud;
+
+  return 1;
+}
+
+void sly_gc_finish(sly_store_t *S)
+{
+  free(S->os_address);
+  S->size = S->capacity = 0;
+  S->from_space = S->to_space = NULL;
+  S->roots_cb = S->roots_cb_data = NULL;
+}
+
 void* sly_gc_alloc(sly_store_t *S, uint32_t size)
 {
   void *ret;
@@ -272,5 +302,13 @@ void* sly_gc_alloc(sly_store_t *S, uint32_t size)
   S->size += size;
 
   return ret;
+}
+
+void sly_gc_add_port(sly_store_t *S, sly_port_t *port)
+{
+  if(port) {
+    port->next = S->ports;
+    S->ports = port;
+  }
 }
 

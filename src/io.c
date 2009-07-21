@@ -345,14 +345,25 @@ int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const sly_char_t* str)
 struct fp_priv {
   FILE *f;
   sly_char_t chr;
+  uint8_t closable;
 };
 
-static int fpi_finish(sly_iport_t *self)
+static int fp_finish(sly_port_t *self)
 {
-  FILE *f = ((struct fp_priv*)SLY_PORT(self)->private)->f;
+  int ret;
+  struct fp_priv *priv;
+
+  priv = (struct fp_priv*)SLY_PORT(self)->private;
 
   free(SLY_PORT(self)->private);
-  return fclose(f) == 0;
+  if(priv->closable) {
+    ret = fclose(priv->f) == 0;
+  } else {
+    ret = 1;
+  }
+  free(priv);
+
+  return ret;
 }
 
 static int fp_read_char_utf8(sly_iport_t *self, sly_char_t *c)
@@ -544,14 +555,6 @@ static int fp_peek_char(sly_iport_t *self, sly_char_t *c)
   *c = p->chr;
 
   return 1;
-}
-
-static int fpo_finish(sly_oport_t *self)
-{
-  FILE *f = ((struct fp_priv*)SLY_PORT(self)->private)->f;
-
-  free(SLY_PORT(self)->private);
-  return fclose(f) == 0;
 }
 
 static int fp_flush(sly_oport_t *p)
@@ -1089,11 +1092,12 @@ sly_gcobject_t *sly_io_create_ifport(sly_state_t *S, FILE* file)
   priv = (struct fp_priv*)malloc(sizeof(struct fp_priv));
 
   priv->f = file;
+  priv->closable = 1;
   priv->chr = SLY_UCS_NO_CHAR;
   SLY_PORT(port)->private = priv;
+  SLY_PORT(port)->finish = fp_finish;
   SLY_PORT(port)->type = SLY_TYPE_PORT_FILE;
 
-  SLY_IPORT(port)->finish = fpi_finish;
   SLY_IPORT(port)->peek_char = fp_peek_char;
   SLY_IPORT(port)->read_char = fp_read_char;
 
@@ -1109,11 +1113,12 @@ sly_gcobject_t *sly_io_create_ofport(sly_state_t *S, FILE* file)
   priv = (struct fp_priv*)malloc(sizeof(struct fp_priv));
 
   priv->f = file;
+  priv->closable = 1;
   priv->chr = SLY_UCS_NO_CHAR;
   SLY_PORT(port)->private = priv;
+  SLY_PORT(port)->finish = fp_finish;
   SLY_PORT(port)->type = SLY_TYPE_PORT_FILE;
 
-  SLY_OPORT(port)->finish = fpo_finish;
   SLY_OPORT(port)->flush = fp_flush;
   SLY_OPORT(port)->write_char = fp_write_char;
 
@@ -1122,17 +1127,32 @@ sly_gcobject_t *sly_io_create_ofport(sly_state_t *S, FILE* file)
 
 sly_gcobject_t *sly_io_create_stdin(sly_state_t *S)
 {
-  return sly_io_create_ifport(S, stdin);
+  sly_gcobject_t *port;
+
+  port = sly_io_create_ifport(S, stdin);
+  ((struct fp_priv*)SLY_PORT(port)->private)->closable = 0;
+
+  return port;
 }
 
 sly_gcobject_t *sly_io_create_stdout(sly_state_t *S)
 {
-  return sly_io_create_ofport(S, stdout);
+  sly_gcobject_t *port;
+
+  port = sly_io_create_ofport(S, stdout);
+  ((struct fp_priv*)SLY_PORT(port)->private)->closable = 0;
+
+  return port;
 }
 
 sly_gcobject_t *sly_io_create_stderr(sly_state_t *S)
 {
-  return sly_io_create_ofport(S, stderr);
+  sly_gcobject_t *port;
+
+  port = sly_io_create_ofport(S, stderr);
+  ((struct fp_priv*)SLY_PORT(port)->private)->closable = 0;
+
+  return port;
 }
 
 sly_gcobject_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str, uint8_t char_enc)

@@ -184,7 +184,10 @@ struct sly_port_t {
   uint8_t char_enc;
 
   /* pointer to the next objects that needs finalisation */
-  sly_gcobject_t *next;
+  sly_port_t *next;
+
+  /* finalisation function */
+  int (*finish)(sly_port_t *self);
 
   /* private port data */
   void *private;
@@ -193,16 +196,12 @@ struct sly_port_t {
 struct sly_iport_t {
   sly_port_t base;
 
-  int (*finish)(sly_iport_t *self);
-
   int (*peek_char)(sly_iport_t *self, sly_char_t *c);
   int (*read_char)(sly_iport_t *self, sly_char_t *c);
 };
 
 struct sly_oport_t {
   sly_port_t base;
-
-  int (*finish)(sly_oport_t *self);
 
   int (*flush)(sly_oport_t* self);
   int (*write_char)(sly_oport_t* self, sly_char_t c);

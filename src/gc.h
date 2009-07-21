@@ -53,6 +53,9 @@ struct sly_store_t {
   /* the space to which objects are copied */
   void *to_space;
 
+  /* list of ports that may need finalisation */
+  sly_port_t *ports;
+
   /* roots callback */
   sly_roots_cb_t roots_cb;
 
@@ -60,9 +63,10 @@ struct sly_store_t {
   void *roots_cb_data;
 };
 
-int sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud);
+int  sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud);
 void sly_gc_finish(sly_store_t *S);
 
 void* sly_gc_alloc(sly_store_t *S, uint32_t size);
+void  sly_gc_add_port(sly_store_t *S, sly_port_t *port);
 
 #endif

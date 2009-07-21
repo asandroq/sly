@@ -144,17 +144,20 @@ static opcode_t global_opcodes[] = {
  * debugging
  */
 
-static void dump_instr(uint32_t instr)
+static void dump_instr(sly_state_t *S, uint32_t instr, sly_oport_t *port)
 {
   uint8_t op;
   opcode_t* dbg;
+  char buf[64];
 
   op = EXTRACT_OP(instr);
   for(dbg = global_opcodes; dbg->name != NULL; dbg++) {
     if(dbg->op == op) {
-      printf("%u\t%s", (uint32_t)op, dbg->name);
+      snprintf(buf, 64, "%u\t%s", (uint32_t)op, dbg->name);
+      sly_io_write_c_string(S, buf, port);
       if(IS_TYPE_B(op)) {
-	printf(" %u", EXTRACT_ARG(instr));
+	snprintf(buf, 64, " %u", EXTRACT_ARG(instr));
+        sly_io_write_c_string(S, buf, port);
       }
       break;
     }
@@ -184,7 +187,7 @@ void sly_vm_dump(sly_state_t* S)
   port = SLY_OPORT(S->stack[2].value.gc);
 
   sly_io_write_c_string(S, "Instruction: ", port);
-  dump_instr(S->code[S->pc]);
+  dump_instr(S, S->code[S->pc], port);
   sly_io_newline(S, port);
 
   sly_io_write_c_string(S, "Registers:", port);
@@ -202,13 +205,14 @@ void sly_vm_dump(sly_state_t* S)
   sly_io_write_c_string(S, buf, port);
   sly_io_newline(S, port);
 
-  printf("Stack:");
+  sly_io_write_c_string(S, "Stack:", port);
   for(i = 0; i < S->sp; i++) {
-    printf(" ");
+    sly_io_write_c_string(S, " ", port);
     sly_io_write(S, S->stack + i, port);
   }
 
-  printf("\n\n");
+  sly_io_newline(S, port);
+  sly_io_newline(S, port);
 #if 0
   printf("Globals:\n");
   for(i = 0; i < S->global_env.size; i++) {

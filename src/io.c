@@ -64,6 +64,7 @@
 /*
  * character sets
  */
+static const sly_char_t delim_set[]     = {'(', ')', '[', ']', '"', ';', '#', '\0'};
 static const sly_char_t pec_begin_set[] = {'+', '-', '.', '\0'};
 static const sly_char_t sym_begin_set[] = {'!', '$', '%', '&', '*', '/',
                                            ':', '<', '=', '>', '?', '^',
@@ -98,12 +99,21 @@ static int is_char_in_set(sly_char_t c, const sly_char_t *set)
 
   p = set;
   while(*p != 0) {
-    if(c == *p) {
+    if(c == *p++) {
       return 1;
     }
   }
 
   return 0;
+}
+
+static int str_len(const sly_char_t *str)
+{
+  int i;
+
+  for(i = 0; str[i] != 0; i++);
+
+  return i;
 }
 
 /*
@@ -322,18 +332,10 @@ void sly_sbuffer_add(sly_sbuffer_t* buffer, sly_char_t c)
   buffer->str[buffer->pos] = '\0';
 }
 
-const sly_char_t* sly_sbuffer_string(sly_sbuffer_t* buffer)
-{
-  if(buffer != NULL) {
-    return buffer->str;
-  } else {
-    return NULL;
-  }
-}
-
 int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const sly_char_t* str)
 {
-  return memcmp(buffer->str, str, buffer->size * sizeof(sly_char_t)) == 0;
+  return buffer->pos == (uint32_t)str_len(str) &&
+         memcmp(buffer->str, str, buffer->pos * sizeof(sly_char_t)) == 0;
 }
 
 /*
@@ -707,8 +709,7 @@ static void read_till_delimiter(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t* 
   sly_sbuffer_add(buf, c);
 
   c = port_peek_char(S, in);
-  while(!is_space(c) && c != SLY_UCS_EOF &&
-        c != '(' && c != ')' && c != '"'  && c != ';') {
+  while(!is_space(c) && c != SLY_UCS_EOF && !is_char_in_set(c, delim_set)) {
     sly_sbuffer_add(buf, c);
     port_read_char(S, in);
     c = port_peek_char(S, in);
@@ -820,7 +821,7 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
   if(c == '"') {
     read_string(S, in, buf);
     res->type = SLY_TYPE_STRING;
-    res->value.gc = sly_create_string(S, sly_sbuffer_string(buf), buf->size);
+    res->value.gc = sly_create_string(S, buf->str, buf->pos);
     return;
   }
 
@@ -841,11 +842,11 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
 	res->value.chr = SLY_UCS_SPACE;
       } else if(sly_sbuffer_equalp(buf, newline_str)) {
 	res->value.chr = SLY_UCS_LINE_FEED;
-      } else if(buf->size == 3) {
+      } else if(buf->pos == 3) {
 	res->value.chr = buf->str[2];
       } else {
-	/* error */
-	res->type = SLY_TYPE_NIL;
+        sly_push_string(S, "unknown read syntax");
+        sly_error(S, 1);
       }
     } else if(buf->str[1] == 'i' ||
 	      buf->str[1] == 'e' ||
@@ -866,15 +867,15 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
   if(is_char_in_set(c, pec_begin_set)) {
     read_till_delimiter(S, in, buf);
     if(buf->str[0] == '+' || buf->str[0] == '-') {
-      if(buf->size == 1) {
-	obj = sly_create_string(S, buf->str, buf->size);
+      if(buf->pos == 1) {
+	obj = sly_create_string(S, buf->str, buf->pos);
 	*res = sly_create_symbol(S, SLY_STRING(obj));
       } else {
 	/* number */
 	parse_number(buf, res);
       }
     } else if(sly_sbuffer_equalp(buf, ellipsis_str)) {
-      obj = sly_create_string(S, buf->str, buf->size);
+      obj = sly_create_string(S, buf->str, buf->pos);
       *res = sly_create_symbol(S, SLY_STRING(obj));
     } else {
       sly_push_string(S, "unknown read syntax");
@@ -885,7 +886,7 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
 
   if(is_char_in_set(c, sym_begin_set) || isalpha(c)) {
     read_till_delimiter(S, in, buf);
-    obj = sly_create_string(S, buf->str, buf->size);
+    obj = sly_create_string(S, buf->str, buf->pos);
     *res = sly_create_symbol(S, SLY_STRING(obj));
     return;
   }
@@ -918,7 +919,7 @@ static void write_string(sly_state_t *S, sly_string_t* s, sly_oport_t *port, int
   uint32_t i;
 
   if(quote) {
-    port_write_char(S, port, SLY_UCS_LEFT_QUOTE);
+    port_write_char(S, port, '"');
   }
 
   for(i = 0; i < s->size; i++) {
@@ -926,7 +927,7 @@ static void write_string(sly_state_t *S, sly_string_t* s, sly_oport_t *port, int
   }
 
   if(quote) {
-    port_write_char(S, port, SLY_UCS_RIGHT_QUOTE);
+    port_write_char(S, port, '"');
   }
 }
 

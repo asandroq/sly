@@ -862,6 +862,13 @@ static void sly_destroy_module(sly_module_t *M)
   free(M->globals);
 }
 
+static int is_sly_eval(sly_string_t *str)
+{
+  static sly_char_t test_str[] = {'s', 'l', 'y', '-', 'e', 'v', 'a', 'l'};
+
+  return str->size == 8 && memcmp(str->chars, test_str, 8 * sizeof(sly_char_t)) == 0;
+}
+
 static uint32_t sly_link_module(sly_state_t* S, sly_module_t *mod)
 {
   sly_env_t env;
@@ -888,9 +895,17 @@ static uint32_t sly_link_module(sly_state_t* S, sly_module_t *mod)
 
     idx = sly_st_get_global_index(S, env.vars[i].symbol);
     if(idx < 0) {
-      env.vars[i].value.value.fixnum = S->global_env.size + growth++;
+      dw = S->global_env.size + growth++;
     } else {
-      env.vars[i].value.value.fixnum = idx;
+      dw = idx;
+    }
+
+    env.vars[i].value.value.fixnum = dw;
+
+    /* caching the sly-eval procedure for the REPL */
+    if(is_sly_eval(mod->globals[i])) {
+      fprintf(stderr, "Got it at %d\n", dw);
+      S->sly_eval = dw;
     }
   }
 

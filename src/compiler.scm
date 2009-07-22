@@ -21,6 +21,10 @@
 ;;; THE SOFTWARE.
 ;;;
 
+(define (sly-eval e)
+  (let ((cs (compile-toplevel (list e))))
+    cs))
+
 (define (sly-load file)
   (with-input-from-file (string-append file ".scm")
     (lambda ()

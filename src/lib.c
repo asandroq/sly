@@ -457,6 +457,24 @@ static int apply(sly_state_t* S)
 }
 
 /*
+ * R5RS 6.5
+ */
+
+static int eval(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  sly_eval(S, 0);
+
+  return 1;
+}
+
+/*
  * R5RS 6.6.1
  */
 
@@ -745,6 +763,7 @@ static sly_reg_t lib_regs[] = {
   {"vector-ref", vector_ref},
   {"vector-set!", vector_set},
   {"apply", apply},
+  {"eval", eval},
   {"input-port?", input_portp},
   {"output-port?", output_portp},
   {"current-input-port", current_input_port},

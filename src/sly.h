@@ -148,6 +148,9 @@ void sly_vector_set(sly_state_t* S, uint32_t pos, int idx);
 /* control */
 void sly_apply(sly_state_t* S, int idx, uint32_t nr_args);
 
+/* evaluation */
+void sly_eval(sly_state_t* S, int idx);
+
 /* I/O */
 void sly_newline(sly_state_t* S, int idx);
 void sly_read(sly_state_t* S, int idx);

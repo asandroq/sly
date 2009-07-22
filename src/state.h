@@ -66,6 +66,9 @@ struct sly_state_t {
   /* the program counter */
   uint32_t pc;
 
+  /* global index of the 'sly-eval' procedure */
+  uint32_t sly_eval;
+
   /* accumulator register */
   sly_object_t accum;
 

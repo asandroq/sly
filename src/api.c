@@ -741,6 +741,19 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
   S->stack[S->sp++] = S->accum;
 }
 
+void sly_eval(sly_state_t *S, int idx)
+{
+  idx = calc_index(S, idx);
+
+  /* pushing evaluating procedure */
+  S->stack[S->sp++] = S->global_env.vars[S->sly_eval].value;
+
+  /* pushing argument */
+  S->stack[S->sp++] = S->stack[idx];
+
+  sly_apply(S, -2, 1);
+}
+
 void sly_push_current_input_port(sly_state_t *S)
 {
   /* for now, I'll grab the port at a fixed address */

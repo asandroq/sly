@@ -177,14 +177,8 @@ struct sly_port_t {
   /* port type */
   uint8_t type;
 
-  /* if this port was copied in the last GC cycle */
-  uint8_t copied;
-
   /* character encoding of this port */
   uint8_t char_enc;
-
-  /* pointer to the next objects that needs finalisation */
-  sly_port_t *next;
 
   /* finalisation function */
   int (*finish)(sly_port_t *self);

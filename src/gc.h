@@ -27,6 +27,7 @@
 #include "sly.h"
 #include "object.h"
 
+typedef struct sly_fobj_t sly_fobj_t;
 typedef struct sly_store_t sly_store_t;
 
 /*
@@ -35,6 +36,19 @@ typedef struct sly_store_t sly_store_t;
  * when there are no more roots to scan
  */
 typedef sly_object_t* (*sly_roots_cb_t)(void*);
+
+/*
+ * this is used to create a chain of links to
+ * objects that can be finalised
+ */
+struct sly_fobj_t {
+
+  /* object that may need finalisation */
+  sly_gcobject_t *obj;
+
+  /* pointer to next object in chain */
+  sly_fobj_t *next;
+};
 
 struct sly_store_t {
   
@@ -53,8 +67,8 @@ struct sly_store_t {
   /* the space to which objects are copied */
   void *to_space;
 
-  /* list of ports that may need finalisation */
-  sly_port_t *ports;
+  /* list of objects that may need finalisation */
+  sly_fobj_t *fobjs;
 
   /* roots callback */
   sly_roots_cb_t roots_cb;

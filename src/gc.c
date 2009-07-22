@@ -107,15 +107,7 @@ static void copy_object(sly_store_t* S, sly_object_t* obj)
     return;
   }
 
-  /*
-   * when copied, ports must be marked so they
-   * won't be finalised on the next phase
-   */
-  if(obj->value.gc->type == SLY_TYPE_INPUT_PORT ||
-     obj->value.gc->type == SLY_TYPE_OUTPUT_PORT) {
-    SLY_PORT(obj->value.gc)->copied = 1;
-  }
-
+  /* actual copy */
   to = S->to_space + S->size;
   size = sizeof_gcobj(obj->value.gc);
   memcpy(to, obj->value.gc, size);
@@ -127,22 +119,29 @@ static void copy_object(sly_store_t* S, sly_object_t* obj)
   obj->value.gc = to;
 }
 
-static void collect_ports(sly_store_t *S)
+static void collect_fobjs(sly_store_t *S)
 {
-  /*sly_port_t *p, *prev;*/
+  sly_fobj_t *fobj, *prev;
 
-  if(!S->ports) {
-    return;
+  for(prev = fobj = S->fobjs; fobj;) {
+    if(fobj->obj->type == SLY_FORWARD_TAG) {
+      fobj->obj = ((sly_forward_t*)fobj->obj)->ref;
+      fobj = fobj->next;
+      prev = fobj;
+    } else {
+      /* if object was not copied then it's dead */
+      prev->next = fobj->next;
+      if(fobj->obj->type == SLY_TYPE_INPUT_PORT ||
+         fobj->obj->type == SLY_TYPE_OUTPUT_PORT) {
+        sly_port_t *port;
+
+        port = SLY_PORT(fobj->obj);
+        port->finish(port);
+      }
+      free(fobj);
+      fobj = prev->next;
+    }
   }
-
-  /*
-    for(prev = p = S->ports; p; p = p->next) {
-    if(SLY_GCOBJECT(p)->type == SLY_FORWARD_TAG) {
-    prev->next = ((sly_forward_t*)p)->ref;
-    prev = p;
-    }
-    }
-  */
 }
 
 static void collect_garbage(sly_store_t* S)
@@ -213,7 +212,8 @@ static void collect_garbage(sly_store_t* S)
   S->from_space = S->to_space;
   S->to_space = scan;
 
-  collect_ports(S);
+  /* process objects that need finalisation */
+  collect_fobjs(S);
 
   /*fprintf(stderr, "GC before: %d after: %d\n\n", old_size, S->size);*/
 }
@@ -262,7 +262,7 @@ int sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud)
   S->capacity = SLY_INITIAL_SPACE_SIZE;
   S->to_space = S->from_space + (SLY_INITIAL_SPACE_SIZE);
 
-  S->ports = NULL;
+  S->fobjs = NULL;
 
   S->roots_cb = cb;
   S->roots_cb_data = ud;
@@ -272,10 +272,27 @@ int sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud)
 
 void sly_gc_finish(sly_store_t *S)
 {
+  sly_fobj_t *fobj;
+
   free(S->os_address);
   S->size = S->capacity = 0;
   S->from_space = S->to_space = NULL;
   S->roots_cb = S->roots_cb_data = NULL;
+
+  for(fobj = S->fobjs; fobj;) {
+    sly_fobj_t *t;
+
+    t = fobj->next;
+    if(fobj->obj->type == SLY_TYPE_INPUT_PORT ||
+       fobj->obj->type == SLY_TYPE_OUTPUT_PORT) {
+      sly_port_t *port;
+
+      port = SLY_PORT(fobj->obj);
+      port->finish(port);
+    }
+    free(fobj);
+    fobj = t;
+  }
 }
 
 void* sly_gc_alloc(sly_store_t *S, uint32_t size)
@@ -306,9 +323,20 @@ void* sly_gc_alloc(sly_store_t *S, uint32_t size)
 
 void sly_gc_add_port(sly_store_t *S, sly_port_t *port)
 {
-  if(port) {
-    port->next = S->ports;
-    S->ports = port;
+  sly_fobj_t *link;
+
+  if(!port) {
+    return;
   }
+
+  link = (sly_fobj_t*)malloc(sizeof(sly_fobj_t));
+  if(!link) {
+    return;
+  }
+
+  link->next = S->fobjs;
+  link->obj = SLY_GCOBJECT(port);
+
+  S->fobjs = link;
 }
 

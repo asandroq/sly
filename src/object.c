@@ -173,8 +173,6 @@ sly_gcobject_t *sly_create_iport(sly_state_t *S)
   if(ret) {
     SLY_GCOBJECT(ret)->type = SLY_TYPE_INPUT_PORT;
     SLY_PORT(ret)->char_enc = SLY_CHAR_ENC_LATIN1;
-    SLY_PORT(ret)->copied = 1;
-    SLY_PORT(ret)->next = NULL;
     SLY_PORT(ret)->finish = NULL;
     SLY_PORT(ret)->private = NULL;
 
@@ -194,8 +192,6 @@ sly_gcobject_t *sly_create_oport(sly_state_t *S)
   if(ret) {
     SLY_GCOBJECT(ret)->type = SLY_TYPE_OUTPUT_PORT;
     SLY_PORT(ret)->char_enc = SLY_CHAR_ENC_LATIN1;
-    SLY_PORT(ret)->copied = 1;
-    SLY_PORT(ret)->next = NULL;
     SLY_PORT(ret)->finish = NULL;
     SLY_PORT(ret)->private = NULL;
 

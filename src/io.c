@@ -355,7 +355,6 @@ static int fp_finish(sly_port_t *self)
 
   priv = (struct fp_priv*)SLY_PORT(self)->private;
 
-  free(SLY_PORT(self)->private);
   if(priv->closable) {
     ret = fclose(priv->f) == 0;
   } else {

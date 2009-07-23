@@ -500,7 +500,7 @@ static int sly_vm_run(sly_state_t* S)
       /* where the values will be copied from */
       j = S->sp - dw1;
 
-      memcpy(S->stack+i, S->stack+j, dw1 * sizeof(sly_object_t));
+      memmove(S->stack+i, S->stack+j, dw1 * sizeof(sly_object_t));
 
       S->sp = S->fp + dw1 + 1;
       S->stack[S->fp].value.fixnum = dw1;
@@ -820,8 +820,32 @@ static int sly_vm_run(sly_state_t* S)
   return 1;
 }
 
-void sly_vm_call(sly_state_t* S)
+void sly_vm_call(sly_state_t* S, sly_object_t proc, uint32_t nargs)
 {
+  int idx;
+
+  /* must copy args "up" to create space for frame info */
+  idx = S->sp - nargs;
+  S->sp += 4;
+  memmove(&S->stack[idx+4], &S->stack[idx], nargs * sizeof(sly_object_t));
+
+  /* return address */
+  (S->stack[idx  ]).type = SLY_TYPE_FIXNUM;
+  (S->stack[idx++]).value.fixnum = SLY_HALT_ADDRESS;
+
+  /* saved procedure */
+  S->stack[idx++] = S->proc;
+  S->proc = proc;
+
+  /* saved frame pointer */
+  (S->stack[idx  ]).type = SLY_TYPE_FIXNUM;
+  (S->stack[idx++]).value.fixnum = S->fp;
+
+  /* number of arguments */
+  S->fp = idx;
+  (S->stack[idx  ]).type = SLY_TYPE_FIXNUM;
+  (S->stack[idx++]).value.fixnum = nargs;
+
   if(SLY_CLOSURE(S->proc.value.gc)->is_c) {
     call_c_closure(S, SLY_CLOSURE(S->proc.value.gc));
   } else {
@@ -904,7 +928,6 @@ static uint32_t sly_link_module(sly_state_t* S, sly_module_t *mod)
 
     /* caching the sly-eval procedure for the REPL */
     if(is_sly_eval(mod->globals[i])) {
-      fprintf(stderr, "Got it at %d\n", dw);
       S->sly_eval = dw;
     }
   }

@@ -110,6 +110,6 @@
 void sly_vm_dump(sly_state_t* S);
 
 /* performs the call protocol */
-void sly_vm_call(sly_state_t* S);
+void sly_vm_call(sly_state_t* S, sly_object_t proc, uint32_t nargs);
 
 #endif

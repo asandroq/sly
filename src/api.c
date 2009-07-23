@@ -710,34 +710,14 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
   assert(sly_listp(S, -1));
 #endif
 
-  /* creating fake frame */
-  sly_push_integer(S, SLY_HALT_ADDRESS);
-  S->stack[S->sp++] = S->proc;
-  sly_push_integer(S, S->fp);
-
-  S->fp = S->sp++;
-  S->stack[S->fp].type = SLY_TYPE_FIXNUM;
-
-  /* adding non-list arguments */
-  if(nr_args > 1) {
-    memcpy(&S->stack[S->sp],
-           &S->stack[first],
-           (nr_args-1) * sizeof(sly_object_t));
-    S->sp += nr_args - 1;
-  }
-
   /* add arguments from list */
   --nr_args;
-  for(p = S->stack[S->fp-4]; p.type == SLY_TYPE_PAIR; nr_args++) {
+  for(p = S->stack[S->sp-1], S->sp--; p.type == SLY_TYPE_PAIR; nr_args++) {
     S->stack[S->sp++] = SLY_PAIR(p.value.gc)->car;
     p = SLY_PAIR(p.value.gc)->cdr;
   }
 
-  /* calling */
-  S->stack[S->fp].value.fixnum = nr_args;
-  S->proc = S->stack[proc];
-  sly_vm_call(S);
-
+  sly_vm_call(S, S->stack[proc], nr_args);
   S->stack[S->sp++] = S->accum;
 }
 
@@ -745,13 +725,11 @@ void sly_eval(sly_state_t *S, int idx)
 {
   idx = calc_index(S, idx);
 
-  /* pushing evaluating procedure */
-  S->stack[S->sp++] = S->global_env.vars[S->sly_eval].value;
-
   /* pushing argument */
   S->stack[S->sp++] = S->stack[idx];
 
-  sly_apply(S, -2, 1);
+  sly_vm_call(S, S->global_env.vars[S->sly_eval].value, 1);
+  S->stack[S->sp++] = S->accum;
 }
 
 void sly_push_current_input_port(sly_state_t *S)

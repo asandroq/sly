@@ -26,22 +26,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#else
-#include <errno.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#endif
-
 #include "sly.h"
 #include "io.h"
 #include "object.h"
-
-#define SLY_IO_PAUSE                10000
 
 #define SLY_UCS_CHAR_TAB            0x0009
 #define SLY_UCS_LINE_FEED           0x000A
@@ -718,76 +705,96 @@ static void read_till_delimiter(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t* 
   };
 }
 
-static void parse_number(sly_sbuffer_t *buf, sly_object_t *res)
+static int digit_value(sly_char_t c, int base, uint8_t *value)
 {
+  int ret;
+  uint8_t i;
+  static const sly_char_t digits[] = {'0', '1', '2', '3', '4', '5', '6', '7',
+                                      '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+
+  ret = 0;
+  for(i = 0; i < base; i++) {
+    if(c == digits[i]) {
+      ret = 1;
+      if(value) {
+        *value = i;
+      }
+      break;
+    }
+  }
+
+  return ret;
+}
+
+static int parse_number(sly_sbuffer_t *buf, sly_object_t *res)
+{
+  uint8_t val;
   sly_char_t *str;
-  int i, base, is_exact;
+  uint32_t exp, ret;
+  int i, j, base, is_exact;
 
   i = 0;
   base = -1;
   is_exact = -1;
   str = buf->str;
 
-  fprintf(stderr, "%c\n", str[i]);
   /* are there prefixes? */
   while(str[i] == '#') {
     ++i;
     if(str[i] == 'i') {
       if(is_exact != -1) {
-	/* ERROR */
-	res->type = SLY_TYPE_NIL;
-	return;
+	return 0;
       }
       is_exact = 0;
     } else if(str[i] == 'e') {
       if(is_exact != -1) {
-	/* ERROR */
-	res->type = SLY_TYPE_NIL;
-	return;
+	return 0;
       }
       is_exact = 1;
     } else if(str[i] == 'b') {
       if(base != -1) {
-	/* ERROR */
-	res->type = SLY_TYPE_NIL;
-	return;
+	return 0;
       }
       base = 2;
     } else if(str[i] == 'd') {
       if(base != -1) {
-	/* ERROR */
-	res->type = SLY_TYPE_NIL;
-	return;
+	return 0;
       }
       base = 10;
     } else if(str[i] == 'o') {
       if(base != -1) {
-	/* ERROR */
-	res->type = SLY_TYPE_NIL;
-	return;
+	return 0;
       }
       base = 8;
     } else if(str[i] == 'x') {
       if(base != -1) {
-	/* ERROR */
-	res->type = SLY_TYPE_NIL;
-	return;
+	return 0;
       }
       base = 16;
     } else {
-      /* ERROR */
-      res->type = SLY_TYPE_NIL;
-      return;
+      return 0;
     }
     ++i;
   }
 
-  fprintf(stderr, "%c\n", str[i]);
   base = base == -1 ? 10 : base;
   is_exact = is_exact == -1 ? 1 : is_exact;
 
-  /* special complex cases */
-  
+  /* for now, just fixnums */
+  ret = 0;
+  exp = 1;
+  for(j = buf->pos - 1; j >= i; j--) {
+    if(!digit_value(buf->str[j], base, &val)) {
+      return 0;
+    }
+
+    ret += val * exp;
+    exp *= base;
+  }
+  res->type = SLY_TYPE_FIXNUM;
+  res->value.fixnum = ret;
+
+  return 1;
 }
 
 static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, sly_object_t* res)
@@ -857,7 +864,10 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
 	      buf->str[1] == 'o' ||
 	      buf->str[1] == 'x') {
       /* number */
-      parse_number(buf, res);
+      if(!parse_number(buf, res)) {
+        sly_push_string(S, "cannot parse number");
+        sly_error(S, 1);
+      }
     } else {
       sly_push_string(S, "unknown read syntax");
       sly_error(S, 1);
@@ -874,7 +884,10 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
 	*res = sly_create_symbol(S, SLY_STRING(obj));
       } else {
 	/* number */
-	parse_number(buf, res);
+        if(!parse_number(buf, res)) {
+          sly_push_string(S, "cannot parse number");
+          sly_error(S, 1);
+        }
       }
     } else if(sly_sbuffer_equalp(buf, ellipsis_str)) {
       obj = sly_create_string(S, buf->str, buf->pos);
@@ -893,9 +906,13 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
     return;
   }
 
-  if(isdigit(c)) {
+  if(digit_value(c, 10, NULL)) {
     /* base 10 number */
-    parse_number(buf, res);
+    read_till_delimiter(S, in, buf);
+    if(!parse_number(buf, res)) {
+      sly_push_string(S, "cannot parse number");
+      sly_error(S, 1);
+    }
     return;
   }
 }

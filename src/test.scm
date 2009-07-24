@@ -26,7 +26,8 @@
             (add1 c)
             (- c b)
             (and c (x (- d a) b)))))))
-    (proc1 (char->integer #\A) (* 24 3) (add1 (sub1 (add1 1024))))))
+    (display (proc1 (char->integer #\A) (* 24 3) (add1 (sub1 (add1 1024)))))
+    (newline)))
 
 (define test2
   '((define my-name "Alex")

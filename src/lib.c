@@ -333,6 +333,24 @@ static int string_append(sly_state_t* S)
  * R5RS 6.3.6
  */
 
+static int vectorp(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(sly_vectorp(S, 0)) {
+    sly_push_boolean(S, 1);
+  } else {
+    sly_push_boolean(S, 0);
+  }
+
+  return 1;
+}
+
 static int make_vector(sly_state_t* S)
 {
   int i, size, nargs = sly_get_top(S);
@@ -758,6 +776,7 @@ static sly_reg_t lib_regs[] = {
   {"string-length", string_length},
   {"string-ref", string_ref},
   {"string-append", string_append},
+  {"vector?", vectorp},
   {"make-vector", make_vector},
   {"vector-length", vector_length},
   {"vector-ref", vector_ref},

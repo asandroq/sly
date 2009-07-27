@@ -51,18 +51,17 @@
 /*
  * character sets
  */
-static const sly_char_t delim_set[]     = {'(', ')', '[', ']', '"', ';', '#', '\0'};
+static const sly_char_t delim_set[]     = {'(', ')', '[', ']', '"', ';', '\0'};
 static const sly_char_t pec_begin_set[] = {'+', '-', '.', '\0'};
-static const sly_char_t sym_begin_set[] = {'!', '$', '%', '&', '*', '/',
-                                           ':', '<', '=', '>', '?', '^',
-                                           '_', '~', '\0'};
+static const sly_char_t sym_begin_set[] = {'!', '$', '%', '&', '*', '/', ':', '<', '=',
+                                           '>', '?', '^', '_', '~', '\0'};
+static const sly_char_t num_set[]       = {'e', 'E', 'i', 'I', 'b', 'B', 'o', 'O',
+                                           'd', 'D', 'x', 'X', '\0'};
 
 /*
  * some string constants
  */
 
-static const sly_char_t false_str[]     = {'#', 'f', '\0'};
-static const sly_char_t true_str[]      = {'#', 't', '\0'};
 static const sly_char_t space_str[]     = {'#', '\\', 's', 'p', 'a', 'c', 'e', '\0'};
 static const sly_char_t newline_str[]   = {'#', '\\', 'n', 'e', 'w', 'l', 'i', 'n', 'e', '\0'};
 static const sly_char_t ellipsis_str[]  = {'.', '.', '.', '\0'};
@@ -741,32 +740,32 @@ static int parse_number(sly_sbuffer_t *buf, sly_object_t *res)
   /* are there prefixes? */
   while(str[i] == '#') {
     ++i;
-    if(str[i] == 'i') {
+    if(str[i] == 'i' || str[i] == 'I') {
       if(is_exact != -1) {
 	return 0;
       }
       is_exact = 0;
-    } else if(str[i] == 'e') {
+    } else if(str[i] == 'e' || str[i] == 'E') {
       if(is_exact != -1) {
 	return 0;
       }
       is_exact = 1;
-    } else if(str[i] == 'b') {
+    } else if(str[i] == 'b' || str[i] == 'B') {
       if(base != -1) {
 	return 0;
       }
       base = 2;
-    } else if(str[i] == 'd') {
+    } else if(str[i] == 'd' || str[i] == 'D') {
       if(base != -1) {
 	return 0;
       }
       base = 10;
-    } else if(str[i] == 'o') {
+    } else if(str[i] == 'o' || str[i] == 'O') {
       if(base != -1) {
 	return 0;
       }
       base = 8;
-    } else if(str[i] == 'x') {
+    } else if(str[i] == 'x' || str[i] == 'X') {
       if(base != -1) {
 	return 0;
       }
@@ -836,17 +835,30 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
 
   if(c == '#') {
     read_till_delimiter(S, in, buf);
-    if(sly_sbuffer_equalp(buf, false_str)) {
+    if(buf->pos == 2 &&
+       (buf->str[1] == 'f' || buf->str[1] == 'F')) {
       /* boolean false */
       res->type = SLY_TYPE_BOOL;
       res->value.bool = 0;
-    } else if(sly_sbuffer_equalp(buf, true_str)) {
+    } else if(buf->pos == 2 &&
+              (buf->str[1] == 't' || buf->str[1] == 'T')) {
       /* boolean true */
       res->type = SLY_TYPE_BOOL;
       res->value.bool = 1;
     } else if(buf->str[1] == '\\') {
       /* character */
       res->type = SLY_TYPE_CHAR;
+      c = peek_char(S, in);
+      if(is_char_in_set(c, delim_set)) {
+        /* the character itself is a delimiter, must read it */
+        read_till_delimiter(S, in, buf);
+        if(buf->pos != 1) {
+          sly_push_string(S, "invalid character syntax");
+          sly_error(S, 1);
+        }
+        res->value.chr = c;
+        return;
+      }
       if(sly_sbuffer_equalp(buf, space_str)) {
 	res->value.chr = SLY_UCS_SPACE;
       } else if(sly_sbuffer_equalp(buf, newline_str)) {
@@ -854,15 +866,10 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
       } else if(buf->pos == 3) {
 	res->value.chr = buf->str[2];
       } else {
-        sly_push_string(S, "unknown read syntax");
+        sly_push_string(S, "invalid character syntax");
         sly_error(S, 1);
       }
-    } else if(buf->str[1] == 'i' ||
-	      buf->str[1] == 'e' ||
-	      buf->str[1] == 'b' ||
-	      buf->str[1] == 'd' ||
-	      buf->str[1] == 'o' ||
-	      buf->str[1] == 'x') {
+    } else if(is_char_in_set(buf->str[1], num_set)) {
       /* number */
       if(!parse_number(buf, res)) {
         sly_push_string(S, "cannot parse number");

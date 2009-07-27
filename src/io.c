@@ -49,6 +49,22 @@
 #define SLY_UCS_NO_CHAR             0xF001
 
 /*
+ * reader tokens
+ */
+#define SLY_TOK_NONE                1
+#define SLY_TOK_EOF                 2
+#define SLY_TOK_DATUM               3
+#define SLY_TOK_LEFT_PAREN          4
+#define SLY_TOK_RIGHT_PAREN         5
+#define SLY_TOK_SHARP_PAREN         6
+#define SLY_TOK_QUOTE               7
+#define SLY_TOK_BACKQUOTE           8
+#define SLY_TOK_COMMA               9
+#define SLY_TOK_COMMA_AT           10
+#define SLY_TOK_DOT                11
+
+
+/*
  * character sets
  */
 static const sly_char_t delim_set[]     = {'(', ')', '[', ']', '"', ';', '\0'};
@@ -693,9 +709,6 @@ static void read_till_delimiter(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t* 
 
   sly_sbuffer_assign(buf, "");
 
-  c = read_char(S, in);
-  sly_sbuffer_add(buf, c);
-
   c = peek_char(S, in);
   while(!is_space(c) && c != SLY_UCS_EOF && !is_char_in_set(c, delim_set)) {
     sly_sbuffer_add(buf, c);
@@ -796,12 +809,10 @@ static int parse_number(sly_sbuffer_t *buf, sly_object_t *res)
   return 1;
 }
 
-static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, sly_object_t* res)
+static int read_token(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, sly_object_t* res)
 {
   sly_char_t c;
   sly_gcobject_t *obj;
-
-  res->type = SLY_TYPE_UNDEF;
 
   c = peek_char(S, in);
   while(is_space(c) || c == ';') {
@@ -822,7 +833,38 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
   if(c == SLY_UCS_EOF) {
     read_char(S, in);
     res->type = SLY_TYPE_EOF;
-    return;
+    return SLY_TOK_EOF;
+  }
+
+  if(c == '(') {
+    read_char(S, in);
+    return SLY_TOK_LEFT_PAREN;
+  }
+
+  if(c == ')') {
+    read_char(S, in);
+    return SLY_TOK_RIGHT_PAREN;
+  }
+
+  if(c == '\'') {
+    read_char(S, in);
+    return SLY_TOK_QUOTE;
+  }
+
+  if(c == '`') {
+    read_char(S, in);
+    return SLY_TOK_BACKQUOTE;
+  }
+
+  if(c == ',') {
+    read_char(S, in);
+    c = peek_char(S, in);
+    if(c == '@') {
+      read_char(S, in);
+      return SLY_TOK_COMMA_AT;
+    } else {
+      return SLY_TOK_COMMA;
+    }
   }
 
   /* strings */
@@ -830,12 +872,15 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
     read_string(S, in, buf);
     res->type = SLY_TYPE_STRING;
     res->value.gc = sly_create_string(S, buf->str, buf->pos);
-    return;
+    return SLY_TOK_DATUM;
   }
 
   if(c == '#') {
     read_till_delimiter(S, in, buf);
-    if(buf->pos == 2 &&
+    if(buf->pos == 1 && peek_char(S, in) == '(') {
+      read_char(S, in);
+      return SLY_TOK_SHARP_PAREN;
+    } else if(buf->pos == 2 &&
        (buf->str[1] == 'f' || buf->str[1] == 'F')) {
       /* boolean false */
       res->type = SLY_TYPE_BOOL;
@@ -851,13 +896,14 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
       c = peek_char(S, in);
       if(is_char_in_set(c, delim_set)) {
         /* the character itself is a delimiter, must read it */
+        read_char(S, in);
         read_till_delimiter(S, in, buf);
-        if(buf->pos != 1) {
+        if(buf->pos != 0) {
           sly_push_string(S, "invalid character syntax");
           sly_error(S, 1);
         }
         res->value.chr = c;
-        return;
+        return SLY_TOK_DATUM;
       }
       if(sly_sbuffer_equalp(buf, space_str)) {
 	res->value.chr = SLY_UCS_SPACE;
@@ -879,7 +925,7 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
       sly_push_string(S, "unknown read syntax");
       sly_error(S, 1);
     }
-    return;
+    return SLY_TOK_DATUM;
   }
 
   /* symbols */
@@ -896,6 +942,8 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
           sly_error(S, 1);
         }
       }
+    } else if(buf->pos == 1 && buf->str[0] == '.') {
+      return SLY_TOK_DOT;
     } else if(sly_sbuffer_equalp(buf, ellipsis_str)) {
       obj = sly_create_string(S, buf->str, buf->pos);
       *res = sly_create_symbol(S, SLY_STRING(obj));
@@ -903,14 +951,14 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
       sly_push_string(S, "unknown read syntax");
       sly_error(S, 1);
     }
-    return;
+    return SLY_TOK_DATUM;
   }
 
   if(is_char_in_set(c, sym_begin_set) || isalpha(c)) {
     read_till_delimiter(S, in, buf);
     obj = sly_create_string(S, buf->str, buf->pos);
     *res = sly_create_symbol(S, SLY_STRING(obj));
-    return;
+    return SLY_TOK_DATUM;
   }
 
   if(digit_value(c, 10, NULL)) {
@@ -920,8 +968,10 @@ static void sly_io_read_i(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, s
       sly_push_string(S, "cannot parse number");
       sly_error(S, 1);
     }
-    return;
+    return SLY_TOK_DATUM;
   }
+
+  return SLY_TOK_NONE;
 }
 
 sly_object_t sly_io_read(sly_state_t *S, sly_iport_t *p)
@@ -930,7 +980,7 @@ sly_object_t sly_io_read(sly_state_t *S, sly_iport_t *p)
   sly_sbuffer_t *buffer;
 
   buffer = sly_io_create_sbuffer();
-  sly_io_read_i(S, buffer, p, &ret);
+  read_token(S, buffer, p, &ret);
   sly_io_destroy_sbuffer(buffer);
 
   return ret;
@@ -964,6 +1014,10 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
   char buf[64];
 
   switch(obj->type) {
+
+  case SLY_TYPE_EOF:
+    sly_io_write_c_string(S, "<#eof>", port);
+    break;
 
   case SLY_TYPE_UNDEF:
     sly_io_write_c_string(S, "<#undef>", port);

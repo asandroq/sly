@@ -29,6 +29,7 @@
 #include "sly.h"
 #include "io.h"
 #include "object.h"
+#include "state.h"
 
 #define SLY_UCS_CHAR_TAB            0x0009
 #define SLY_UCS_LINE_FEED           0x000A
@@ -52,16 +53,15 @@
  * reader tokens
  */
 #define SLY_TOK_NONE                1
-#define SLY_TOK_EOF                 2
-#define SLY_TOK_DATUM               3
-#define SLY_TOK_LEFT_PAREN          4
-#define SLY_TOK_RIGHT_PAREN         5
-#define SLY_TOK_SHARP_PAREN         6
-#define SLY_TOK_QUOTE               7
-#define SLY_TOK_BACKQUOTE           8
-#define SLY_TOK_COMMA               9
-#define SLY_TOK_COMMA_AT           10
-#define SLY_TOK_DOT                11
+#define SLY_TOK_DATUM               2
+#define SLY_TOK_LEFT_PAREN          3
+#define SLY_TOK_RIGHT_PAREN         4
+#define SLY_TOK_SHARP_PAREN         5
+#define SLY_TOK_QUOTE               6
+#define SLY_TOK_BACKQUOTE           7
+#define SLY_TOK_COMMA               8
+#define SLY_TOK_COMMA_AT            9
+#define SLY_TOK_DOT                10
 
 
 /*
@@ -809,7 +809,7 @@ static int parse_number(sly_sbuffer_t *buf, sly_object_t *res)
   return 1;
 }
 
-static int read_token(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, sly_object_t* res)
+static int read_token(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t *buf, sly_object_t* res)
 {
   sly_char_t c;
   sly_gcobject_t *obj;
@@ -833,7 +833,7 @@ static int read_token(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, sly_o
   if(c == SLY_UCS_EOF) {
     read_char(S, in);
     res->type = SLY_TYPE_EOF;
-    return SLY_TOK_EOF;
+    return SLY_TOK_DATUM;
   }
 
   if(c == '(') {
@@ -974,14 +974,143 @@ static int read_token(sly_state_t* S, sly_sbuffer_t *buf, sly_iport_t* in, sly_o
   return SLY_TOK_NONE;
 }
 
+static void read(sly_state_t *S, sly_iport_t *p, sly_sbuffer_t *buf, int tok, sly_object_t *obj)
+{
+  int la;
+  sly_gcobject_t *str;
+  sly_object_t obj1, *tmp, *root;
+
+  switch(tok) {
+  case SLY_TOK_NONE:
+  case SLY_TOK_DOT:
+  case SLY_TOK_RIGHT_PAREN:
+    sly_push_string(S, "invalid read syntax");
+    sly_error(S, 1);
+    break;
+
+  case SLY_TOK_LEFT_PAREN:
+    la = read_token(S, p, buf, obj);
+    if(la == SLY_TOK_RIGHT_PAREN) {
+      obj->type = SLY_TYPE_NIL;
+      break;
+    }
+
+    root = &S->stack[S->sp++];
+    root->type = SLY_TYPE_PAIR;
+    root->value.gc = sly_create_pair(S);
+    SLY_PAIR(root->value.gc)->car.type = SLY_TYPE_UNDEF;
+    SLY_PAIR(root->value.gc)->cdr.type = SLY_TYPE_UNDEF;
+
+    if(la != SLY_TOK_DATUM) {
+      read(S, p, buf, la, obj);
+    }
+    SLY_PAIR(root->value.gc)->car = *obj;
+
+    tmp = root;
+    while(1) {
+      sly_object_t *t;
+
+      la = read_token(S, p, buf, obj);
+      if(la == SLY_TOK_DOT) {
+        la = read_token(S, p, buf, obj);
+        if(la != SLY_TOK_DATUM) {
+          read(S, p, buf, la, obj);
+        }
+        SLY_PAIR(tmp->value.gc)->cdr = *obj;
+        tok = read_token(S, p, buf, obj);
+        if(tok != SLY_TOK_RIGHT_PAREN) {
+          sly_push_string(S, "invalid read syntax");
+          sly_error(S, 1);
+          return;
+        }
+        *obj = *root;
+        S->sp--;
+        break;
+      } else if(la == SLY_TOK_RIGHT_PAREN) {
+        SLY_PAIR(tmp->value.gc)->cdr.type = SLY_TYPE_NIL;
+        *obj = *root;
+        S->sp--;
+        break;
+      }
+
+      t = &SLY_PAIR(tmp->value.gc)->cdr;
+      t->type = SLY_TYPE_PAIR;
+      t->value.gc = sly_create_pair(S);
+      SLY_PAIR(t->value.gc)->car.type = SLY_TYPE_UNDEF;
+      SLY_PAIR(t->value.gc)->cdr.type = SLY_TYPE_UNDEF;
+
+      if(la != SLY_TOK_DATUM) {
+        read(S, p, buf, la, obj);
+      }
+      SLY_PAIR(t->value.gc)->car = *obj;
+      tmp = &SLY_PAIR(t->value.gc)->cdr;
+    }
+    break;
+
+  case SLY_TOK_SHARP_PAREN:
+    break;
+
+  case SLY_TOK_QUOTE:
+  case SLY_TOK_BACKQUOTE:
+  case SLY_TOK_COMMA:
+  case SLY_TOK_COMMA_AT:
+    root = &S->stack[S->sp++];
+    root->type = SLY_TYPE_PAIR;
+    root->value.gc = sly_create_pair(S);
+    SLY_PAIR(root->value.gc)->car.type = SLY_TYPE_UNDEF;
+    SLY_PAIR(root->value.gc)->cdr.type = SLY_TYPE_NIL;
+
+    la = read_token(S, p, buf, obj);
+    if(la != SLY_TOK_DATUM) {
+      read(S, p, buf, la, obj);
+    }
+    SLY_PAIR(root->value.gc)->car = *obj;
+
+    obj1.type = SLY_TYPE_PAIR;
+    obj1.value.gc = sly_create_pair(S);
+    SLY_PAIR(obj1.value.gc)->car.type = SLY_TYPE_UNDEF;
+    SLY_PAIR(obj1.value.gc)->cdr = *root;
+    *root = obj1;
+
+    switch(tok) {
+    case SLY_TOK_QUOTE:
+      sly_sbuffer_assign(buf, "quote");
+      break;
+
+    case SLY_TOK_BACKQUOTE:
+      sly_sbuffer_assign(buf, "quasiquote");
+      break;
+
+    case SLY_TOK_COMMA:
+      sly_sbuffer_assign(buf, "unquote");
+      break;
+
+    case SLY_TOK_COMMA_AT:
+      sly_sbuffer_assign(buf, "unquote-splicing");
+    }
+    str = sly_create_string(S, buf->str, buf->pos);
+    obj1 = sly_create_symbol(S, SLY_STRING(str));
+    SLY_PAIR(root->value.gc)->car = obj1;
+    *obj = *root;
+    S->sp--;
+    break;
+  }
+}
+
 sly_object_t sly_io_read(sly_state_t *S, sly_iport_t *p)
 {
+  int tok;
   sly_object_t ret;
-  sly_sbuffer_t *buffer;
+  sly_sbuffer_t *buf;
 
-  buffer = sly_io_create_sbuffer();
-  read_token(S, buffer, p, &ret);
-  sly_io_destroy_sbuffer(buffer);
+  buf = sly_io_create_sbuffer();
+
+  tok = read_token(S, p, buf, &ret);
+  if(tok != SLY_TOK_DATUM) {
+    read(S, p, buf, tok, &ret);
+  }
+
+  sly_io_destroy_sbuffer(buf);
 
   return ret;
 }

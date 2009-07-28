@@ -28,6 +28,7 @@
 #include "object.h"
 
 typedef struct sly_fobj_t sly_fobj_t;
+typedef struct sly_root_t sly_root_t;
 typedef struct sly_store_t sly_store_t;
 
 /*
@@ -36,6 +37,18 @@ typedef struct sly_store_t sly_store_t;
  * when there are no more roots to scan
  */
 typedef sly_object_t* (*sly_roots_cb_t)(void*);
+
+/*
+ * this is used for extra roots that need protection
+ */
+struct sly_root_t {
+
+  /* object that needs protection */
+  sly_object_t *obj;
+
+  /* next in chain */
+  sly_root_t *next;
+};
 
 /*
  * this is used to create a chain of links to
@@ -67,6 +80,9 @@ struct sly_store_t {
   /* the space to which objects are copied */
   void *to_space;
 
+  /* extra roots that need protection */
+  sly_root_t *roots;
+
   /* list of objects that may need finalisation */
   sly_fobj_t *fobjs;
 
@@ -81,6 +97,8 @@ int  sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud);
 void sly_gc_finish(sly_store_t *S);
 
 void* sly_gc_alloc(sly_store_t *S, uint32_t size);
+void  sly_gc_protect(sly_store_t *S, sly_object_t *obj);
+void  sly_gc_release(sly_store_t *S, sly_object_t *obj);
 void  sly_gc_add_port(sly_store_t *S, sly_port_t *port);
 
 #endif

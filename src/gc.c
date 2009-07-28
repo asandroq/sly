@@ -123,14 +123,18 @@ static void collect_fobjs(sly_store_t *S)
 {
   sly_fobj_t *fobj, *prev;
 
-  for(prev = fobj = S->fobjs; fobj;) {
+  for(prev = NULL, fobj = S->fobjs; fobj;) {
     if(fobj->obj->type == SLY_FORWARD_TAG) {
       fobj->obj = ((sly_forward_t*)fobj->obj)->ref;
       fobj = fobj->next;
       prev = fobj;
     } else {
       /* if object was not copied then it's dead */
-      prev->next = fobj->next;
+      if(prev) {
+        prev->next = fobj->next;
+      } else {
+        S->fobjs = fobj->next;
+      }
       if(fobj->obj->type == SLY_TYPE_INPUT_PORT ||
          fobj->obj->type == SLY_TYPE_OUTPUT_PORT) {
         sly_port_t *port;
@@ -151,6 +155,7 @@ static void collect_garbage(sly_store_t* S)
    * using Cheney's algorithm
    */
   void *scan;
+  sly_root_t *root;
   sly_object_t *obj;
   uint32_t old_size;
 
@@ -164,6 +169,11 @@ static void collect_garbage(sly_store_t* S)
   /* copying roots */
   while((obj = S->roots_cb(S->roots_cb_data))) {
     copy_object(S, obj);
+  }
+
+  /* extra roots */
+  for(root = S->roots; root; root = root->next) {
+    copy_object(S, root->obj);
   }
 
   /* now scan to-space */
@@ -262,6 +272,7 @@ int sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud)
   S->capacity = SLY_INITIAL_SPACE_SIZE;
   S->to_space = S->from_space + (SLY_INITIAL_SPACE_SIZE);
 
+  S->roots = NULL;
   S->fobjs = NULL;
 
   S->roots_cb = cb;
@@ -272,12 +283,21 @@ int sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud)
 
 void sly_gc_finish(sly_store_t *S)
 {
+  sly_root_t *root;
   sly_fobj_t *fobj;
 
   free(S->os_address);
   S->size = S->capacity = 0;
   S->from_space = S->to_space = NULL;
   S->roots_cb = S->roots_cb_data = NULL;
+
+  for(root = S->roots; root;) {
+    sly_root_t *t;
+
+    t = root->next;
+    free(root);
+    root = t;
+  }
 
   for(fobj = S->fobjs; fobj;) {
     sly_fobj_t *t;
@@ -319,6 +339,39 @@ void* sly_gc_alloc(sly_store_t *S, uint32_t size)
   S->size += size;
 
   return ret;
+}
+
+void sly_gc_protect(sly_store_t *S, sly_object_t *obj)
+{
+  sly_root_t *link;
+
+  link = (sly_root_t*)malloc(sizeof(sly_root_t));
+  if(!link) {
+    return;
+  }
+
+  link->obj = obj;
+  link->next = S->roots;
+
+  S->roots = link;
+}
+
+void sly_gc_release(sly_store_t *S, sly_object_t *obj)
+{
+  sly_root_t *prev, *root;
+
+  for(prev = NULL, root = S->roots; root; root = root->next) {
+    if(root->obj == obj) {
+      if(prev) {
+        prev->next = root->next;
+      } else {
+        S->roots = root->next;
+      }
+      free(root);
+      break;
+    }
+    prev = root;
+  }
 }
 
 void sly_gc_add_port(sly_store_t *S, sly_port_t *port)

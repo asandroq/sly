@@ -144,7 +144,7 @@ static opcode_t global_opcodes[] = {
  * debugging
  */
 
-static void dump_instr(sly_state_t *S, uint32_t instr, sly_oport_t *port)
+static void dump_instr(sly_state_t *S, uint32_t instr, sly_object_t *port)
 {
   uint8_t op;
   opcode_t* dbg;
@@ -182,9 +182,9 @@ void sly_vm_dump(sly_state_t* S)
 {
   uint32_t i;
   char buf[64];
-  sly_oport_t *port;
+  sly_object_t *port;
 
-  port = SLY_OPORT(S->stack[2].value.gc);
+  port = &S->stack[2];
 
   sly_io_write_c_string(S, "Instruction: ", port);
   dump_instr(S, S->code[S->pc], port);

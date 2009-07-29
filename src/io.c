@@ -642,14 +642,17 @@ static void write_char(sly_state_t* S, sly_oport_t *p, sly_char_t c)
  * reader
  */
 
-static void read_string(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t* buf)
+#define PEEK_CHAR(S, o) (peek_char((S), SLY_IPORT((o)->value.gc)))
+#define READ_CHAR(S, o) (read_char((S), SLY_IPORT((o)->value.gc)))
+
+static void read_string(sly_state_t* S, sly_object_t* in, sly_sbuffer_t* buf)
 {
   sly_char_t c;
 
   /* remove left quote */
-  read_char(S, in);
+  READ_CHAR(S, in);
   
-  c = read_char(S, in);
+  c = READ_CHAR(S, in);
   sly_sbuffer_assign(buf, "");
 
   while(c != '"') {
@@ -660,7 +663,7 @@ static void read_string(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t* buf)
     }
 
     if(c == '\\') {
-      c = read_char(S, in);
+      c = READ_CHAR(S, in);
 
       if(c == SLY_UCS_EOF) {
         sly_push_string(S, "unterminated string");
@@ -699,21 +702,21 @@ static void read_string(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t* buf)
     }
 
     sly_sbuffer_add(buf, c);
-    c = read_char(S, in);
+    c = READ_CHAR(S, in);
   };
 }
 
-static void read_till_delimiter(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t* buf)
+static void read_till_delimiter(sly_state_t* S, sly_object_t* in, sly_sbuffer_t* buf)
 {
   sly_char_t c;
 
   sly_sbuffer_assign(buf, "");
 
-  c = peek_char(S, in);
+  c = PEEK_CHAR(S, in);
   while(!is_space(c) && c != SLY_UCS_EOF && !is_char_in_set(c, delim_set)) {
     sly_sbuffer_add(buf, c);
-    read_char(S, in);
-    c = peek_char(S, in);
+    READ_CHAR(S, in);
+    c = PEEK_CHAR(S, in);
   };
 }
 
@@ -809,58 +812,58 @@ static int parse_number(sly_sbuffer_t *buf, sly_object_t *res)
   return 1;
 }
 
-static int read_token(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t *buf, sly_object_t* res)
+static int read_token(sly_state_t* S, sly_object_t* in, sly_sbuffer_t *buf, sly_object_t* res)
 {
   sly_char_t c;
   sly_gcobject_t *obj;
 
-  c = peek_char(S, in);
+  c = PEEK_CHAR(S, in);
   while(is_space(c) || c == ';') {
     /* eating up whitespace and comments */
     while(is_space(c)) {
-      read_char(S, in);
-      c = peek_char(S, in);
+      READ_CHAR(S, in);
+      c = PEEK_CHAR(S, in);
     }
 
     if(c == ';') {
       while(!is_line_ending(c)) {
-	c = read_char(S, in);
+	c = READ_CHAR(S, in);
       }
-      c = peek_char(S, in);
+      c = PEEK_CHAR(S, in);
     }
   }
 
   if(c == SLY_UCS_EOF) {
-    read_char(S, in);
+    READ_CHAR(S, in);
     res->type = SLY_TYPE_EOF;
     return SLY_TOK_DATUM;
   }
 
   if(c == '(') {
-    read_char(S, in);
+    READ_CHAR(S, in);
     return SLY_TOK_LEFT_PAREN;
   }
 
   if(c == ')') {
-    read_char(S, in);
+    READ_CHAR(S, in);
     return SLY_TOK_RIGHT_PAREN;
   }
 
   if(c == '\'') {
-    read_char(S, in);
+    READ_CHAR(S, in);
     return SLY_TOK_QUOTE;
   }
 
   if(c == '`') {
-    read_char(S, in);
+    READ_CHAR(S, in);
     return SLY_TOK_BACKQUOTE;
   }
 
   if(c == ',') {
-    read_char(S, in);
-    c = peek_char(S, in);
+    READ_CHAR(S, in);
+    c = PEEK_CHAR(S, in);
     if(c == '@') {
-      read_char(S, in);
+      READ_CHAR(S, in);
       return SLY_TOK_COMMA_AT;
     } else {
       return SLY_TOK_COMMA;
@@ -877,8 +880,8 @@ static int read_token(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t *buf, sly_o
 
   if(c == '#') {
     read_till_delimiter(S, in, buf);
-    if(buf->pos == 1 && peek_char(S, in) == '(') {
-      read_char(S, in);
+    if(buf->pos == 1 && PEEK_CHAR(S, in) == '(') {
+      READ_CHAR(S, in);
       return SLY_TOK_SHARP_PAREN;
     } else if(buf->pos == 2 &&
        (buf->str[1] == 'f' || buf->str[1] == 'F')) {
@@ -893,10 +896,10 @@ static int read_token(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t *buf, sly_o
     } else if(buf->str[1] == '\\') {
       /* character */
       res->type = SLY_TYPE_CHAR;
-      c = peek_char(S, in);
+      c = PEEK_CHAR(S, in);
       if(is_char_in_set(c, delim_set)) {
         /* the character itself is a delimiter, must read it */
-        read_char(S, in);
+        READ_CHAR(S, in);
         read_till_delimiter(S, in, buf);
         if(buf->pos != 0) {
           sly_push_string(S, "invalid character syntax");
@@ -974,7 +977,7 @@ static int read_token(sly_state_t* S, sly_iport_t* in, sly_sbuffer_t *buf, sly_o
   return SLY_TOK_NONE;
 }
 
-static void read(sly_state_t *S, sly_iport_t *p, sly_sbuffer_t *buf, int tok, sly_object_t *obj)
+static void read(sly_state_t *S, sly_object_t *p, sly_sbuffer_t *buf, int tok, sly_object_t *obj)
 {
   int la;
   sly_gcobject_t *str;
@@ -1097,47 +1100,46 @@ static void read(sly_state_t *S, sly_iport_t *p, sly_sbuffer_t *buf, int tok, sl
   }
 }
 
-sly_object_t sly_io_read(sly_state_t *S, sly_iport_t *p)
+void sly_io_read(sly_state_t *S, sly_object_t *p, sly_object_t *ret)
 {
   int tok;
-  sly_object_t ret;
   sly_sbuffer_t *buf;
 
   buf = sly_io_create_sbuffer();
 
-  tok = read_token(S, p, buf, &ret);
+  tok = read_token(S, p, buf, ret);
   if(tok != SLY_TOK_DATUM) {
-    read(S, p, buf, tok, &ret);
+    read(S, p, buf, tok, ret);
   }
 
   sly_io_destroy_sbuffer(buf);
-
-  return ret;
 }
 
 /*
  * writer
  */
 
-static void write_string(sly_state_t *S, sly_string_t* s, sly_oport_t *port, int quote)
+#define FLUSH(S,o) (flush((S), SLY_OPORT((o)->value.gc)))
+#define WRITE_CHAR(S,o,c) (write_char((S), SLY_OPORT((o)->value.gc), (c)))
+
+static void write_string(sly_state_t *S, sly_string_t* s, sly_object_t *port, int quote)
 {
   uint32_t i;
 
   if(quote) {
-    write_char(S, port, '"');
+    WRITE_CHAR(S, port, '"');
   }
 
   for(i = 0; i < s->size; i++) {
-    write_char(S, port, s->chars[i]);
+    WRITE_CHAR(S, port, s->chars[i]);
   }
 
   if(quote) {
-    write_char(S, port, '"');
+    WRITE_CHAR(S, port, '"');
   }
 }
 
-static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
-                           sly_oport_t *port, int quote)
+static void sly_io_write_i(sly_state_t *S, sly_object_t* obj, sly_object_t *port, int quote)
 {
   uint32_t i;
   char buf[64];
@@ -1157,11 +1159,11 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
     break;
 
   case SLY_TYPE_BOOL:
-    write_char(S, port, (sly_char_t)'#');
+    WRITE_CHAR(S, port, (sly_char_t)'#');
     if(obj->value.bool) {
-      write_char(S, port, (sly_char_t)'t');
+      WRITE_CHAR(S, port, (sly_char_t)'t');
     } else {
-      write_char(S, port, (sly_char_t)'f');
+      WRITE_CHAR(S, port, (sly_char_t)'f');
     }
     break;
 
@@ -1172,11 +1174,11 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
 
   case SLY_TYPE_CHAR:
     if(quote) {
-      write_char(S, port, (sly_char_t)'#');
-      write_char(S, port, (sly_char_t)'\\');
+      WRITE_CHAR(S, port, (sly_char_t)'#');
+      WRITE_CHAR(S, port, (sly_char_t)'\\');
     }
 
-    write_char(S, port, obj->value.chr);
+    WRITE_CHAR(S, port, obj->value.chr);
     break;
 
   case SLY_TYPE_SYMBOL:
@@ -1191,7 +1193,7 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
     sly_object_t cdr;
     sly_gcobject_t *p = obj->value.gc;
 
-    write_char(S, port, (sly_char_t)'(');
+    WRITE_CHAR(S, port, (sly_char_t)'(');
     for(;;) {
     
       sly_io_write(S, &(SLY_PAIR(p)->car), port);
@@ -1204,11 +1206,11 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
         sly_io_write(S, &cdr, port);
         break;
       } else {
-        write_char(S, port, (sly_char_t)' ');
+        WRITE_CHAR(S, port, (sly_char_t)' ');
         p = cdr.value.gc;
       }
     }
-    write_char(S, port, (sly_char_t)')');
+    WRITE_CHAR(S, port, (sly_char_t)')');
   }
     break;
 
@@ -1230,7 +1232,7 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj,
     sly_io_write_c_string(S, "#(", port);
     for(i = 0; i < SLY_VECTOR(obj->value.gc)->size; i++) {
       if(i != 0) {
-        write_char(S, port, (sly_char_t)' ');
+        WRITE_CHAR(S, port, (sly_char_t)' ');
       }
       sly_io_write(S, SLY_VECTOR(obj->value.gc)->data + i, port);
     }
@@ -1361,12 +1363,12 @@ sly_gcobject_t *sly_io_create_stderr(sly_state_t *S)
   return port;
 }
 
-sly_gcobject_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str, uint8_t char_enc)
+sly_gcobject_t *sly_io_open_ifile(sly_state_t *S, sly_object_t *str, uint8_t char_enc)
 {
   char *fname;
   FILE *file;
 
-  fname = from_string(str, char_enc);
+  fname = from_string(SLY_STRING(str->value.gc), char_enc);
   if(!fname) {
     sly_push_string(S, "cannot convert file name");
     sly_error(S, 1);
@@ -1384,12 +1386,12 @@ sly_gcobject_t *sly_io_open_ifile(sly_state_t *S, sly_string_t *str, uint8_t cha
   return sly_io_create_ifport(S, file);
 }
 
-sly_gcobject_t *sly_io_open_ofile(sly_state_t *S, sly_string_t *str, uint8_t char_enc)
+sly_gcobject_t *sly_io_open_ofile(sly_state_t *S, sly_object_t *str, uint8_t char_enc)
 {
   char *fname;
   FILE *file;
 
-  fname = from_string(str, char_enc);
+  fname = from_string(SLY_STRING(str->value.gc), char_enc);
   if(!fname) {
     sly_push_string(S, "cannot convert file name");
     sly_error(S, 1);
@@ -1407,7 +1409,7 @@ sly_gcobject_t *sly_io_open_ofile(sly_state_t *S, sly_string_t *str, uint8_t cha
   return sly_io_create_ofport(S, file);
 }
 
-void sly_io_close_iport(sly_state_t *S, sly_iport_t *port)
+void sly_io_close_iport(sly_state_t *S, sly_object_t *port)
 {
   S = S;
 
@@ -1416,7 +1418,7 @@ void sly_io_close_iport(sly_state_t *S, sly_iport_t *port)
   }
 }
 
-void sly_io_close_oport(sly_state_t *S, sly_oport_t *port)
+void sly_io_close_oport(sly_state_t *S, sly_object_t *port)
 {
   S = S;
 
@@ -1425,40 +1427,42 @@ void sly_io_close_oport(sly_state_t *S, sly_oport_t *port)
   }
 }
 
-void sly_io_write_c_string(sly_state_t *S, const char* s, sly_oport_t *port)
+void sly_io_write_c_string(sly_state_t *S, const char* s, sly_object_t *port)
 {
   const char *p;
 
   for(p = s; *p; p++) {
-    write_char(S, port, (sly_char_t)*p);
+    WRITE_CHAR(S, port, (sly_char_t)*p);
   }
+  FLUSH(S, port);
 }
 
-void sly_io_write_symbol(sly_state_t *S, sly_symbol_t *sym, sly_oport_t *port)
+void sly_io_write_symbol(sly_state_t *S, sly_symbol_t *sym, sly_object_t *port)
 {
   write_string(S, sym->str, port, 0);
+  FLUSH(S, port);
 }
 
 /* TODO: create 'eol' parameter */
-void sly_io_newline(sly_state_t *S, sly_oport_t *port)
+void sly_io_newline(sly_state_t *S, sly_object_t *port)
 {
 #ifdef _WIN32
-  write_char(S, port, (sly_char_t)'\r');
+  WRITE_CHAR(S, port, (sly_char_t)'\r');
 #endif
-  write_char(S, port, (sly_char_t)'\n');
+  WRITE_CHAR(S, port, (sly_char_t)'\n');
 
-  flush(S, port);
+  FLUSH(S, port);
 }
 
-void sly_io_write(sly_state_t *S, sly_object_t *obj, sly_oport_t *port)
+void sly_io_write(sly_state_t *S, sly_object_t *obj, sly_object_t *port)
 {
   sly_io_write_i(S, obj, port, 1);
-  flush(S, port);
+  FLUSH(S, port);
 }
 
-void sly_io_display(sly_state_t *S, sly_object_t *obj, sly_oport_t *port)
+void sly_io_display(sly_state_t *S, sly_object_t *obj, sly_object_t *port)
 {
   sly_io_write_i(S, obj, port, 0);
-  flush(S, port);
+  FLUSH(S, port);
 }
 

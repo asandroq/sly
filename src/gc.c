@@ -173,7 +173,7 @@ static void collect_garbage(sly_store_t* S)
 
   /* extra roots */
   for(root = S->roots; root; root = root->next) {
-    copy_object(S, root->obj);
+    copy_object(S, &root->obj);
   }
 
   /* now scan to-space */
@@ -341,27 +341,28 @@ void* sly_gc_alloc(sly_store_t *S, uint32_t size)
   return ret;
 }
 
-void sly_gc_protect(sly_store_t *S, sly_object_t *obj)
+sly_object_t* sly_gc_new_root(sly_store_t *S)
 {
   sly_root_t *link;
 
   link = (sly_root_t*)malloc(sizeof(sly_root_t));
   if(!link) {
-    return;
+    return NULL;
   }
 
-  link->obj = obj;
+  link->obj.type = SLY_TYPE_UNDEF;
   link->next = S->roots;
-
   S->roots = link;
+
+  return &link->obj;
 }
 
-void sly_gc_release(sly_store_t *S, sly_object_t *obj)
+void sly_gc_release_root(sly_store_t *S, sly_object_t *obj)
 {
   sly_root_t *prev, *root;
 
   for(prev = NULL, root = S->roots; root; root = root->next) {
-    if(root->obj == obj) {
+    if(obj == &root->obj) {
       if(prev) {
         prev->next = root->next;
       } else {

@@ -39,12 +39,12 @@ typedef struct sly_store_t sly_store_t;
 typedef sly_object_t* (*sly_roots_cb_t)(void*);
 
 /*
- * this is used for extra roots that need protection
+ * this is used for creating extra roots
  */
 struct sly_root_t {
 
-  /* object that needs protection */
-  sly_object_t *obj;
+  /* new root */
+  sly_object_t obj;
 
   /* next in chain */
   sly_root_t *next;
@@ -96,9 +96,9 @@ struct sly_store_t {
 int  sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud);
 void sly_gc_finish(sly_store_t *S);
 
-void* sly_gc_alloc(sly_store_t *S, uint32_t size);
-void  sly_gc_protect(sly_store_t *S, sly_object_t *obj);
-void  sly_gc_release(sly_store_t *S, sly_object_t *obj);
-void  sly_gc_add_port(sly_store_t *S, sly_port_t *port);
+void*         sly_gc_alloc(sly_store_t *S, uint32_t size);
+sly_object_t* sly_gc_new_root(sly_store_t *S);
+void          sly_gc_release_root(sly_store_t *S, sly_object_t *obj);
+void          sly_gc_add_port(sly_store_t *S, sly_port_t *port);
 
 #endif

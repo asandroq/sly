@@ -981,7 +981,10 @@ static void read(sly_state_t *S, sly_object_t *p, sly_sbuffer_t *buf, int tok, s
 {
   int la;
   sly_gcobject_t *str;
-  sly_object_t obj1, *tmp, *root;
+  sly_object_t *r1, *r2, tmp;
+
+  r1 = sly_gc_new_root(&S->store);
+  r2 = sly_gc_new_root(&S->store);
 
   switch(tok) {
   case SLY_TOK_NONE:
@@ -998,55 +1001,49 @@ static void read(sly_state_t *S, sly_object_t *p, sly_sbuffer_t *buf, int tok, s
       break;
     }
 
-    root = &S->stack[S->sp++];
-    root->type = SLY_TYPE_PAIR;
-    root->value.gc = sly_create_pair(S);
-    SLY_PAIR(root->value.gc)->car.type = SLY_TYPE_UNDEF;
-    SLY_PAIR(root->value.gc)->cdr.type = SLY_TYPE_UNDEF;
-
     if(la != SLY_TOK_DATUM) {
       read(S, p, buf, la, obj);
     }
-    SLY_PAIR(root->value.gc)->car = *obj;
 
-    tmp = root;
+    tmp.type = SLY_TYPE_PAIR;
+    tmp.value.gc = sly_create_pair(S);
+    SLY_PAIR(tmp.value.gc)->car = *obj;
+    SLY_PAIR(tmp.value.gc)->cdr.type = SLY_TYPE_UNDEF;
+    *obj = *r1 = tmp;
+
     while(1) {
-      sly_object_t *t;
-
-      la = read_token(S, p, buf, obj);
+      la = read_token(S, p, buf, r2);
       if(la == SLY_TOK_DOT) {
-        la = read_token(S, p, buf, obj);
+        la = read_token(S, p, buf, r2);
         if(la != SLY_TOK_DATUM) {
-          read(S, p, buf, la, obj);
+          read(S, p, buf, la, r2);
         }
-        SLY_PAIR(tmp->value.gc)->cdr = *obj;
-        tok = read_token(S, p, buf, obj);
+        SLY_PAIR(r1->value.gc)->cdr = *r2;
+        tok = read_token(S, p, buf, r2);
         if(tok != SLY_TOK_RIGHT_PAREN) {
+          sly_gc_release_root(&S->store, r1);
+          sly_gc_release_root(&S->store, r2);
           sly_push_string(S, "invalid read syntax");
           sly_error(S, 1);
           return;
         }
-        *obj = *root;
-        S->sp--;
         break;
       } else if(la == SLY_TOK_RIGHT_PAREN) {
-        SLY_PAIR(tmp->value.gc)->cdr.type = SLY_TYPE_NIL;
-        *obj = *root;
-        S->sp--;
+        SLY_PAIR(r1->value.gc)->cdr.type = SLY_TYPE_NIL;
         break;
       }
 
-      t = &SLY_PAIR(tmp->value.gc)->cdr;
-      t->type = SLY_TYPE_PAIR;
-      t->value.gc = sly_create_pair(S);
-      SLY_PAIR(t->value.gc)->car.type = SLY_TYPE_UNDEF;
-      SLY_PAIR(t->value.gc)->cdr.type = SLY_TYPE_UNDEF;
-
       if(la != SLY_TOK_DATUM) {
-        read(S, p, buf, la, obj);
+        read(S, p, buf, la, r2);
       }
-      SLY_PAIR(t->value.gc)->car = *obj;
-      tmp = &SLY_PAIR(t->value.gc)->cdr;
+
+      tmp.type = SLY_TYPE_PAIR;
+      tmp.value.gc = sly_create_pair(S);
+      SLY_PAIR(tmp.value.gc)->car = *r2;
+      SLY_PAIR(tmp.value.gc)->cdr.type = SLY_TYPE_UNDEF;
+
+      SLY_PAIR(r1->value.gc)->cdr = tmp;
+      *r1 = tmp;
     }
     break;
 
@@ -1057,23 +1054,16 @@ static void read(sly_state_t *S, sly_object_t *p, sly_sbuffer_t *buf, int tok, s
   case SLY_TOK_BACKQUOTE:
   case SLY_TOK_COMMA:
   case SLY_TOK_COMMA_AT:
-    root = &S->stack[S->sp++];
-    root->type = SLY_TYPE_PAIR;
-    root->value.gc = sly_create_pair(S);
-    SLY_PAIR(root->value.gc)->car.type = SLY_TYPE_UNDEF;
-    SLY_PAIR(root->value.gc)->cdr.type = SLY_TYPE_NIL;
-
     la = read_token(S, p, buf, obj);
     if(la != SLY_TOK_DATUM) {
       read(S, p, buf, la, obj);
     }
-    SLY_PAIR(root->value.gc)->car = *obj;
 
-    obj1.type = SLY_TYPE_PAIR;
-    obj1.value.gc = sly_create_pair(S);
-    SLY_PAIR(obj1.value.gc)->car.type = SLY_TYPE_UNDEF;
-    SLY_PAIR(obj1.value.gc)->cdr = *root;
-    *root = obj1;
+    tmp.type = SLY_TYPE_PAIR;
+    tmp.value.gc = sly_create_pair(S);
+    SLY_PAIR(tmp.value.gc)->car = *obj;
+    SLY_PAIR(tmp.value.gc)->cdr.type = SLY_TYPE_NIL;
+    *r1 = tmp;
 
     switch(tok) {
     case SLY_TOK_QUOTE:
@@ -1092,12 +1082,18 @@ static void read(sly_state_t *S, sly_object_t *p, sly_sbuffer_t *buf, int tok, s
       sly_sbuffer_assign(buf, "unquote-splicing");
     }
     str = sly_create_string(S, buf->str, buf->pos);
-    obj1 = sly_create_symbol(S, SLY_STRING(str));
-    SLY_PAIR(root->value.gc)->car = obj1;
-    *obj = *root;
-    S->sp--;
+    *r2 = sly_create_symbol(S, SLY_STRING(str));
+
+    tmp.type = SLY_TYPE_PAIR;
+    tmp.value.gc = sly_create_pair(S);
+    SLY_PAIR(tmp.value.gc)->car = *r2;
+    SLY_PAIR(tmp.value.gc)->cdr = *r1;
+    *obj = tmp;
     break;
   }
+
+  sly_gc_release_root(&S->store, r1);
+  sly_gc_release_root(&S->store, r2);
 }
 
 void sly_io_read(sly_state_t *S, sly_object_t *p, sly_object_t *ret)

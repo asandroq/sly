@@ -918,6 +918,10 @@ static int read_token(sly_state_t* S, sly_object_t* in, sly_sbuffer_t *buf, sly_
         sly_push_string(S, "invalid character syntax");
         sly_error(S, 1);
       }
+    } else if(buf->str[1] == '#') {
+      /* private symbols */
+      obj = sly_create_string(S, buf->str, buf->pos);
+      *res = sly_create_symbol(S, SLY_STRING(obj));
     } else if(is_char_in_set(buf->str[1], num_set)) {
       /* number */
       if(!parse_number(buf, res)) {

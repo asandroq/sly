@@ -53,15 +53,16 @@
  * reader tokens
  */
 #define SLY_TOK_NONE                1
-#define SLY_TOK_DATUM               2
-#define SLY_TOK_LEFT_PAREN          3
-#define SLY_TOK_RIGHT_PAREN         4
-#define SLY_TOK_SHARP_PAREN         5
-#define SLY_TOK_QUOTE               6
-#define SLY_TOK_BACKQUOTE           7
-#define SLY_TOK_COMMA               8
-#define SLY_TOK_COMMA_AT            9
-#define SLY_TOK_DOT                10
+#define SLY_TOK_EOF                 2
+#define SLY_TOK_DATUM               3
+#define SLY_TOK_LEFT_PAREN          4
+#define SLY_TOK_RIGHT_PAREN         5
+#define SLY_TOK_SHARP_PAREN         6
+#define SLY_TOK_QUOTE               7
+#define SLY_TOK_BACKQUOTE           8
+#define SLY_TOK_COMMA               9
+#define SLY_TOK_COMMA_AT           10
+#define SLY_TOK_DOT                11
 
 
 /*
@@ -836,7 +837,7 @@ static int read_token(sly_state_t* S, sly_object_t* in, sly_sbuffer_t *buf, sly_
   if(c == SLY_UCS_EOF) {
     READ_CHAR(S, in);
     res->type = SLY_TYPE_EOF;
-    return SLY_TOK_DATUM;
+    return SLY_TOK_EOF;
   }
 
   if(c == '(') {
@@ -1098,6 +1099,85 @@ static void read(sly_state_t *S, sly_object_t *p, sly_sbuffer_t *buf, int tok, s
 
   sly_gc_release_root(&S->store, r1);
   sly_gc_release_root(&S->store, r2);
+}
+
+void sly_io_read_token(sly_state_t *S, sly_object_t *p, sly_object_t *ret)
+{
+  int tok;
+  sly_sbuffer_t *buf;
+  sly_object_t tmp1, tmp2;
+
+  buf = sly_io_create_sbuffer();
+
+  tok = read_token(S, p, buf, ret);
+  switch(tok) {
+  case SLY_TOK_EOF:
+    ret->type = SLY_TYPE_EOF;
+    break;
+
+  case SLY_TOK_DATUM:
+    tmp1.value.gc = sly_create_string_from_ascii(S, "datum");
+    tmp2 = sly_create_symbol(S, SLY_STRING(tmp1.value.gc));
+    tmp1.type = SLY_TYPE_PAIR;
+    tmp1.value.gc = sly_create_pair(S);
+    SLY_PAIR(tmp1.value.gc)->car = tmp2;
+    SLY_PAIR(tmp1.value.gc)->cdr = *ret;
+    *ret = tmp1;
+    break;
+
+  case SLY_TOK_DOT:
+    tmp1.value.gc = sly_create_string_from_ascii(S, "dot");
+    *ret = sly_create_symbol(S, SLY_STRING(tmp1.value.gc));
+    break;
+
+  case SLY_TOK_LEFT_PAREN:
+    tmp1.value.gc = sly_create_string_from_ascii(S, "left-paren");
+    *ret = sly_create_symbol(S, SLY_STRING(tmp1.value.gc));
+    break;
+
+  case SLY_TOK_RIGHT_PAREN:
+    tmp1.value.gc = sly_create_string_from_ascii(S, "right-paren");
+    *ret = sly_create_symbol(S, SLY_STRING(tmp1.value.gc));
+    break;
+
+  case SLY_TOK_SHARP_PAREN:
+    tmp1.value.gc = sly_create_string_from_ascii(S, "sharp-paren");
+    *ret = sly_create_symbol(S, SLY_STRING(tmp1.value.gc));
+    break;
+
+  case SLY_TOK_QUOTE:
+  case SLY_TOK_BACKQUOTE:
+  case SLY_TOK_COMMA:
+  case SLY_TOK_COMMA_AT:
+    tmp1.value.gc = sly_create_string_from_ascii(S, "macro");
+    tmp2 = sly_create_symbol(S, SLY_STRING(tmp1.value.gc));
+    ret->type = SLY_TYPE_PAIR;
+    ret->value.gc = sly_create_pair(S);
+    SLY_PAIR(ret->value.gc)->car = tmp2;
+
+    switch(tok) {
+    case SLY_TOK_QUOTE:
+      tmp1.value.gc = sly_create_string_from_ascii(S, "quote");
+      break;
+
+    case SLY_TOK_BACKQUOTE:
+      tmp1.value.gc = sly_create_string_from_ascii(S, "quasiquote");
+      break;
+
+    case SLY_TOK_COMMA:
+      tmp1.value.gc = sly_create_string_from_ascii(S, "unquote");
+      break;
+
+    case SLY_TOK_COMMA_AT:
+      tmp1.value.gc = sly_create_string_from_ascii(S, "unquote-splicing");
+    }
+
+    tmp2 = sly_create_symbol(S, SLY_STRING(tmp1.value.gc));
+    SLY_PAIR(ret->value.gc)->cdr = tmp2;
+    break;
+  }
+
+  sly_io_destroy_sbuffer(buf);
 }
 
 void sly_io_read(sly_state_t *S, sly_object_t *p, sly_object_t *ret)

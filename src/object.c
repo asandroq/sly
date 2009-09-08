@@ -144,6 +144,28 @@ sly_gcobject_t *sly_create_string(sly_state_t *S, const sly_char_t* str, uint32_
   return SLY_GCOBJECT(ret);
 }
 
+sly_gcobject_t *sly_create_string_from_ascii(sly_state_t *S, const char* str)
+{
+  int len;
+  sly_string_t *ret;
+
+  len = strlen(str);
+  ret = (sly_string_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_STRING(len));
+
+  if(ret) {
+    int i;
+
+    SLY_GCOBJECT(ret)->type = SLY_TYPE_STRING;
+    ret->size = len;
+
+    for(i = 0; i < len; i++) {
+      ret->chars[i] = (sly_char_t)str[i];
+    }
+  }
+
+  return SLY_GCOBJECT(ret);
+}
+
 sly_gcobject_t *sly_create_vector(sly_state_t *S, uint32_t size)
 {
   sly_vector_t* ret;

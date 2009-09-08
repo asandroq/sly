@@ -66,6 +66,13 @@ void sly_io_close_iport(sly_state_t *S, sly_object_t *port);
 void sly_io_close_oport(sly_state_t *S, sly_object_t *port);
 
 /*
+ * reader
+ */
+
+void sly_io_read(sly_state_t *S, sly_object_t *port, sly_object_t *ret);
+void sly_io_read_token(sly_state_t *S, sly_object_t *port, sly_object_t *ret);
+
+/*
  * writer
  */
 
@@ -73,8 +80,6 @@ void sly_io_newline(sly_state_t *S, sly_object_t *port);
 
 void sly_io_write_c_string(sly_state_t *S, const char *str, sly_object_t *port);
 void sly_io_write_symbol(sly_state_t *S, sly_symbol_t *sym, sly_object_t *port);
-
-void sly_io_read(sly_state_t *S, sly_object_t *port, sly_object_t *ret);
 
 void sly_io_write(sly_state_t *S, sly_object_t *obj, sly_object_t *port);
 void sly_io_display(sly_state_t *S, sly_object_t *obj, sly_object_t *port);

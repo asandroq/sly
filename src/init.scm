@@ -192,6 +192,54 @@
     (close-output-port port)
     result))
 
+;; R5RS 6.6.3
+
+(define read
+  (lambda args
+    (let ((port (if (null? args)
+                    (current-input-port)
+                    (car args))))
+      (let ((token (##read-token port)))
+        (cond
+         ((pair? token)
+          (case (car token)
+            ((macro)
+             (list (cdr token) (read port)))
+            ((datum)
+             (cdr token))))
+         ((symbol? token)
+          (case token
+            ((dot)
+             (error "invalid read syntax"))
+            ((left-paren)
+             (let ((next (##read-token port)))
+               (cond
+                ((eqv? next 'right-paren)
+                 '())
+                ((eqv? next 'dot)
+                 (error "invalid read syntax"))
+                (else
+                 (##read-list port token)))))
+            ((right-paren)
+             (error "invalid read syntax"))
+            ((sharp-paren)
+             (error "invalid read syntax"))))
+         (else token))))))
+
+(define (##read-list port token)
+  (let loop ((token token)
+             (res '()))
+    (cond
+     ((pair? token)
+      (case (car token)
+        ((datum)
+         ((loop (##read-token port)
+                (cons (cdr token) res))))
+        ((macro)
+         (loop (##read-token port)
+               (cons (list (cdr token) (read port)) rest)))))
+     (else #f))))
+
 ;; Temporary bizarre solution
 (define gensym
   (let ((counter 0))

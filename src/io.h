@@ -69,7 +69,6 @@ void sly_io_close_oport(sly_state_t *S, sly_object_t *port);
  * reader
  */
 
-void sly_io_read(sly_state_t *S, sly_object_t *port, sly_object_t *ret);
 void sly_io_read_token(sly_state_t *S, sly_object_t *port, sly_object_t *ret);
 
 /*

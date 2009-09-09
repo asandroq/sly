@@ -153,7 +153,6 @@ void sly_eval(sly_state_t* S, int idx);
 
 /* I/O */
 void sly_newline(sly_state_t* S, int idx);
-void sly_read(sly_state_t* S, int idx);
 void sly_read_token(sly_state_t* S, int idx);
 void sly_write(sly_state_t* S, int idx1, int idx2);
 void sly_display(sly_state_t* S, int idx1, int idx2);

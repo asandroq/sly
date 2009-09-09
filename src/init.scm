@@ -163,6 +163,17 @@
               (vector-set! vec i (car args))
               (loop (add1 i) (cdr args))))))))
 
+(define (list->vector list)
+  (let* ((size (length list))
+         (vec (make-vector size)))
+    (let loop ((i 0)
+               (list list))
+      (if (null? list)
+          vec
+          (begin
+            (vector-set! vec i (car list))
+            (loop (add1 i) (cdr list)))))))
+
 ;; R5RS 6.4
 
 ;; this is not a complete map implementation
@@ -194,51 +205,59 @@
 
 ;; R5RS 6.6.3
 
+(define (##read port look-ahead)
+  (cond
+   ((pair? look-ahead)
+    (case (car look-ahead)
+      ((datum)
+       (cdr look-ahead))
+      ((macro)
+       (list (cdr look-ahead) (read port)))))
+   ((symbol? look-ahead)
+    (case look-ahead
+      ((dot)
+       (error "invalid read syntax"))
+      ((left-paren)
+       (let ((token (##read-token port)))
+         (cond
+          ((eqv? token 'dot)
+           (error "invalid read syntax"))
+          ((eqv? token 'right-paren)
+           '())
+          (else
+           (let loop ((look-ahead token)
+                      (res '()))
+             (cond
+              ((eqv? look-ahead 'right-paren)
+               (reverse res))
+              ((eqv? look-ahead 'dot)
+               (let* ((next (read port))
+                      (look-ahead (##read-token port)))
+                 (if (eqv? look-ahead 'right-paren)
+                     (append (reverse res) next)
+                     (error "invalid read syntax"))))
+              (else
+               (let ((next (##read port look-ahead)))
+                 (loop (##read-token port)
+                       (cons next res))))))))))
+      ((right-paren)
+       (error "invalid read syntax"))
+      ((sharp-paren)
+       (let loop ((look-ahead (##read-token port))
+                  (res '()))
+         (if (eqv? look-ahead 'right-paren)
+             (list->vector (reverse res))
+             (let ((next (##read port look-ahead)))
+               (loop (##read-token port)
+                     (cons next res))))))))
+   (else look-ahead)))
+
 (define read
   (lambda args
     (let ((port (if (null? args)
                     (current-input-port)
                     (car args))))
-      (let ((token (##read-token port)))
-        (cond
-         ((pair? token)
-          (case (car token)
-            ((macro)
-             (list (cdr token) (read port)))
-            ((datum)
-             (cdr token))))
-         ((symbol? token)
-          (case token
-            ((dot)
-             (error "invalid read syntax"))
-            ((left-paren)
-             (let ((next (##read-token port)))
-               (cond
-                ((eqv? next 'right-paren)
-                 '())
-                ((eqv? next 'dot)
-                 (error "invalid read syntax"))
-                (else
-                 (##read-list port token)))))
-            ((right-paren)
-             (error "invalid read syntax"))
-            ((sharp-paren)
-             (error "invalid read syntax"))))
-         (else token))))))
-
-(define (##read-list port token)
-  (let loop ((token token)
-             (res '()))
-    (cond
-     ((pair? token)
-      (case (car token)
-        ((datum)
-         ((loop (##read-token port)
-                (cons (cdr token) res))))
-        ((macro)
-         (loop (##read-token port)
-               (cons (list (cdr token) (read port)) rest)))))
-     (else #f))))
+      (##read port (##read-token port)))))
 
 ;; Temporary bizarre solution
 (define gensym

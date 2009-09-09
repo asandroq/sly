@@ -22,14 +22,7 @@
 ##
 
 CC = gcc
-
-# GCC 2.x has different warning options
-ifeq ($(GCC),2)
 CFLAGS = -g3 -O0 -Wall -W -DSLY_DEBUG_API
-else
-CFLAGS = -g3 -O0 -Wall -Wextra -DSLY_DEBUG_API
-endif
-
 LD = gcc
 LDFLAGS =
 

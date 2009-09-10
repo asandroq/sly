@@ -212,7 +212,7 @@
       ((datum)
        (cdr look-ahead))
       ((macro)
-       (list (cdr look-ahead) (read port)))))
+       (list (cdr look-ahead) (##read port (##read-token port))))))
    ((symbol? look-ahead)
     (case look-ahead
       ((dot)
@@ -231,7 +231,7 @@
               ((eqv? look-ahead 'right-paren)
                (reverse res))
               ((eqv? look-ahead 'dot)
-               (let* ((next (read port))
+               (let* ((next (##read port (##read-token port)))
                       (look-ahead (##read-token port)))
                  (if (eqv? look-ahead 'right-paren)
                      (append (reverse res) next)

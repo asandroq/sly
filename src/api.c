@@ -733,7 +733,10 @@ void sly_eval(sly_state_t *S, int idx)
   /* pushing argument */
   S->stack[S->sp++] = S->stack[idx];
 
+  /* the compiler is in Scheme land */
   sly_vm_call(S, S->global_env.vars[S->sly_eval].value, 1);
+  sly_vm_load(S, S->accum);
+
   S->stack[S->sp++] = S->accum;
 }
 

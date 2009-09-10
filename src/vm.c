@@ -58,87 +58,101 @@
 #define EXTRACT_OP(instr)   ((uint8_t)((instr) & 0x000000ff))
 #define EXTRACT_ARG(instr)  ((uint32_t)((instr) >> 8))
 
-/* debugging information */
-struct  opcode_ {
+struct  sly_opcode_ {
   uint8_t op;
   const char *name;
+  sly_symbol_t *sym;
 };
 
-typedef struct opcode_ opcode_t;
+typedef struct sly_opcode_ sly_opcode_t;
 
-static opcode_t global_opcodes[] = {
-  {SLY_OP_LOAD_NIL,               "LOAD-NIL"},
-  {SLY_OP_LOAD_FALSE,             "LOAD-FALSE"},
-  {SLY_OP_LOAD_TRUE,              "LOAD-TRUE"},
-  {SLY_OP_LOAD_ZERO,              "LOAD-ZERO"},
-  {SLY_OP_LOAD_ONE,               "LOAD-ONE"},
-  {SLY_OP_LOAD_FIXNUM,            "LOAD-FIXNUM"},
-  {SLY_OP_LOAD_CHAR,              "LOAD-CHAR"},
-  {SLY_OP_PUSH,                   "PUSH"},
-  {SLY_OP_LOAD_0,                 "LOAD0"},
-  {SLY_OP_LOAD_1,                 "LOAD1"},
-  {SLY_OP_LOAD_2,                 "LOAD2"},
-  {SLY_OP_LOAD_3,                 "LOAD3"},
-  {SLY_OP_LOAD,                   "LOAD"},
-  {SLY_OP_MAKE_CLOSURE,           "MAKE-CLOSURE"},
-  {SLY_OP_CALL,                   "CALL"},
-  {SLY_OP_RETURN,                 "RETURN"},
-  {SLY_OP_JMP_IF,                 "JMP-IF"},
-  {SLY_OP_JMP,                    "JMP"},
-  {SLY_OP_LOAD_FREE,              "LOAD-FREE"},
-  {SLY_OP_SAVE_CONT,              "SAVE-CONT"},
-  {SLY_OP_REST_CONT,              "REST-CONT"},
-  {SLY_OP_ASSIGN,                 "ASSIGN"},
-  {SLY_OP_ASSIGN_FREE,            "ASSIGN-FREE"},
-  {SLY_OP_BOX,                    "BOX"},
-  {SLY_OP_OPEN_BOX,               "OPEN-BOX"},
-  {SLY_OP_FRAME,                  "FRAME"},
-  {SLY_OP_TAIL_CALL,              "TAIL-CALL"},
-  {SLY_OP_HALT,                   "HALT"},
-  {SLY_OP_LOAD_LOCAL,             "LOAD-LOCAL"},
-  {SLY_OP_INSERT_BOX,             "INSERT-BOX"},
-  {SLY_OP_ASSIGN_LOCAL,           "ASSIGN-LOCAL"},
-  {SLY_OP_POP,                    "POP"},
-  {SLY_OP_GLOBAL_REF,             "GLOBAL-REF"},
-  {SLY_OP_CHECKED_GLOBAL_REF,     "CHECKED-GLOBAL-REF"},
-  {SLY_OP_GLOBAL_SET,             "GLOBAL-SET"},
-  {SLY_OP_CHECKED_GLOBAL_SET,     "CHECKED-GLOBAL-SET"},
-  {SLY_OP_LOAD_UNDEF,             "LOAD-UNDEF"},
-  {SLY_OP_CONST,                  "CONST"},
-  {SLY_OP_CONST_INIT,             "CONST-INIT"},
-  {SLY_OP_ARITY_EQ,               "ARITY="},
-  {SLY_OP_ARITY_GE,               "ARITY>="},
-  {SLY_OP_LISTIFY,                "LISTIFY"},
-  {SLY_OP_ABORT,                  "ABORT"},
-  {SLY_OP_NULL_P,                 "NULL?"},
-  {SLY_OP_BOOL_P,                 "BOOL?"},
-  {SLY_OP_CHAR_P,                 "CHAR?"},
-  {SLY_OP_FIXNUM_P,               "FIXNUM?"},
-  {SLY_OP_PAIR_P,                 "PAIR?"},
-  {SLY_OP_SYMBOL_P,               "SYMBOL?"},
-  {SLY_OP_INC,                    "INC"},
-  {SLY_OP_DEC,                    "DEC"},
-  {SLY_OP_FIXNUM_TO_CHAR,         "FIXNUM->CHAR"},
-  {SLY_OP_CHAR_TO_FIXNUM,         "CHAR->FIXNUM"},
-  {SLY_OP_ZERO_P,                 "ZERO?"},
-  {SLY_OP_NOT,                    "NOT"},
-  {SLY_OP_PLUS,                   "PLUS"},
-  {SLY_OP_MINUS,                  "MINUS"},
-  {SLY_OP_MULT,                   "MULT"},
-  {SLY_OP_CONS,                   "CONS"},
-  {SLY_OP_CAR,                    "CAR"},
-  {SLY_OP_CDR,                    "CDR"},
-  {SLY_OP_NUM_EQ,                 "NUM-EQ"},
-  {SLY_OP_EQ,                     "EQ?"},
-  {SLY_OP_EQV,                    "EQV?"},
-  {SLY_OP_MAKE_STRING,            "MAKE-STRING"},
-  {SLY_OP_STRING_SET,             "STRING-SET"},
-  {SLY_OP_STRING_TO_SYMBOL,       "STRING->SYMBOL"},
-  {SLY_OP_MAKE_VECTOR,            "MAKE-VECTOR"},
-  {SLY_OP_VECTOR_SET,             "VECTOR-SET"},
-  {SLY_OP_DEBUG,                  "DEBUG"},
-  {0, NULL}
+static sly_opcode_t global_opcodes[] = {
+  {SLY_OP_LOAD_NIL,               "LOAD-NIL",           NULL},
+  {SLY_OP_LOAD_FALSE,             "LOAD-FALSE",         NULL},
+  {SLY_OP_LOAD_TRUE,              "LOAD-TRUE",          NULL},
+  {SLY_OP_LOAD_UNDEF,             "LOAD-UNDEF",         NULL},
+  {SLY_OP_LOAD_ZERO,              "LOAD-ZERO",          NULL},
+  {SLY_OP_LOAD_ONE,               "LOAD-ONE",           NULL},
+  {SLY_OP_PUSH,                   "PUSH",               NULL},
+  {SLY_OP_LOAD_0,                 "LOAD0",              NULL},
+  {SLY_OP_LOAD_1,                 "LOAD1",              NULL},
+  {SLY_OP_LOAD_2,                 "LOAD2",              NULL},
+  {SLY_OP_LOAD_3,                 "LOAD3",              NULL},
+  {SLY_OP_RETURN,                 "RETURN",             NULL},
+  {SLY_OP_SAVE_CONT,              "SAVE-CONT",          NULL},
+  {SLY_OP_REST_CONT,              "REST-CONT",          NULL},
+  {SLY_OP_BOX,                    "BOX",                NULL},
+  {SLY_OP_OPEN_BOX,               "OPEN-BOX",           NULL},
+  {SLY_OP_HALT,                   "HALT",               NULL},
+  {SLY_OP_ABORT,                  "ABORT",              NULL},
+  {SLY_OP_NULL_P,                 "NULL?",              NULL},
+  {SLY_OP_BOOL_P,                 "BOOL?",              NULL},
+  {SLY_OP_CHAR_P,                 "CHAR?",              NULL},
+  {SLY_OP_FIXNUM_P,               "FIXNUM?",            NULL},
+  {SLY_OP_PAIR_P,                 "PAIR?",              NULL},
+  {SLY_OP_SYMBOL_P,               "SYMBOL?",            NULL},
+  {SLY_OP_INC,                    "INC",                NULL},
+  {SLY_OP_DEC,                    "DEC",                NULL},
+  {SLY_OP_FIXNUM_TO_CHAR,         "FIXNUM->CHAR",       NULL},
+  {SLY_OP_CHAR_TO_FIXNUM,         "CHAR->FIXNUM",       NULL},
+  {SLY_OP_ZERO_P,                 "ZERO?",              NULL},
+  {SLY_OP_NOT,                    "NOT",                NULL},
+  {SLY_OP_PLUS,                   "PLUS",               NULL},
+  {SLY_OP_MINUS,                  "MINUS",              NULL},
+  {SLY_OP_MULT,                   "MULT",               NULL},
+  {SLY_OP_CONS,                   "CONS",               NULL},
+  {SLY_OP_CAR,                    "CAR",                NULL},
+  {SLY_OP_CDR,                    "CDR",                NULL},
+  {SLY_OP_NUM_EQ,                 "NUM-EQ",             NULL},
+  {SLY_OP_EQ,                     "EQ?",                NULL},
+  {SLY_OP_EQV,                    "EQV?",               NULL},
+  {SLY_OP_MAKE_STRING,            "MAKE-STRING",        NULL},
+  {SLY_OP_STRING_SET,             "STRING-SET",         NULL},
+  {SLY_OP_STRING_TO_SYMBOL,       "STRING->SYMBOL",     NULL},
+  {SLY_OP_MAKE_VECTOR,            "MAKE-VECTOR",        NULL},
+  {SLY_OP_VECTOR_SET,             "VECTOR-SET",         NULL},
+  {SLY_OP_DEBUG,                  "DEBUG",              NULL},
+  {SLY_OP_LOAD_FIXNUM,            "LOAD-FIXNUM",        NULL},
+  {SLY_OP_LOAD_CHAR,              "LOAD-CHAR",          NULL},
+  {SLY_OP_LOAD,                   "LOAD",               NULL},
+  {SLY_OP_MAKE_CLOSURE,           "MAKE-CLOSURE",       NULL},
+  {SLY_OP_CALL,                   "CALL",               NULL},
+  {SLY_OP_JMP_IF,                 "JMP-IF",             NULL},
+  {SLY_OP_JMP,                    "JMP",                NULL},
+  {SLY_OP_LOAD_FREE,              "LOAD-FREE",          NULL},
+  {SLY_OP_ASSIGN,                 "ASSIGN",             NULL},
+  {SLY_OP_ASSIGN_FREE,            "ASSIGN-FREE",        NULL},
+  {SLY_OP_FRAME,                  "FRAME",              NULL},
+  {SLY_OP_TAIL_CALL,              "TAIL-CALL",          NULL},
+  {SLY_OP_LOAD_LOCAL,             "LOAD-LOCAL",         NULL},
+  {SLY_OP_INSERT_BOX,             "INSERT-BOX",         NULL},
+  {SLY_OP_ASSIGN_LOCAL,           "ASSIGN-LOCAL",       NULL},
+  {SLY_OP_POP,                    "POP",                NULL},
+  {SLY_OP_GLOBAL_REF,             "GLOBAL-REF",         NULL},
+  {SLY_OP_CHECKED_GLOBAL_REF,     "CHECKED-GLOBAL-REF", NULL},
+  {SLY_OP_GLOBAL_SET,             "GLOBAL-SET",         NULL},
+  {SLY_OP_CHECKED_GLOBAL_SET,     "CHECKED-GLOBAL-SET", NULL},
+  {SLY_OP_CONST,                  "CONST",              NULL},
+  {SLY_OP_CONST_INIT,             "CONST-INIT",         NULL},
+  {SLY_OP_ARITY_EQ,               "ARITY=",             NULL},
+  {SLY_OP_ARITY_GE,               "ARITY>=",            NULL},
+  {SLY_OP_LISTIFY,                "LISTIFY",            NULL},
+  {0, NULL, NULL}
 };
+
+void sly_vm_init(sly_state_t* S)
+{
+  sly_opcode_t *opc;
+  sly_object_t sym;
+  sly_gcobject_t *str;
+
+  /* creating symbols for instructions */
+  for(opc = global_opcodes; opc->name != NULL; opc++) {
+    str = sly_create_string_from_ascii(S, opc->name);
+    sym = sly_create_symbol(S, SLY_STRING(str));
+    opc->sym = sym.value.symbol;
+  }
+}
 
 /*
  * debugging
@@ -147,7 +161,7 @@ static opcode_t global_opcodes[] = {
 static void dump_instr(sly_state_t *S, uint32_t instr, sly_object_t *port)
 {
   uint8_t op;
-  opcode_t* dbg;
+  sly_opcode_t* dbg;
   char buf[64];
 
   op = EXTRACT_OP(instr);
@@ -213,19 +227,24 @@ void sly_vm_dump(sly_state_t* S)
 
   sly_io_newline(S, port);
   sly_io_newline(S, port);
+
 #if 0
   printf("Globals:\n");
   for(i = 0; i < S->global_env.size; i++) {
     sly_env_var_t var = S->global_env.vars[i];
     printf(" [ %d , ", i);
+    fflush(NULL);
     if(var.symbol) {
-      sly_io_write_symbol(var.symbol);
+      sly_io_write_symbol(S, var.symbol, port);
     }
     printf(" , ");
-    sly_io_write(&var.value);
+    fflush(NULL);
+    sly_io_write(S, &var.value, port);
     printf("]\n");
+    fflush(NULL);
   }
   printf("\n\n");
+  fflush(NULL);
 
   printf("Constants:");
   for(i = 0; i < S->nr_consts; i++) {
@@ -1004,6 +1023,122 @@ static uint32_t sly_link_module(sly_state_t* S, sly_module_t *mod)
   return code_base;
 }
 
+static int sly_link_run_module(sly_state_t* S, sly_module_t *mod)
+{
+  S->pc = sly_link_module(S, mod);
+  sly_destroy_module(mod);
+
+  /* initial frame on stack with address of halt instruction */
+  /* return address */
+  (S->stack[S->sp  ]).type = SLY_TYPE_FIXNUM;
+  (S->stack[S->sp++]).value.fixnum = SLY_HALT_ADDRESS;
+
+  /* saved procedure */
+  S->stack[S->sp++] = S->proc;
+
+  /* saved frame pointer */
+  (S->stack[S->sp  ]).type = SLY_TYPE_FIXNUM;
+  (S->stack[S->sp++]).value.fixnum = S->fp;
+
+  /* number of arguments */
+  (S->stack[S->sp  ]).type = SLY_TYPE_FIXNUM;
+  (S->stack[S->sp++]).value.fixnum = 0;
+
+  S->fp = S->sp - 1;
+
+  return sly_vm_run(S);
+}
+
+#define CAR(l) (SLY_PAIR((l).value.gc)->car)
+#define CDR(l) (SLY_PAIR((l).value.gc)->cdr)
+#define VECTOR_REF(v,i) (SLY_VECTOR((v).value.gc)->data[i])
+
+static uint8_t get_opcode(sly_object_t sym)
+{
+  sly_opcode_t *opc;
+
+  for(opc = global_opcodes; opc->name != NULL; opc++) {
+    if(sym.value.symbol == opc->sym) {
+      return opc->op;
+    }
+  }
+
+  return 255;
+}
+
+static uint32_t list_length(sly_object_t lis)
+{
+  uint32_t i;
+
+  if(lis.type == SLY_TYPE_NIL) {
+    return 0;
+  }
+
+  for(i = 1;; i++, lis = CDR(lis)) {
+    if((CDR(lis)).type == SLY_TYPE_NIL) {
+      return i;
+    }
+  }
+}
+
+int sly_vm_load(sly_state_t* S, sly_object_t vec)
+{
+  uint32_t sz;
+  sly_object_t p;
+  sly_module_t mod;
+
+  assert(vec.type == SLY_TYPE_VECTOR);
+
+  /* globals */
+  p = VECTOR_REF(vec, 0);
+  sz = list_length(p);
+  mod.nr_globals = sz;
+  sz *= sizeof(sly_string_t*);
+  mod.globals = (sly_string_t**)malloc(sz);
+  memset(mod.globals, 0x00, sz);
+  for(sz = 0;; p = CDR(p), sz++) {
+    uint32_t size;
+    sly_string_t *str;
+
+    if(p.type == SLY_TYPE_NIL) {
+      break;
+    } else {
+      size = SLY_SIZE_OF_STRING((CAR(p)).value.symbol->str->size);
+      str = (sly_string_t*)malloc(size);
+      memmove(str, (CAR(p)).value.symbol->str, size);
+
+      mod.globals[sz] = str;
+    }
+  }
+
+  /* constants */
+  mod.nr_consts = list_length(VECTOR_REF(vec, 1));
+
+  /* loading code */
+  sz = (VECTOR_REF(vec, 2)).value.fixnum;
+  mod.code_size = sz;
+  mod.code = (uint32_t*)malloc(sz * sizeof(uint32_t));
+  vec = VECTOR_REF(vec, 3);
+
+  for(sz = 0; sz < mod.code_size; sz++) {
+    uint32_t instr, dat;
+    sly_object_t vec_instr;
+
+    vec_instr = VECTOR_REF(vec, sz);
+    instr = (uint32_t)get_opcode(VECTOR_REF(vec_instr, 0));
+
+    /* retrieve operands if any */
+    if(IS_TYPE_B(instr)) {
+      dat = (VECTOR_REF(vec_instr, 1)).value.fixnum;
+      instr |= (dat << 8);
+    }
+
+    mod.code[sz] = instr;
+  }
+
+  return sly_link_run_module(S, &mod);
+}
+
 static int get_next(FILE* f, uint32_t *next)
 {
   int ret;
@@ -1174,27 +1309,6 @@ int sly_load_file(sly_state_t* S, const char *fname)
     return 0;
   }
 
-  S->pc = sly_link_module(S, &mod);
-  sly_destroy_module(&mod);
-
-  /* initial frame on stack with address of halt instruction */
-  /* return address */
-  (S->stack[S->sp  ]).type = SLY_TYPE_FIXNUM;
-  (S->stack[S->sp++]).value.fixnum = SLY_HALT_ADDRESS;
-
-  /* saved procedure */
-  S->stack[S->sp++] = S->proc;
-
-  /* saved frame pointer */
-  (S->stack[S->sp  ]).type = SLY_TYPE_FIXNUM;
-  (S->stack[S->sp++]).value.fixnum = S->fp;
-
-  /* number of arguments */
-  (S->stack[S->sp  ]).type = SLY_TYPE_FIXNUM;
-  (S->stack[S->sp++]).value.fixnum = 0;
-
-  S->fp = S->sp - 1;
-
-  return sly_vm_run(S);
+  return sly_link_run_module(S, &mod);
 }
 

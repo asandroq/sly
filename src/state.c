@@ -184,6 +184,11 @@ static sly_state_t* sly_create_state(void)
   S->proc.type = SLY_TYPE_UNDEF;
   S->accum.type = SLY_TYPE_UNDEF;
 
+  /*
+   * virtual machine
+   */
+  sly_vm_init(S);
+
   return S;
 }
 

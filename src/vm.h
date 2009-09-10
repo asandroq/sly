@@ -106,10 +106,16 @@
 /* address of HALT instruction */
 #define SLY_HALT_ADDRESS               0
 
+/* initialises the virtual machine */
+void sly_vm_init(sly_state_t* S);
+
 /* dump the state of the VM to standard output */
 void sly_vm_dump(sly_state_t* S);
 
 /* performs the call protocol */
 void sly_vm_call(sly_state_t* S, sly_object_t proc, uint32_t nargs);
+
+/* loads compiled code into the vm */
+int sly_vm_load(sly_state_t* S, sly_object_t mod);
 
 #endif

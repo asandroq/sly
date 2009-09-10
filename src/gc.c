@@ -129,11 +129,13 @@ static void collect_fobjs(sly_store_t *S)
       fobj = fobj->next;
       prev = fobj;
     } else {
+      sly_fobj_t *tmp = fobj->next;
+
       /* if object was not copied then it's dead */
       if(prev) {
-        prev->next = fobj->next;
+        prev->next = tmp;
       } else {
-        S->fobjs = fobj->next;
+        S->fobjs = tmp;
       }
       if(fobj->obj->type == SLY_TYPE_INPUT_PORT ||
          fobj->obj->type == SLY_TYPE_OUTPUT_PORT) {
@@ -143,7 +145,7 @@ static void collect_fobjs(sly_store_t *S)
         port->finish(port);
       }
       free(fobj);
-      fobj = prev->next;
+      fobj = tmp;
     }
   }
 }

@@ -522,6 +522,21 @@ void sly_round(sly_state_t* S, int idx)
     S->stack[S->sp++].value.fixnum = S->stack[idx].value.fixnum;
 }
 
+void sly_remainder(sly_state_t* S, int idx1, int idx2)
+{
+  idx1 = calc_index(S, idx1);
+  idx2 = calc_index(S, idx2);
+
+#ifdef SLY_DEBUG_API
+  assert(numberp(S, idx1));
+  assert(numberp(S, idx2));
+#endif
+
+  S->stack[S->sp].type = SLY_TYPE_FIXNUM;
+  S->stack[S->sp++].value.fixnum =
+    S->stack[idx1].value.fixnum % S->stack[idx2].value.fixnum;
+}
+
 void sly_number_to_string(sly_state_t* S, int idx)
 {
   char tmp[64];

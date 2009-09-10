@@ -22,8 +22,17 @@
 ;;;
 
 (define (sly-eval e)
-  (let ((cs (compile-toplevel (list e))))
-    cs))
+  (compile-toplevel (list e)))
+
+(define (sly-compile-file file)
+  (let ((in  (open-input-file  (string-append file ".scm")))
+        (out (open-output-file (string-append file ".fasl"))))
+    (let loop ((exps '()))
+      (let ((e (read in)))
+        (if (eof-object? e)
+            (let ((cs (compile-toplevel (reverse exps))))
+              (write-code-vector cs out))
+            (loop (cons e exps)))))))
 
 (define (sly-load file)
   (with-input-from-file (string-append file ".scm")
@@ -37,9 +46,9 @@
 
 (define (compile-to-file file e+)
   (let ((cs (compile-toplevel e+)))
-    (with-output-to-file file
-      (lambda ()
-        (write-code-vector cs)))))
+    (call-with-output-file file
+      (lambda (port)
+        (write-code-vector cs port)))))
 
 ;; generates code for module,
 ;; a list of toplevel expressions
@@ -1250,58 +1259,60 @@
    (else
     (error "unknown immediate"))))
 
-(define (write-code-vector cs)
-  (display "#( ")
+(define (write-code-vector cs port)
+  (display "#( " port)
   (let ((globals (vector-ref cs 0))
         (consts (vector-ref cs 1))
         (code (vector-ref cs 3))
 	(code-size (code-size cs)))
     
     ;; globals
-    (write-fixnum (length globals))
-    (for-each write-global globals)
+    (write-fixnum (length globals) port)
+    (for-each (lambda (g)
+                (write-global g port))
+              globals)
 
     ;; constants
-    (write-fixnum (length consts))
+    (write-fixnum (length consts) port)
 
     ;; code
-    (write-fixnum code-size)
+    (write-fixnum code-size port)
     (let loop ((i 0))
       (if (= i code-size)
-	  (display ")")
+	  (display ")" port)
 	  (let ((instr (vector-ref code i)))
 	    (let ((op   (vector-ref instr 0))
 		  (arg1 (vector-ref instr 1)))
-	      (display (cdr (assv op *opcodes*)))
-	      (display " ")
-	      (and arg1 (write-fixnum arg1)))
+	      (display (cdr (assv op *opcodes*)) port)
+	      (display " " port)
+	      (and arg1 (write-fixnum arg1 port)))
 	    (loop (+ i 1)))))))
 
-(define (write-global sym)
+(define (write-global sym port)
   (let* ((str (symbol->string sym))
          (len (string-length str)))
-    (write-fixnum len)
+    (write-fixnum len port)
     (let loop ((i 0))
       (if (< i len)
           (begin
-            (write-fixnum (char->integer (string-ref str i)))
+            (write-fixnum (char->integer (string-ref str i)) port)
             (loop (+ i 1)))))))
 
-(define (write-fixnum x)
-  (let* ((b4 (quotient  x  16777216))
-         (x4 (remainder x  16777216))
-         (b3 (quotient  x4 65536))
-         (x3 (remainder x4 65536))
+(define (write-fixnum x port)
+  (let* (;(b4 (quotient  x  16777216))
+         ;(x4 (remainder x  16777216))
+         (b3 (quotient  x  65536))
+         (x3 (remainder x  65536))
          (b2 (quotient  x3 256))
          (b1 (remainder x3 256)))
-    (display b1)
-    (display " ")
-    (display b2)
-    (display " ")
-    (display b3)
-    (display " ")
-    (display b4)
-    (display " ")))
+    (display b1 port)
+    (display " " port)
+    (display b2 port)
+    (display " " port)
+    (display b3 port)
+    (display " " port)
+    (display 0 port)
+    (display " " port)))
 
 (define (extend-code-vector! cs)
   (let* ((len (vector-length (vector-ref cs 3)))

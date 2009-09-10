@@ -140,6 +140,34 @@ static int round(sly_state_t* S)
   return 1;
 }
 
+static int quotient(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 2) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  } else {
+    sly_divide(S, 2);
+  }
+
+  return 1;
+}
+
+static int remainder(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 2) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  } else {
+    sly_remainder(S, 0, 1);
+  }
+
+  return 1;
+}
+
 /*
  * R5RS 6.2.6
  */
@@ -784,6 +812,8 @@ static sly_reg_t lib_regs[] = {
   {"-", minus},
   {"/", divide},
   {"round", round},
+  {"quotient", quotient},
+  {"remainder", remainder},
   {"number->string", number_to_string},
   {"cons", cons},
   {"car", car},

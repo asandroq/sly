@@ -128,6 +128,7 @@ void sly_add(sly_state_t* S, uint32_t nr_numbers);
 void sly_subtract(sly_state_t* S, uint32_t nr_numbers);
 void sly_divide(sly_state_t* S, uint32_t nr_numbers);
 void sly_round(sly_state_t* S, int idx);
+void sly_remainder(sly_state_t* S, int idx1, int idx2);
 
 /* number I/O */
 void sly_number_to_string(sly_state_t* S, int idx);

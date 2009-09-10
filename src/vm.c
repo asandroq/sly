@@ -1081,21 +1081,18 @@ static uint32_t list_length(sly_object_t lis)
   }
 }
 
-int sly_vm_load(sly_state_t* S, sly_object_t vec)
+static void vector_to_module(sly_object_t vec, sly_module_t *mod)
 {
   uint32_t sz;
   sly_object_t p;
-  sly_module_t mod;
-
-  assert(vec.type == SLY_TYPE_VECTOR);
 
   /* globals */
   p = VECTOR_REF(vec, 0);
   sz = list_length(p);
-  mod.nr_globals = sz;
+  mod->nr_globals = sz;
   sz *= sizeof(sly_string_t*);
-  mod.globals = (sly_string_t**)malloc(sz);
-  memset(mod.globals, 0x00, sz);
+  mod->globals = (sly_string_t**)malloc(sz);
+  memset(mod->globals, 0x00, sz);
   for(sz = 0;; p = CDR(p), sz++) {
     uint32_t size;
     sly_string_t *str;
@@ -1107,20 +1104,20 @@ int sly_vm_load(sly_state_t* S, sly_object_t vec)
       str = (sly_string_t*)malloc(size);
       memmove(str, (CAR(p)).value.symbol->str, size);
 
-      mod.globals[sz] = str;
+      mod->globals[sz] = str;
     }
   }
 
   /* constants */
-  mod.nr_consts = list_length(VECTOR_REF(vec, 1));
+  mod->nr_consts = list_length(VECTOR_REF(vec, 1));
 
   /* loading code */
   sz = (VECTOR_REF(vec, 2)).value.fixnum;
-  mod.code_size = sz;
-  mod.code = (uint32_t*)malloc(sz * sizeof(uint32_t));
+  mod->code_size = sz;
+  mod->code = (uint32_t*)malloc(sz * sizeof(uint32_t));
   vec = VECTOR_REF(vec, 3);
 
-  for(sz = 0; sz < mod.code_size; sz++) {
+  for(sz = 0; sz < mod->code_size; sz++) {
     uint32_t instr, dat;
     sly_object_t vec_instr;
 
@@ -1133,10 +1130,103 @@ int sly_vm_load(sly_state_t* S, sly_object_t vec)
       instr |= (dat << 8);
     }
 
-    mod.code[sz] = instr;
+    mod->code[sz] = instr;
+  }
+}
+
+int sly_vm_load(sly_state_t* S, sly_object_t vec)
+{
+  sly_module_t mod;
+
+  assert(vec.type == SLY_TYPE_VECTOR);
+
+  vector_to_module(vec, &mod);
+  return sly_link_run_module(S, &mod);
+}
+
+#define FIXNUM(o, n) do {(o).type = SLY_TYPE_FIXNUM; (o).value.fixnum = (n);} while(0)
+
+static void write_fixnum(sly_state_t *S, sly_object_t *fix, sly_object_t *port)
+{
+  uint8_t b;
+  uint32_t val;
+  sly_object_t o;
+
+  val = fix->value.fixnum;
+
+  b = val / (1 >> 24);
+  val %= 1 >> 24;
+  FIXNUM(o, b);
+  sly_io_write(S, &o, port);
+  sly_io_write_c_string(S, " ", port);
+
+  b = val / (1 >> 16);
+  val %= 1 >> 16;
+  FIXNUM(o, b);
+  sly_io_write(S, &o, port);
+  sly_io_write_c_string(S, " ", port);
+
+  b = val / (1 >> 8);
+  val %= 1 >> 8;
+  FIXNUM(o, b);
+  sly_io_write(S, &o, port);
+  sly_io_write_c_string(S, " ", port);
+
+  FIXNUM(o, val);
+  sly_io_write(S, &o, port);
+  sly_io_write_c_string(S, " ", port);
+}
+
+void sly_vm_write_code(sly_state_t *S, sly_object_t vec, sly_object_t *port)
+{
+  uint32_t i;
+  sly_module_t mod;
+  sly_object_t o;
+
+  vector_to_module(vec, &mod);
+
+  sly_io_write_c_string(S, "#( ", port);
+  FIXNUM(o, mod.nr_globals);
+  write_fixnum(S, &o, port);
+
+  for(i = 0; i < mod.nr_globals; i++) {
+    uint32_t j;
+    sly_string_t *str;
+
+    str = mod.globals[i];
+    FIXNUM(o, str->size);
+    write_fixnum(S, &o, port);
+
+    for(j = 0; j < str->size; j++) {
+      FIXNUM(o, str->chars[j]);
+      write_fixnum(S, &o, port);
+    }
   }
 
-  return sly_link_run_module(S, &mod);
+  FIXNUM(o, mod.nr_consts);
+  write_fixnum(S, &o, port);
+
+  FIXNUM(o, mod.code_size);
+  write_fixnum(S, &o, port);
+
+  for(i = 0; i < mod.code_size; i++) {
+    uint32_t instr;
+
+    instr = mod.code[i];
+    FIXNUM(o, EXTRACT_OP(instr));
+    sly_io_write(S, &o, port);
+    sly_io_write_c_string(S, " ", port);
+
+    if(IS_TYPE_B(instr)) {
+      FIXNUM(o, EXTRACT_ARG(instr));
+      write_fixnum(S, &o, port);
+    }
+  }
+
+  sly_io_write_c_string(S, ")", port);
+  sly_io_newline(S, port);
+
+  sly_destroy_module(&mod);
 }
 
 static int get_next(FILE* f, uint32_t *next)

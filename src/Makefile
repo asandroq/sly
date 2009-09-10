@@ -40,8 +40,13 @@ SOURCES = \
 
 OBJECTS = $(SOURCES:.c=.o)
 
+all: $(TARGET) fasl2h
+
 $(TARGET): $(OBJECTS)
 	$(LD) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
+
+fasl2h: fasl2h.o
+	$(LD) fasl2h.o $(LDFLAGS) -o fasl2h
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -49,4 +54,4 @@ $(TARGET): $(OBJECTS)
 .PHONY: clean
 
 clean:
-	rm -f $(TARGET) $(OBJECTS) *~ *.fasl
+	rm -f $(TARGET) fasl2h $(OBJECTS) *~ *.fasl

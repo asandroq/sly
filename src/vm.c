@@ -1312,3 +1312,96 @@ int sly_load_file(sly_state_t* S, const char *fname)
   return sly_link_run_module(S, &mod);
 }
 
+static void get_fixnum_b(uint8_t **buf, uint32_t *num)
+{
+  uint32_t b1, b2, b3, b4;
+
+  b1 = (*buf)[0];
+  b2 = (*buf)[1];
+  b3 = (*buf)[2];
+  b4 = (*buf)[3];
+
+  *num = b1 | (b2 << 8) | (b3 << 16) | (b4 << 24);
+
+  *buf += 4;
+}
+
+static int get_string_b(uint8_t **buf, sly_string_t **str)
+{
+  uint32_t i, dw1, dw2;
+
+  /* string size */
+  get_fixnum_b(buf, &dw1);
+
+  *str = (sly_string_t*)malloc(SLY_SIZE_OF_STRING(dw1));
+  /* TODO: test return and throw error */
+  (*str)->size  = dw1;
+  SLY_GCOBJECT(*str)->type = SLY_TYPE_STRING;
+
+  for(i = 0; i < dw1; i++) {
+    get_fixnum_b(buf, &dw2);
+    (*str)->chars[i] = dw2;
+  }
+
+  return 1;
+}
+
+static int load_code_from_buffer(sly_module_t *mod, uint8_t *buf)
+{
+  uint32_t i, dw1, dw2;
+
+  /* reading number of globals */
+  get_fixnum_b(&buf, &dw1);
+
+  mod->nr_globals = dw1;
+  dw2 = dw1 * sizeof(sly_string_t*);
+  mod->globals = (sly_string_t**)malloc(dw2);
+  /* TODO: test return and throw error */
+  memset(mod->globals, 0x00, dw2);
+
+  /* reading globals */
+  for(i = 0; i < mod->nr_globals; i++) {
+    get_string_b(&buf, &mod->globals[i]);
+  }
+
+  /* reading number of constants */
+  get_fixnum_b(&buf, &dw1);
+  mod->nr_consts = dw1;
+
+  /* reading code size */
+  get_fixnum_b(&buf, &dw1);
+
+  mod->code_size = dw1;
+  mod->code = (uint32_t*)malloc(dw1 * sizeof(uint32_t));
+  /* TODO: test return and throw error */
+
+  /* reading actual code */
+  for(i = 0; i < mod->code_size; i++) {
+    uint32_t instr;
+
+    instr = (uint32_t)*(buf++);
+
+    /* retrieve operands if any */
+    if(IS_TYPE_B(instr)) {
+      get_fixnum_b(&buf, &dw1);
+
+      instr |= (dw1 << 8);
+    }
+
+    mod->code[i] = instr;
+  }
+
+  return 1;
+}
+
+int sly_load_buffer(sly_state_t* S, uint8_t *buffer)
+{
+  sly_module_t mod;
+
+  /* tries to load code into module */
+  if(!load_code_from_buffer(&mod, buffer)) {
+    return 0;
+  }
+
+  return sly_link_run_module(S, &mod);
+}

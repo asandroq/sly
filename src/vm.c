@@ -1346,9 +1346,12 @@ static int get_string_b(uint8_t **buf, sly_string_t **str)
   return 1;
 }
 
-static int load_code_from_buffer(sly_module_t *mod, uint8_t *buf)
+static int load_code_from_buffer(sly_module_t *mod, const uint8_t *buffer)
 {
+  uint8_t *buf;
   uint32_t i, dw1, dw2;
+
+  buf = (uint8_t*)buffer;
 
   /* reading number of globals */
   get_fixnum_b(&buf, &dw1);
@@ -1394,7 +1397,7 @@ static int load_code_from_buffer(sly_module_t *mod, uint8_t *buf)
   return 1;
 }
 
-int sly_load_buffer(sly_state_t* S, uint8_t *buffer)
+int sly_load_buffer(sly_state_t* S, const uint8_t *buffer)
 {
   sly_module_t mod;
 

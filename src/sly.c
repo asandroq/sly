@@ -37,12 +37,6 @@ int main(int argc, char *argv[])
 
   S = sly_open();
 
-  /* tries to load Scheme initial environment */
-  sly_load_file(S, "init.fasl");
-
-  /* tries to load compiler */
-  sly_load_file(S, "compiler.fasl");
-
   if(!sly_load_file(S, argv[1])) {
     printf("Error!\n");
   }

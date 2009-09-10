@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
     fprintf(out, "%u, ", value);
   }
 
-  fprintf(out, "}\n");
+  fprintf(out, "};\n\n");
 
   return 0;
 }

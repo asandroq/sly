@@ -28,6 +28,9 @@
 #include "vm.h"
 #include "state.h"
 
+#include "init.h"
+#include "compiler.h"
+
 int sly_open_lib(sly_state_t* S);
 
 /* garbage collector callback */
@@ -196,8 +199,11 @@ sly_state_t* sly_open(void)
 {
   sly_state_t *S = sly_create_state();
 
-  /* register C lib */
+  /* register C libs */
   sly_open_lib(S);
+
+  sly_load_buffer(S, init_buf);
+  sly_load_buffer(S, compiler_buf);
 
   return S;
 }

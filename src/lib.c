@@ -514,6 +514,24 @@ static int input_portp(sly_state_t* S)
   return 1;
 }
 
+static int eof_objectp(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(sly_eof_objectp(S, 0)) {
+    sly_push_boolean(S, 1);
+  } else {
+    sly_push_boolean(S, 0);
+  }
+
+  return 1;
+}
+
 static int output_portp(sly_state_t* S)
 {
   int nargs = sly_get_top(S);
@@ -783,6 +801,7 @@ static sly_reg_t lib_regs[] = {
   {"vector-set!", vector_set},
   {"apply", apply},
   {"eval", eval},
+  {"eof-object?", eof_objectp},
   {"input-port?", input_portp},
   {"output-port?", output_portp},
   {"current-input-port", current_input_port},

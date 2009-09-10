@@ -220,7 +220,8 @@
       ((left-paren)
        (let ((token (##read-token port)))
          (cond
-          ((eqv? token 'dot)
+          ((or (eqv? token 'dot)
+               (eof-object? token))
            (error "invalid read syntax"))
           ((eqv? token 'right-paren)
            '())
@@ -228,6 +229,8 @@
            (let loop ((look-ahead token)
                       (res '()))
              (cond
+              ((eof-object? look-ahead)
+               (error "invalid read syntax"))
               ((eqv? look-ahead 'right-paren)
                (reverse res))
               ((eqv? look-ahead 'dot)
@@ -245,11 +248,15 @@
       ((sharp-paren)
        (let loop ((look-ahead (##read-token port))
                   (res '()))
-         (if (eqv? look-ahead 'right-paren)
-             (list->vector (reverse res))
-             (let ((next (##read port look-ahead)))
-               (loop (##read-token port)
-                     (cons next res))))))))
+         (cond
+          ((eof-object? look-ahead)
+           (error "invalid read syntax"))
+          ((eqv? look-ahead 'right-paren)
+           (list->vector (reverse res)))
+          (else
+           (let ((next (##read port look-ahead)))
+             (loop (##read-token port)
+                   (cons next res)))))))))
    (else look-ahead)))
 
 (define read

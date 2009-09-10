@@ -179,6 +179,11 @@ int sly_procedurep(sly_state_t* S, int idx)
   return check_type(S, idx, SLY_TYPE_CLOSURE);
 }
 
+int sly_eof_objectp(sly_state_t* S, int idx)
+{
+  return check_type(S, idx, SLY_TYPE_EOF);
+}
+
 int sly_input_portp(sly_state_t* S, int idx)
 {
   return check_type(S, idx, SLY_TYPE_INPUT_PORT);

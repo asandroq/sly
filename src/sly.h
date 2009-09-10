@@ -88,6 +88,7 @@ int sly_listp(sly_state_t* S, int idx);
 int sly_stringp(sly_state_t* S, int idx);
 int sly_vectorp(sly_state_t* S, int idx);
 int sly_procedurep(sly_state_t* S, int idx);
+int sly_eof_objectp(sly_state_t* S, int idx);
 int sly_input_portp(sly_state_t* S, int idx);
 int sly_output_portp(sly_state_t* S, int idx);
 

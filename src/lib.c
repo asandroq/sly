@@ -126,7 +126,7 @@ static int divide(sly_state_t* S)
   return 1;
 }
 
-static int round(sly_state_t* S)
+static int _round(sly_state_t* S)
 {
   int nargs = sly_get_top(S);
 
@@ -154,7 +154,7 @@ static int quotient(sly_state_t* S)
   return 1;
 }
 
-static int remainder(sly_state_t* S)
+static int _remainder(sly_state_t* S)
 {
   int nargs = sly_get_top(S);
 
@@ -811,9 +811,9 @@ static sly_reg_t lib_regs[] = {
   {"+", plus},
   {"-", minus},
   {"/", divide},
-  {"round", round},
+  {"round", _round},
   {"quotient", quotient},
-  {"remainder", remainder},
+  {"remainder", _remainder},
   {"number->string", number_to_string},
   {"cons", cons},
   {"car", car},

@@ -1314,7 +1314,7 @@ sly_gcobject_t *sly_io_open_ifile(sly_state_t *S, sly_object_t *str, uint8_t cha
   char *fname;
   FILE *file;
 
-  fname = from_string(SLY_STRING(str->value.gc), char_enc);
+  fname = (char*)from_string(SLY_STRING(str->value.gc), char_enc);
   if(!fname) {
     sly_push_string(S, "cannot convert file name");
     sly_error(S, 1);
@@ -1337,7 +1337,7 @@ sly_gcobject_t *sly_io_open_ofile(sly_state_t *S, sly_object_t *str, uint8_t cha
   char *fname;
   FILE *file;
 
-  fname = from_string(SLY_STRING(str->value.gc), char_enc);
+  fname = (char*)from_string(SLY_STRING(str->value.gc), char_enc);
   if(!fname) {
     sly_push_string(S, "cannot convert file name");
     sly_error(S, 1);

@@ -1154,20 +1154,20 @@ static void write_fixnum(sly_state_t *S, sly_object_t *fix, sly_object_t *port)
 
   val = fix->value.fixnum;
 
-  b = val / (1 >> 24);
-  val %= 1 >> 24;
+  b = val / (1 << 24);
+  val %= 1 << 24;
   FIXNUM(o, b);
   sly_io_write(S, &o, port);
   sly_io_write_c_string(S, " ", port);
 
-  b = val / (1 >> 16);
-  val %= 1 >> 16;
+  b = val / (1 << 16);
+  val %= 1 << 16;
   FIXNUM(o, b);
   sly_io_write(S, &o, port);
   sly_io_write_c_string(S, " ", port);
 
-  b = val / (1 >> 8);
-  val %= 1 >> 8;
+  b = val / (1 << 8);
+  val %= 1 << 8;
   FIXNUM(o, b);
   sly_io_write(S, &o, port);
   sly_io_write_c_string(S, " ", port);

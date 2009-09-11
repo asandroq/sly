@@ -288,11 +288,6 @@ void sly_gc_finish(sly_store_t *S)
   sly_root_t *root;
   sly_fobj_t *fobj;
 
-  free(S->os_address);
-  S->size = S->capacity = 0;
-  S->from_space = S->to_space = NULL;
-  S->roots_cb = S->roots_cb_data = NULL;
-
   for(root = S->roots; root;) {
     sly_root_t *t;
 
@@ -315,6 +310,11 @@ void sly_gc_finish(sly_store_t *S)
     free(fobj);
     fobj = t;
   }
+
+  free(S->os_address);
+  S->size = S->capacity = 0;
+  S->from_space = S->to_space = NULL;
+  S->roots_cb = S->roots_cb_data = NULL;
 }
 
 void* sly_gc_alloc(sly_store_t *S, uint32_t size)

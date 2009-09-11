@@ -4,7 +4,7 @@
 
 int main(int argc, char *argv[])
 {
-  int ret;
+  int ret, i;
   unsigned value;
   FILE *in, *out;
   char iname[512], oname[512];
@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
   fprintf(out, "\tDo not edit it.\n");
   fprintf(out, "*/\n\n");
 
-  fprintf(out, "static const uint8_t %s_buf[] = {\n", argv[1]);
+  fprintf(out, "static const uint8_t %s_buf[] = {\n   ", argv[1]);
 
   /* bytecode beginning */
   ret = fscanf(in, " #(");
@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
     exit(1);
   }
 
-  while(1) {
+  for(i = 1;; i++) {
     ret = fscanf(in, " %u", &value);
     if(ret == 0) {
       break;
@@ -60,9 +60,15 @@ int main(int argc, char *argv[])
     }
 
     fprintf(out, "%u, ", value);
+    if(!(i % 20)) {
+      fprintf(out, "\n   ");
+    }
   }
 
   fprintf(out, "};\n\n");
+
+  fclose(in);
+  fclose(out);
 
   return 0;
 }

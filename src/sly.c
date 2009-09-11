@@ -28,16 +28,23 @@
 
 int main(int argc, char *argv[])
 {
+  int repl;
   sly_state_t* S;
 
-  if(argc != 2) {
+  if(argc == 1) {
+    repl = 1;
+  } else if(argc != 2) {
     fprintf(stderr, "%s: Need file to run.\n", argv[0]);
     exit(13);
   }
 
   S = sly_open();
 
-  if(!sly_load_file(S, argv[1])) {
+  if(repl) {
+    sly_push_current_input_port(S);
+    sly_push_current_output_port(S);
+    sly_repl(S);
+  } else if(!sly_load_file(S, argv[1])) {
     printf("Error!\n");
   }
 

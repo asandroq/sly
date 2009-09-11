@@ -70,6 +70,9 @@ int sly_error(sly_state_t* S, uint32_t nr);
  */
 void sly_register(sly_state_t* S, sly_reg_t* regs);
 
+/* the input and output ports must be on stack */
+void sly_repl(sly_state_t *S);
+
 int sly_load_file(sly_state_t* S, const char *fname);
 int sly_load_buffer(sly_state_t* S, const uint8_t *buffer);
 

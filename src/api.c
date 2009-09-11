@@ -74,11 +74,14 @@ int sly_error(sly_state_t* S, uint32_t num)
   sly_push_current_error_port(S);
 
   /* error objects are on top of stack */
-  printf("Error: ");
+  sly_push_string(S, "Error: ");
+  sly_display(S, -1, -2);
+  S->sp--;
   for(i = -num-1; i < -1; ++i) {
     sly_display(S, i, -1);
   }
-  printf("\n");
+  sly_newline(S, -1);
+  S->sp--;
 
   S->sp -= num;
   sly_vm_dump(S);
@@ -743,13 +746,20 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
 
 void sly_eval(sly_state_t *S, int idx)
 {
+  sly_gcobject_t *pair;
+
   idx = calc_index(S, idx);
 
   /* pushing argument */
-  S->stack[S->sp++] = S->stack[idx];
+  pair = sly_create_pair(S);
+  SLY_PAIR(pair)->car = S->stack[idx];
+  SLY_PAIR(pair)->cdr.type = SLY_TYPE_NIL;
+
+  S->stack[S->sp].type = SLY_TYPE_PAIR;
+  S->stack[S->sp++].value.gc = pair;
 
   /* the compiler is in Scheme land */
-  sly_vm_call(S, S->global_env.vars[S->sly_eval].value, 1);
+  sly_vm_call(S, S->global_env.vars[S->proc_compile].value, 1);
   sly_vm_load(S, S->accum);
 
   S->stack[S->sp++] = S->accum;
@@ -793,6 +803,23 @@ void sly_read_token(sly_state_t* S, int idx)
 #endif
 
   sly_io_read_token(S, &S->stack[idx], &S->stack[S->sp++]);
+}
+
+void sly_read(sly_state_t *S, int idx)
+{
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_INPUT_PORT);
+#endif
+
+  /* pushing port */
+  S->stack[S->sp++] = S->stack[idx];
+
+  /* the reader is in Scheme land */
+  sly_vm_call(S, S->global_env.vars[S->proc_read].value, 1);
+
+  S->stack[S->sp++] = S->accum;
 }
 
 void sly_write(sly_state_t* S, int idx1, int idx2)
@@ -910,3 +937,37 @@ void sly_register(sly_state_t* S, sly_reg_t* regs)
   }
 }
 
+void sly_repl(sly_state_t *S)
+{
+  int idx1, idx2;
+  sly_object_t *in, *out;
+
+  idx1 = calc_index(S, -2);
+  idx2 = calc_index(S, -1);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx1].type == SLY_TYPE_INPUT_PORT);
+  assert(S->stack[idx2].type == SLY_TYPE_OUTPUT_PORT);
+#endif
+
+  in  = &S->stack[idx1];
+  out = &S->stack[idx2];
+
+  while(1) {
+    sly_io_write_c_string(S, "#;> ", out);
+    sly_read(S, -2);
+
+    if(sly_eof_objectp(S, -1)) {
+      S->sp--;
+      break;
+    }
+
+    sly_eval(S, -1);
+    sly_write(S, -1, -3);
+    sly_newline(S, -3);
+    S->sp -= 2;
+  }
+
+  /* removing ports */
+  S->sp -= 2;
+}

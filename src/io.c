@@ -1144,7 +1144,27 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj, sly_object_t *port
     break;
 
   case SLY_TYPE_CLOSURE:
-    sly_io_write_c_string(S, "<#closure>", port);
+    if(SLY_CLOSURE(obj->value.gc)->is_c) {
+      sly_io_write_c_string(S, "<#cclosure>", port);
+    } else {
+      uint32_t i;
+
+      for(i = 0; i < S->global_env.size; i++) {
+        if(S->global_env.vars[i].value.type == SLY_TYPE_CLOSURE) {
+          if(SLY_CLOSURE(S->global_env.vars[i].value.value.gc)->entry_point.scm ==
+             SLY_CLOSURE(obj->value.gc)->entry_point.scm) {
+            sly_io_write_c_string(S, "<#closure ", port);
+            write_string(S, S->global_env.vars[i].symbol->str, port, 0);
+            sly_io_write_c_string(S, ">", port);
+            break;
+          }
+        }
+      }
+
+      if(i == S->global_env.size) {
+        sly_io_write_c_string(S, "<#closure>", port);
+      }
+    }
     break;
 
   case SLY_TYPE_PAIR: {

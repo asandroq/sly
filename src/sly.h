@@ -97,6 +97,7 @@ int sly_input_portp(sly_state_t* S, int idx);
 int sly_output_portp(sly_state_t* S, int idx);
 
 /* push values onto the stack */
+void sly_get_global(sly_state_t* S);
 void sly_push_value(sly_state_t* S, int idx);
 void sly_push_boolean(sly_state_t* S, int bool);
 void sly_push_char(sly_state_t* S, sly_char_t chr);
@@ -123,6 +124,7 @@ int sly_greater_than(sly_state_t* S, int idx1, int idx2);
 
 /* convert values on stack */
 void sly_symbol_to_string(sly_state_t* S, int idx);
+void sly_string_to_symbol(sly_state_t* S, int idx);
 
 /* arithmetic */
 void sly_invert(sly_state_t* S, int idx);
@@ -156,16 +158,17 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args);
 
 /* evaluation */
 void sly_eval(sly_state_t* S, int idx);
+void sly_call(sly_state_t* S, uint32_t n_args);
 
 /* I/O */
+void sly_open_input_file(sly_state_t* S);
+void sly_open_output_file(sly_state_t* S);
+void sly_close_input_port(sly_state_t* S);
+void sly_close_output_port(sly_state_t* S);
 void sly_newline(sly_state_t* S, int idx);
 void sly_read_token(sly_state_t* S, int idx);
 void sly_write(sly_state_t* S, int idx1, int idx2);
 void sly_display(sly_state_t* S, int idx1, int idx2);
-void sly_open_input_file(sly_state_t* S, int idx);
-void sly_open_output_file(sly_state_t* S, int idx);
-void sly_close_input_port(sly_state_t* S, int idx);
-void sly_close_output_port(sly_state_t* S, int idx);
 
 /* sets the current object on top of the stack as a global */
 void sly_set_global(sly_state_t* S, const char* name);

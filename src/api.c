@@ -264,6 +264,22 @@ void sly_push_vector(sly_state_t* S, uint32_t size)
   S->stack[S->sp++] = obj;
 }
 
+void sly_get_global(sly_state_t* S)
+{
+  int glob, idx = calc_index(S, -1);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_SYMBOL);
+#endif
+
+  glob = sly_st_get_global_index(S, S->stack[idx].value.symbol);
+  if(glob < 0) {
+    S->stack[idx].type = SLY_TYPE_NIL;
+  } else {
+    S->stack[idx] = S->global_env.vars[glob].value;
+  }
+}
+
 sly_fixnum_t sly_to_integer(sly_state_t* S, int idx)
 {
   idx = calc_index(S, idx);
@@ -368,6 +384,20 @@ void sly_symbol_to_string(sly_state_t* S, int idx)
 
   S->stack[S->sp].type = SLY_TYPE_STRING;
   S->stack[S->sp++].value.gc = str;
+}
+
+void sly_string_to_symbol(sly_state_t* S, int idx)
+{
+  sly_object_t sym;
+
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type == SLY_TYPE_STRING);
+#endif
+
+  sym = sly_create_symbol(S, SLY_STRING((S->stack[idx]).value.gc));
+  S->stack[S->sp++] = sym;
 }
 
 void sly_invert(sly_state_t* S, int idx)
@@ -765,6 +795,20 @@ void sly_eval(sly_state_t *S, int idx)
   S->stack[S->sp++] = S->accum;
 }
 
+void sly_call(sly_state_t *S, uint32_t n_args)
+{
+  int proc;
+
+  proc = calc_index(S, -n_args-1);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[proc].type = SLY_TYPE_CLOSURE);
+#endif
+
+  sly_vm_call(S, S->stack[proc], n_args);
+  S->stack[S->sp++] = S->accum;
+}
+
 void sly_push_current_input_port(sly_state_t *S)
 {
   /* for now, I'll grab the port at a fixed address */
@@ -846,11 +890,12 @@ void sly_display(sly_state_t* S, int idx1, int idx2)
   sly_io_display(S, &S->stack[idx1], &S->stack[idx2]);
 }
 
-void sly_open_input_file(sly_state_t* S, int idx)
+void sly_open_input_file(sly_state_t* S)
 {
+  int idx;
   sly_gcobject_t *port;
 
-  idx = calc_index(S, idx);
+  idx = calc_index(S, -1);
 
 #ifdef SLY_DEBUG_API
   assert(S->stack[idx].type == SLY_TYPE_STRING);
@@ -858,15 +903,16 @@ void sly_open_input_file(sly_state_t* S, int idx)
 
   port = sly_io_open_ifile(S, &S->stack[idx], SLY_CHAR_ENC_LATIN1);
 
-  S->stack[S->sp].type = SLY_TYPE_INPUT_PORT;
-  S->stack[S->sp++].value.gc = port;
+  S->stack[idx].type = SLY_TYPE_INPUT_PORT;
+  S->stack[idx].value.gc = port;
 }
 
-void sly_open_output_file(sly_state_t* S, int idx)
+void sly_open_output_file(sly_state_t* S)
 {
+  int idx;
   sly_gcobject_t *port;
 
-  idx = calc_index(S, idx);
+  idx = calc_index(S, -1);
 
 #ifdef SLY_DEBUG_API
   assert(S->stack[idx].type == SLY_TYPE_STRING);
@@ -874,30 +920,32 @@ void sly_open_output_file(sly_state_t* S, int idx)
 
   port = sly_io_open_ofile(S, &S->stack[idx], SLY_CHAR_ENC_LATIN1);
 
-  S->stack[S->sp].type = SLY_TYPE_OUTPUT_PORT;
-  S->stack[S->sp++].value.gc = port;
+  S->stack[idx].type = SLY_TYPE_OUTPUT_PORT;
+  S->stack[idx].value.gc = port;
 }
 
-void sly_close_input_port(sly_state_t* S, int idx)
+void sly_close_input_port(sly_state_t* S)
 {
-  idx = calc_index(S, idx);
+  int idx = calc_index(S, -1);
 
 #ifdef SLY_DEBUG_API
   assert(S->stack[idx].type == SLY_TYPE_INPUT_PORT);
 #endif
 
   sly_io_close_iport(S, &S->stack[idx]);
+  S->sp--;
 }
 
-void sly_close_output_port(sly_state_t* S, int idx)
+void sly_close_output_port(sly_state_t* S)
 {
-  idx = calc_index(S, idx);
+  int idx = calc_index(S, -1);
 
 #ifdef SLY_DEBUG_API
   assert(S->stack[idx].type == SLY_TYPE_OUTPUT_PORT);
 #endif
 
   sly_io_close_oport(S, &S->stack[idx]);
+  S->sp--;
 }
 
 void sly_set_global(sly_state_t* S, const char* name)

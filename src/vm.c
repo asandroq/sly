@@ -1096,6 +1096,8 @@ static void vector_to_module(sly_object_t vec, sly_module_t *mod)
   uint32_t sz;
   sly_object_t p;
 
+  assert(vec.type == SLY_TYPE_VECTOR);
+
   /* globals */
   p = VECTOR_REF(vec, 0);
   sz = list_length(p);
@@ -1404,10 +1406,22 @@ int sly_load_file(sly_state_t* S, const char *fname)
 {
   sly_module_t mod;
 
+#if 0
   /* tries to load code into module */
   if(!load_code_from_file(&mod, fname)) {
     return 0;
   }
+#endif
+
+  sly_push_string(S, "compile-from-port");
+  sly_string_to_symbol(S, -1);
+  sly_get_global(S);
+  sly_push_string(S, fname);
+  sly_open_input_file(S);
+  sly_call(S, 1);
+
+  vector_to_module(S->stack[S->sp-1], &mod);
+  S->sp -= 3;
 
   return sly_link_run_module(S, &mod);
 }

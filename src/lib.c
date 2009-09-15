@@ -264,6 +264,20 @@ static int listp(sly_state_t* S)
  * R5RS 6.3.3
  */
 
+static int string_to_symbol(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  sly_string_to_symbol(S, 0);
+
+  return 1;
+}
+
 static int symbol_to_string(sly_state_t* S)
 {
   int nargs = sly_get_top(S);
@@ -635,7 +649,7 @@ static int open_input_file(sly_state_t* S)
     sly_error(S, 2);
   }
 
-  sly_open_input_file(S, 0);
+  sly_open_input_file(S);
 
   return 1;
 }
@@ -655,7 +669,7 @@ static int open_output_file(sly_state_t* S)
     sly_error(S, 2);
   }
 
-  sly_open_output_file(S, 0);
+  sly_open_output_file(S);
 
   return 1;
 }
@@ -675,7 +689,7 @@ static int close_input_port(sly_state_t *S)
     sly_error(S, 2);
   }
 
-  sly_close_input_port(S, 0);
+  sly_close_input_port(S);
 
   return 0;
 }
@@ -695,7 +709,7 @@ static int close_output_port(sly_state_t *S)
     sly_error(S, 2);
   }
 
-  sly_close_output_port(S, 0);
+  sly_close_output_port(S);
 
   return 0;
 }
@@ -819,6 +833,7 @@ static sly_reg_t lib_regs[] = {
   {"car", car},
   {"cdr", cdr},
   {"list?", listp},
+  {"string->symbol", string_to_symbol},
   {"symbol->string", symbol_to_string},
   {"string?", stringp},
   {"string-length", string_length},

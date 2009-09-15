@@ -50,6 +50,13 @@
       (lambda (port)
         (write-code-vector cs port)))))
 
+(define (compile-from-port in)
+  (let loop ((exps '()))
+    (let ((e (read in)))
+      (if (eof-object? e)
+          (compile-toplevel (reverse exps))
+          (loop (cons e exps))))))
+
 ;; generates code for module,
 ;; a list of toplevel expressions
 (define (compile-toplevel e+)

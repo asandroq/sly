@@ -31,6 +31,7 @@ int main(int argc, char *argv[])
   int repl;
   sly_state_t* S;
 
+  repl = 0;
   if(argc == 1) {
     repl = 1;
   } else if(argc != 2) {

@@ -746,10 +746,12 @@ static int parse_number(sly_sbuffer_t *buf, sly_object_t *res)
 {
   uint8_t val;
   sly_char_t *str;
-  uint32_t exp, ret;
-  int i, j, base, is_exact;
+  uint32_t exp;
+  sly_fixnum_t ret;
+  int i, j, base, is_exact, sign;
 
   i = 0;
+  sign = 1;
   base = -1;
   is_exact = -1;
   str = buf->str;
@@ -796,6 +798,14 @@ static int parse_number(sly_sbuffer_t *buf, sly_object_t *res)
   base = base == -1 ? 10 : base;
   is_exact = is_exact == -1 ? 1 : is_exact;
 
+  /* sign */
+  if(str[i] == '+') {
+    ++i;
+  } else if(str[i] == '-') {
+    ++i;
+    sign = -1;
+  }
+
   /* for now, just fixnums */
   ret = 0;
   exp = 1;
@@ -808,7 +818,7 @@ static int parse_number(sly_sbuffer_t *buf, sly_object_t *res)
     exp *= base;
   }
   res->type = SLY_TYPE_FIXNUM;
-  res->value.fixnum = ret;
+  res->value.fixnum = ret * sign;
 
   return 1;
 }

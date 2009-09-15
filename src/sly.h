@@ -41,7 +41,7 @@ typedef uint32_t sly_ucs4_t;
 typedef sly_ucs4_t sly_char_t;
 
 /* type of small integers */
-typedef uint32_t sly_fixnum_t;
+typedef int32_t sly_fixnum_t;
 
 /* the state of the Sly virtual machine */
 typedef struct sly_state_t sly_state_t;

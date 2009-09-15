@@ -874,8 +874,9 @@ static int read_token(sly_state_t* S, sly_object_t* in, sly_sbuffer_t *buf, sly_
   /* strings */
   if(c == '"') {
     read_string(S, in, buf);
+    obj = sly_create_string(S, buf->str, buf->pos);
     res->type = SLY_TYPE_STRING;
-    res->value.gc = sly_create_string(S, buf->str, buf->pos);
+    res->value.gc = obj;
     return SLY_TOK_DATUM;
   }
 

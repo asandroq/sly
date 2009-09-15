@@ -85,7 +85,7 @@ static uint32_t sizeof_gcobj(sly_gcobject_t* obj)
     break;
 
   default:
-    size = 0;
+    abort();
   }
 
   return size;

@@ -899,7 +899,7 @@ static int read_token(sly_state_t* S, sly_object_t* in, sly_sbuffer_t *buf, sly_
       /* character */
       res->type = SLY_TYPE_CHAR;
       c = PEEK_CHAR(S, in);
-      if(is_char_in_set(c, delim_set)) {
+      if(buf->pos == 2 && (is_char_in_set(c, delim_set) || is_space(c))) {
         /* the character itself is a delimiter, must read it */
         READ_CHAR(S, in);
         read_till_delimiter(S, in, buf);

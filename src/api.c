@@ -846,7 +846,8 @@ void sly_read_token(sly_state_t* S, int idx)
   assert(S->stack[idx].type == SLY_TYPE_INPUT_PORT);
 #endif
 
-  sly_io_read_token(S, &S->stack[idx], &S->stack[S->sp++]);
+  S->stack[S->sp++].type = SLY_TYPE_NIL;
+  sly_io_read_token(S, &S->stack[idx], &S->stack[S->sp-1]);
 }
 
 void sly_read(sly_state_t *S, int idx)

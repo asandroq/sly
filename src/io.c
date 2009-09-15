@@ -1033,9 +1033,10 @@ void sly_io_read_token(sly_state_t *S, sly_object_t *p, sly_object_t *ret)
   case SLY_TOK_COMMA_AT:
     tmp1.value.gc = sly_create_string_from_ascii(S, "macro");
     tmp2 = sly_create_symbol(S, SLY_STRING(tmp1.value.gc));
-    ret->type = SLY_TYPE_PAIR;
     ret->value.gc = sly_create_pair(S);
+    ret->type = SLY_TYPE_PAIR;
     SLY_PAIR(ret->value.gc)->car = tmp2;
+    SLY_PAIR(ret->value.gc)->cdr.type = SLY_TYPE_NIL;
 
     switch(tok) {
     case SLY_TOK_QUOTE:

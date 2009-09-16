@@ -310,7 +310,7 @@
   (let ((bindings (cadr exp))
 	(body (cddr exp)))
     (if (null? bindings)
-	(simplify (cons 'begin body) #f)
+	(simplify (cons 'begin body))
 	(let ((first (car bindings))
 	      (rest (cdr bindings)))
 	  (if (null? rest)

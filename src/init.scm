@@ -176,16 +176,30 @@
 
 ;; R5RS 6.4
 
-;; this is not a complete map implementation
-(define (map proc l)
-  (let loop ((l l)
-             (res '()))
-    (cond
-     ((null? l) (reverse res))
-     ((pair? l) (loop (cdr l)
-                      (cons (proc (car l))
-                            res)))
-     (else (error "map applied to non-list")))))
+(define (map proc ls . lol)
+
+  (define (map1 proc l)
+    (let loop ((l l)
+               (res '()))
+      (cond
+       ((null? l) (reverse res))
+       ((pair? l) (loop (cdr l)
+                        (cons (proc (car l))
+                              res)))
+       (else (error "map applied to non-list")))))
+
+  (define (mapn proc lol)
+    (let loop ((lol lol)
+               (res '()))
+      (if (null? (car lol))
+          (reverse res)
+          (let ((ls (map1 car lol)))
+            (loop (map1 cdr lol)
+                  (cons (apply proc ls) res))))))
+
+  (if (null? lol)
+      (map1 proc ls)
+      (mapn proc (cons ls lol))))
 
 (define for-each map)
 

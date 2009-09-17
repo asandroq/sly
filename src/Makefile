@@ -35,6 +35,7 @@ SOURCES = \
 	lib.c \
 	object.c \
 	state.c \
+	std.c \
 	vm.c \
 	sly.c
 
@@ -54,4 +55,4 @@ fasl2h: fasl2h.o
 .PHONY: clean
 
 clean:
-	rm -f $(TARGET) fasl2h $(OBJECTS) *~ *.fasl
+	rm -f $(TARGET) fasl2h fasl2h.o $(OBJECTS) *~ *.fasl

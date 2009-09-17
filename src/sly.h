@@ -166,7 +166,6 @@ void sly_open_output_file(sly_state_t* S);
 void sly_close_input_port(sly_state_t* S);
 void sly_close_output_port(sly_state_t* S);
 void sly_newline(sly_state_t* S, int idx);
-void sly_read_token(sly_state_t* S, int idx);
 void sly_write(sly_state_t* S, int idx1, int idx2);
 void sly_display(sly_state_t* S, int idx1, int idx2);
 

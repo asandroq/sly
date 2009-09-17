@@ -32,6 +32,7 @@
 #include "compiler.h"
 
 int sly_open_lib(sly_state_t* S);
+int sly_open_std(sly_state_t* S);
 
 /* garbage collector callback */
 struct gc_data {
@@ -201,6 +202,7 @@ sly_state_t* sly_open(void)
 
   /* register C libs */
   sly_open_lib(S);
+  sly_open_std(S);
 
   sly_load_buffer(S, init_buf);
   sly_load_buffer(S, compiler_buf);

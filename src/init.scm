@@ -289,3 +289,17 @@
        (string-append "sly-gensym-"
                       (number->string counter))))))
 
+;; SRFI-39
+
+(define (make-parameter init . conv)
+  (let* ((converter (if (null? conv)
+                        (lambda (x) x)
+                        (car conv)))
+         (global-cell (cons (converter init) '())))
+    (letrec ((parameter
+              (lambda new-val
+                (if (null? new-val)
+                    (##dynamic-lookup parameter global-cell)
+                    (##dynamic-store parameter (car new-val) global-cell)))))
+      parameter)))
+

@@ -838,18 +838,6 @@ void sly_newline(sly_state_t* S, int idx)
   sly_io_newline(S, &S->stack[idx]);
 }
 
-void sly_read_token(sly_state_t* S, int idx)
-{
-  idx = calc_index(S, idx);
-
-#ifdef SLY_DEBUG_API
-  assert(S->stack[idx].type == SLY_TYPE_INPUT_PORT);
-#endif
-
-  S->stack[S->sp++].type = SLY_TYPE_NIL;
-  sly_io_read_token(S, &S->stack[idx], &S->stack[S->sp-1]);
-}
-
 void sly_read(sly_state_t *S, int idx)
 {
   idx = calc_index(S, idx);

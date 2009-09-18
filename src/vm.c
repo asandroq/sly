@@ -775,14 +775,12 @@ static int sly_vm_run(sly_state_t* S)
       break;
 
     case SLY_OP_EQ:
-      SLY_SET_BOOL(S->accum.type == S->stack[S->sp-1].type &&
-		    S->accum.value.symbol == S->stack[S->sp-1].value.symbol);
+      SLY_SET_BOOL(SLY_OBJ_EQ(S->accum, S->stack[S->sp-1]));
       --S->sp;
       break;
 
     case SLY_OP_EQV:
-      SLY_SET_BOOL(S->accum.type == S->stack[S->sp-1].type &&
-		    S->accum.value.symbol == S->stack[S->sp-1].value.symbol);
+      SLY_SET_BOOL(SLY_OBJ_EQ(S->accum, S->stack[S->sp-1]));
       --S->sp;
       break;
 

@@ -112,6 +112,9 @@ typedef struct sly_oport_t     sly_oport_t;
 #define SLY_IPORT(obj)         ((sly_iport_t*)(obj))
 #define SLY_OPORT(obj)         ((sly_oport_t*)(obj))
 
+#define SLY_OBJ_EQ(o1, o2)                                              \
+  (((o1).type == (o2).type) && ((o1).value.symbol == (o2).value.symbol))
+
 /* value types */
 struct sly_object_t {
 

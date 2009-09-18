@@ -27,14 +27,65 @@
 #include "io.h"
 #include "state.h"
 
-static int dynamic_lookup(sly_state_t* S)
+/*
+ * pushes a new dynamic binding on the stack
+ * using the tag and value given
+ */
+static int dynamic_bind(sly_state_t* S)
 {
   return 0;
 }
 
+/*
+ * search for a dynamic binding with the given tag
+ * on the stack, and pushes the associanted value or
+ * a default one if the binding was not found
+ * the tag and a default value must have been pushed
+ * on the stack
+ */
+static int dynamic_lookup(sly_state_t* S)
+{
+  int idx;
+
+  for(idx = S->sp - 3; idx >= 0; idx--) {
+    if(STK(idx).type == SLY_TYPE_DYN_BIND &&
+       SLY_OBJ_EQ(SLY_DYN_BIND(STKGC(idx))->tag, STK(S->sp-2))) {
+      STK(S->sp++) = SLY_DYN_BIND(STKGC(idx))->value;
+      break;
+    }
+  }
+
+  return 1;
+}
+
+/*
+ * search for a dynamic binding with the given tag
+ * on the stack, sets the associated value
+ * of the binding with the given argument, and
+ * returns true if successful, false otherwise
+ * the tag and the value must have been pushed
+ * on the stack
+ */
 static int dynamic_store(sly_state_t* S)
 {
-  return 0;
+  int idx;
+
+  for(idx = S->sp - 3; idx >= 0; idx--) {
+    if(STK(idx).type == SLY_TYPE_DYN_BIND &&
+       SLY_OBJ_EQ(SLY_DYN_BIND(STKGC(idx))->tag, STK(S->sp-2))) {
+      SLY_DYN_BIND(STKGC(idx))->value = STK(S->sp-1);
+      break;
+    }
+  }
+
+  STK(S->sp).type = SLY_TYPE_BOOL;
+  if(idx < 0) {
+    STK(S->sp++).value.bool = 0;
+  } else {
+    STK(S->sp++).value.bool = 1;
+  }
+
+  return 1;
 }
 
 static int read_token(sly_state_t* S)
@@ -46,15 +97,16 @@ static int read_token(sly_state_t* S)
     sly_error(S, 1);
   }
 
-  assert(S->stack[S->sp-1].type == SLY_TYPE_INPUT_PORT);
+  assert(STK(S->sp-1).type == SLY_TYPE_INPUT_PORT);
 
-  S->stack[S->sp++].type = SLY_TYPE_NIL;
-  sly_io_read_token(S, &S->stack[S->sp-2], &S->stack[S->sp-1]);
+  STK(S->sp++).type = SLY_TYPE_NIL;
+  sly_io_read_token(S, &STK(S->sp-2), &STK(S->sp-1));
 
   return 1;
 }
 
 static sly_reg_t lib_regs[] = {
+  {"##dynamic-bind", dynamic_bind},
   {"##dynamic-lookup", dynamic_lookup},
   {"##dynamic-store", dynamic_store},
   {"##read-token", read_token},

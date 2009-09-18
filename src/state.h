@@ -27,6 +27,9 @@
 #include "sly.h"
 #include "gc.h"
 
+#define STK(i)   (S->stack[i])
+#define STKGC(i) (S->stack[i].value.gc)
+
 typedef struct sly_env_t sly_env_t;
 typedef struct sly_env_var_t sly_env_var_t;
 

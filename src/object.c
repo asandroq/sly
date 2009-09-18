@@ -186,6 +186,18 @@ sly_gcobject_t *sly_create_vector(sly_state_t *S, uint32_t size)
   return SLY_GCOBJECT(ret);
 }
 
+sly_gcobject_t *sly_create_dyn_bind(sly_state_t *S)
+{
+  sly_dyn_bind_t *ret;
+
+  ret = (sly_dyn_bind_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_DYN_BIND);
+  if(ret) {
+    SLY_GCOBJECT(ret)->type = SLY_TYPE_DYN_BIND;
+  }
+
+  return SLY_GCOBJECT(ret);
+}
+
 sly_gcobject_t *sly_create_iport(sly_state_t *S)
 {
   sly_iport_t* ret;

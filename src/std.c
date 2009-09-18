@@ -1,5 +1,5 @@
 /*
- * The Sly Scheme runtime
+ * The Sly Scheme standard procedures
  * Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy

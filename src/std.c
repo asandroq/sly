@@ -799,6 +799,11 @@ static int unbox(sly_state_t *S)
     sly_error(S, 1);
   }
 
+  if(!sly_boxp(S, 0)) {
+    sly_push_string(S, "cannot unbox non-box!");
+    sly_error(S, 1);
+  }
+
   sly_unbox(S);
 
   return 1;
@@ -810,6 +815,11 @@ static int set_box(sly_state_t *S)
 
   if(nargs != 2) {
     sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(!sly_boxp(S, 0)) {
+    sly_push_string(S, "cannot set non-box!");
     sly_error(S, 1);
   }
 

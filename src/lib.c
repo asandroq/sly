@@ -28,15 +28,6 @@
 #include "state.h"
 
 /*
- * pushes a new dynamic binding on the stack
- * using the tag and value given
- */
-static int dynamic_bind(sly_state_t* S)
-{
-  return 0;
-}
-
-/*
  * search for a dynamic binding with the given tag
  * on the stack, and pushes the associanted value or
  * a default one if the binding was not found
@@ -88,6 +79,42 @@ static int dynamic_store(sly_state_t* S)
   return 1;
 }
 
+/*
+ * creates an input port that is the
+ * system's standard input
+ */
+static int open_stdin_port(sly_state_t* S)
+{
+  STKGC(S->sp) = sly_io_create_stdin(S);
+  STK(S->sp++).type = SLY_TYPE_INPUT_PORT;
+
+  return 1;
+}
+
+/*
+ * creates an input port that is the
+ * system's standard output
+ */
+static int open_stdout_port(sly_state_t* S)
+{
+  STKGC(S->sp) = sly_io_create_stdout(S);
+  STK(S->sp++).type = SLY_TYPE_OUTPUT_PORT;
+
+  return 1;
+}
+
+static int open_stderr_port(sly_state_t* S)
+{
+  STKGC(S->sp) = sly_io_create_stderr(S);
+  STK(S->sp++).type = SLY_TYPE_OUTPUT_PORT;
+
+  return 1;
+}
+
+/*
+ * parses input into tokens to be used
+ * by the 'read' procedure'
+ */
 static int read_token(sly_state_t* S)
 {
   int nargs = sly_get_top(S);
@@ -106,9 +133,11 @@ static int read_token(sly_state_t* S)
 }
 
 static sly_reg_t lib_regs[] = {
-  {"##dynamic-bind", dynamic_bind},
   {"##dynamic-lookup", dynamic_lookup},
   {"##dynamic-store", dynamic_store},
+  {"##open-standard-input", open_stdin_port},
+  {"##open-standard-output", open_stdout_port},
+  {"##open-standard-error", open_stderr_port},
   {"##read-token", read_token},
   {NULL, NULL}
 };

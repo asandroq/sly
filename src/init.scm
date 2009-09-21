@@ -295,11 +295,24 @@
   (let* ((converter (if (null? conv)
                         (lambda (x) x)
                         (car conv)))
-         (global-cell (cons (converter init) '())))
+         (global-box (box (converter init))))
     (letrec ((parameter
               (lambda new-val
                 (if (null? new-val)
-                    (##dynamic-lookup parameter global-cell)
-                    (##dynamic-store parameter (car new-val) global-cell)))))
+                    (##dynamic-lookup parameter (unbox global-box))
+                    (let ((value (car new-val)))
+                      (if (not (##dynamic-store parameter value))
+                          (set-box! global-box value)))))))
       parameter)))
+
+;; standard parameters
+
+(define current-input-port
+  (make-parameter (##open-standard-input)))
+
+(define current-output-port
+  (make-parameter (##open-standard-output)))
+
+(define current-error-port
+  (make-parameter (##open-standard-error)))
 

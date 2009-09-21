@@ -84,6 +84,7 @@ int sly_get_top(sly_state_t* S);
 void sly_pop(sly_state_t* S, uint32_t num);
 
 /* type predicates */
+int sly_boxp(sly_state_t* S, int idx);
 int sly_charp(sly_state_t* S, int idx);
 int sly_integerp(sly_state_t* S, int idx);
 int sly_numberp(sly_state_t* S, int idx);
@@ -137,6 +138,11 @@ void sly_remainder(sly_state_t* S, int idx1, int idx2);
 
 /* number I/O */
 void sly_number_to_string(sly_state_t* S, int idx);
+
+/* boxes */
+void sly_box(sly_state_t* S);
+void sly_unbox(sly_state_t* S);
+void sly_set_box(sly_state_t* S, int idx);
 
 /* lists */
 void sly_cons(sly_state_t* S, int idx1, int idx2);

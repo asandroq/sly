@@ -592,48 +592,6 @@ static int output_portp(sly_state_t* S)
   return 1;
 }
 
-static int current_input_port(sly_state_t* S)
-{
-  int nargs = sly_get_top(S);
-
-  if(nargs != 0) {
-    sly_push_string(S, "wrong number of arguments");
-    sly_error(S, 1);
-  }
-
-  sly_push_current_input_port(S);
-
-  return 1;
-}
-
-static int current_output_port(sly_state_t* S)
-{
-  int nargs = sly_get_top(S);
-
-  if(nargs != 0) {
-    sly_push_string(S, "wrong number of arguments");
-    sly_error(S, 1);
-  }
-
-  sly_push_current_output_port(S);
-
-  return 1;
-}
-
-static int current_error_port(sly_state_t* S)
-{
-  int nargs = sly_get_top(S);
-
-  if(nargs != 0) {
-    sly_push_string(S, "wrong number of arguments");
-    sly_error(S, 1);
-  }
-
-  sly_push_current_error_port(S);
-
-  return 1;
-}
-
 static int open_input_file(sly_state_t* S)
 {
   int nargs = sly_get_top(S);
@@ -796,6 +754,74 @@ static int write_char(sly_state_t* S)
   return 0;
 }
 
+/*
+ * boxes
+ */
+
+static int box(sly_state_t *S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  sly_box(S);
+
+  return 1;
+}
+
+static int boxp(sly_state_t *S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(sly_boxp(S, 0)) {
+    sly_push_boolean(S, 1);
+  } else {
+    sly_push_boolean(S, 0);
+  }
+
+  return 1;
+}
+
+static int unbox(sly_state_t *S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  sly_unbox(S);
+
+  return 1;
+}
+
+static int set_box(sly_state_t *S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 2) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  sly_set_box(S, 0);
+
+  return 1;
+}
+
+/*
+ * error handling
+ */
+
 static int error(sly_state_t* S)
 {
   return sly_error(S, sly_get_top(S));
@@ -831,9 +857,6 @@ static sly_reg_t std_regs[] = {
   {"eof-object?", eof_objectp},
   {"input-port?", input_portp},
   {"output-port?", output_portp},
-  {"current-input-port", current_input_port},
-  {"current-output-port", current_output_port},
-  {"current-error-port", current_error_port},
   {"open-input-file", open_input_file},
   {"open-output-file", open_output_file},
   {"close-input-port", close_input_port},
@@ -842,6 +865,10 @@ static sly_reg_t std_regs[] = {
   {"display", display},
   {"newline", newline},
   {"write-char", write_char},
+  {"box", box},
+  {"box?", boxp},
+  {"unbox", unbox},
+  {"set-box!", set_box},
   {"error", error},
   {NULL, NULL}
 };

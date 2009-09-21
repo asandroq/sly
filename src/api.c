@@ -118,6 +118,11 @@ static int check_type(sly_state_t* S, int idx, int type)
   return S->stack[idx].type == type;
 }
 
+int sly_boxp(sly_state_t* S, int idx)
+{
+  return check_type(S, idx, SLY_TYPE_BOX);
+}
+
 int sly_charp(sly_state_t* S, int idx)
 {
   return check_type(S, idx, SLY_TYPE_CHAR);
@@ -592,6 +597,44 @@ void sly_number_to_string(sly_state_t* S, int idx)
 
   S->stack[S->sp].type = SLY_TYPE_STRING;
   S->stack[S->sp++].value.gc = str;
+}
+
+void sly_box(sly_state_t* S)
+{
+  sly_gcobject_t *box;
+
+  box = sly_create_box(S);
+  SLY_BOX(box)->value = STK(S->sp-1);
+
+  /* replace top of stack with box */
+  STK(S->sp-1).type = SLY_TYPE_BOX;
+  STKGC(S->sp-1) = box;
+}
+
+void sly_unbox(sly_state_t* S)
+{
+  sly_object_t obj;
+
+#ifdef SLY_DEBUG_API
+  assert(STK(S->sp-1).type == SLY_TYPE_BOX);
+#endif
+
+  obj = SLY_BOX(STKGC(S->sp-1))->value;
+
+  /* replace top of stack with box contents */
+  STK(S->sp-1) = obj;
+}
+
+void sly_set_box(sly_state_t* S, int idx)
+{
+  idx = calc_index(S, idx);
+
+#ifdef SLY_DEBUG_API
+  assert(STK(idx).type == SLY_TYPE_BOX);
+#endif
+
+  SLY_BOX(STKGC(idx))->value = STK(S->sp-1);
+  --S->sp;
 }
 
 void sly_cons(sly_state_t* S, int idx1, int idx2)

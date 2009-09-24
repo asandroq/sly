@@ -243,7 +243,7 @@ void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, uint32_t nr_vars)
   S->stack[S->sp++].value.gc = cl;
 }
 
-void sly_push_string(sly_state_t* S, const char* str)
+void sly_push_string(sly_state_t* S, const sly_cp1_t* str)
 {
   uint32_t i, len;
   sly_gcobject_t *obj;
@@ -269,19 +269,18 @@ void sly_push_vector(sly_state_t* S, uint32_t size)
   S->stack[S->sp++] = obj;
 }
 
-void sly_get_global(sly_state_t* S)
+void sly_get_global(sly_state_t* S, const char *name)
 {
-  int glob, idx = calc_index(S, -1);
+  int glob;
+  sly_object_t obj;
 
-#ifdef SLY_DEBUG_API
-  assert(S->stack[idx].type == SLY_TYPE_SYMBOL);
-#endif
+  obj = sly_create_symbol_from_ascii(S, name);
 
-  glob = sly_st_get_global_index(S, S->stack[idx].value.symbol);
+  glob = sly_st_get_global_index(S, obj.value.symbol);
   if(glob < 0) {
-    S->stack[idx].type = SLY_TYPE_NIL;
+    STK(S->sp++).type = SLY_TYPE_NIL;
   } else {
-    S->stack[idx] = S->global_env.vars[glob].value;
+    STK(S->sp++) = S->global_env.vars[glob].value;
   }
 }
 
@@ -343,7 +342,7 @@ uint8_t* sly_to_string_utf8(sly_state_t* S, int idx)
   return sly_io_to_utf8(S, SLY_STRING(S->stack[idx].value.gc));
 }
 
-sly_ucs2_t* sly_to_string_utf16(sly_state_t* S, int idx)
+sly_cp2_t* sly_to_string_utf16(sly_state_t* S, int idx)
 {
   idx = calc_index(S, idx);
 
@@ -983,17 +982,9 @@ void sly_close_output_port(sly_state_t* S)
 void sly_set_global(sly_state_t* S, const char* name)
 {
   int idx;
-  uint32_t i, len;
   sly_object_t sym;
-  sly_gcobject_t *str;
 
-  len = strlen(name);
-  str = sly_create_string(S, NULL, len);
-  for(i = 0; i < len; i++) {
-    SLY_STRING(str)->chars[i] = (sly_char_t)name[i];
-  }
-
-  sym = sly_create_symbol(S, SLY_STRING(str));
+  sym = sly_create_symbol_from_ascii(S, name);
 
   /* is the global already there? */
   idx = sly_st_get_global_index(S, sym.value.symbol);

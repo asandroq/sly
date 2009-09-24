@@ -35,10 +35,11 @@
 #define SLY_CHAR_ENC_UTF16        2
 #define SLY_CHAR_ENC_LATIN1       3
 
-/* character types */
-typedef uint16_t sly_ucs2_t;
-typedef uint32_t sly_ucs4_t;
-typedef sly_ucs4_t sly_char_t;
+/* code point types */
+typedef uint8_t sly_cp1_t;
+typedef uint16_t sly_cp2_t;
+typedef uint32_t sly_cp4_t;
+typedef sly_cp4_t sly_char_t;
 
 /* type of small integers */
 typedef int32_t sly_fixnum_t;
@@ -98,13 +99,13 @@ int sly_input_portp(sly_state_t* S, int idx);
 int sly_output_portp(sly_state_t* S, int idx);
 
 /* push values onto the stack */
-void sly_get_global(sly_state_t* S);
+void sly_get_global(sly_state_t* S, const char *name);
 void sly_push_value(sly_state_t* S, int idx);
 void sly_push_boolean(sly_state_t* S, int bool);
 void sly_push_char(sly_state_t* S, sly_char_t chr);
 void sly_push_integer(sly_state_t* S, sly_fixnum_t num);
 void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, uint32_t nr_vars);
-void sly_push_string(sly_state_t* S, const char* str);
+void sly_push_string(sly_state_t* S, const sly_cp1_t* str);
 void sly_push_vector(sly_state_t* S, uint32_t size);
 
 void sly_push_current_input_port(sly_state_t *S);
@@ -115,9 +116,9 @@ void sly_push_current_error_port(sly_state_t *S);
 sly_fixnum_t sly_to_integer(sly_state_t* S, int idx);
 
 sly_char_t* sly_to_string(sly_state_t* S, int idx);
-uint8_t* sly_to_string_latin1(sly_state_t* S, int idx);
-uint8_t* sly_to_string_utf8(sly_state_t* S, int idx);
-sly_ucs2_t* sly_to_string_utf16(sly_state_t* S, int idx);
+sly_cp1_t* sly_to_string_latin1(sly_state_t* S, int idx);
+sly_cp1_t* sly_to_string_utf8(sly_state_t* S, int idx);
+sly_cp2_t* sly_to_string_utf16(sly_state_t* S, int idx);
 
 /* compare values on the stack */
 int sly_less_than(sly_state_t* S, int idx1, int idx2);

@@ -1411,9 +1411,7 @@ int sly_load_file(sly_state_t* S, const char *fname)
   }
 #endif
 
-  sly_push_string(S, "compile-from-port");
-  sly_string_to_symbol(S, -1);
-  sly_get_global(S);
+  sly_get_global(S, "compile-from-port");
   sly_push_string(S, fname);
   sly_open_input_file(S);
   sly_call(S, 1);

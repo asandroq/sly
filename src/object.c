@@ -262,3 +262,10 @@ sly_object_t sly_create_symbol(sly_state_t* S, sly_string_t *str)
   return obj;
 }
 
+sly_object_t sly_create_symbol_from_ascii(sly_state_t* S, const char* name)
+{
+  sly_gcobject_t *str;
+
+  str = sly_create_string_from_ascii(S, name);
+  return sly_create_symbol(S, SLY_STRING(str));
+}

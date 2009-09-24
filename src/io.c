@@ -450,7 +450,7 @@ static int fp_read_char_utf16(sly_iport_t *self, sly_char_t *c)
 {
   FILE* f;
   uint8_t *b1, *b2;
-  sly_ucs2_t c1, c2;
+  sly_cp2_t c1, c2;
 
   b1 = (uint8_t*)&c1;
   b2 = (uint8_t*)&c2;
@@ -1223,9 +1223,9 @@ uint8_t *sly_io_to_latin1(sly_state_t *S, sly_string_t *str)
   return ret;
 }
 
-uint8_t *sly_io_to_utf8(sly_state_t *S, sly_string_t *str)
+sly_cp1_t *sly_io_to_utf8(sly_state_t *S, sly_string_t *str)
 {
-  uint8_t *ret;
+  sly_cp1_t *ret;
 
   ret = from_string(str, SLY_CHAR_ENC_UTF8);
   if(!ret) {
@@ -1236,11 +1236,11 @@ uint8_t *sly_io_to_utf8(sly_state_t *S, sly_string_t *str)
   return ret;
 }
 
-sly_ucs2_t *sly_io_to_utf16(sly_state_t *S, sly_string_t *str)
+sly_cp2_t *sly_io_to_utf16(sly_state_t *S, sly_string_t *str)
 {
-  sly_ucs2_t *ret;
+  sly_cp2_t *ret;
 
-  ret = (sly_ucs2_t*)from_string(str, SLY_CHAR_ENC_UTF16);
+  ret = (sly_cp2_t*)from_string(str, SLY_CHAR_ENC_UTF16);
   if(!ret) {
     sly_push_string(S, "error converting string to UTF-16");
     sly_error(S, 1);

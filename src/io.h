@@ -47,9 +47,9 @@ int sly_sbuffer_equalp(sly_sbuffer_t* buffer, const sly_char_t* str);
  * strings
  */
 
-uint8_t *sly_io_to_latin1(sly_state_t *S, sly_string_t *str);
-uint8_t *sly_io_to_utf8(sly_state_t *S, sly_string_t *str);
-sly_ucs2_t *sly_io_to_utf16(sly_state_t *S, sly_string_t *str);
+sly_cp1_t *sly_io_to_latin1(sly_state_t *S, sly_string_t *str);
+sly_cp1_t *sly_io_to_utf8(sly_state_t *S, sly_string_t *str);
+sly_cp2_t *sly_io_to_utf16(sly_state_t *S, sly_string_t *str);
 
 /*
  * ports

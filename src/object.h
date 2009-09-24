@@ -247,5 +247,6 @@ sly_gcobject_t *sly_create_iport(sly_state_t *S);
 sly_gcobject_t *sly_create_oport(sly_state_t *S);
 
 sly_object_t sly_create_symbol(sly_state_t* S, sly_string_t* str);
+sly_object_t sly_create_symbol_from_ascii(sly_state_t* S, const char* name);
 
 #endif

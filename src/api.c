@@ -818,9 +818,13 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
 
 void sly_eval(sly_state_t *S, int idx)
 {
+  int proc;
   sly_gcobject_t *pair;
 
   idx = calc_index(S, idx);
+
+  sly_get_global(S, "compile-toplevel");
+  proc = S->sp - 1;
 
   /* pushing argument */
   pair = sly_create_pair(S);
@@ -831,10 +835,11 @@ void sly_eval(sly_state_t *S, int idx)
   S->stack[S->sp++].value.gc = pair;
 
   /* the compiler is in Scheme land */
-  sly_vm_call(S, S->global_env.vars[S->proc_compile].value, 1);
+  sly_vm_call(S, STK(proc), 1);
   sly_vm_load(S, S->accum);
 
-  S->stack[S->sp++] = S->accum;
+  /* put result over procedure */
+  S->stack[S->sp-1] = S->accum;
 }
 
 void sly_call(sly_state_t *S, uint32_t n_args)
@@ -882,19 +887,25 @@ void sly_newline(sly_state_t* S, int idx)
 
 void sly_read(sly_state_t *S, int idx)
 {
+  int proc;
+
   idx = calc_index(S, idx);
 
 #ifdef SLY_DEBUG_API
   assert(S->stack[idx].type == SLY_TYPE_INPUT_PORT);
 #endif
 
+  sly_get_global(S, "read");
+  proc = S->sp - 1;
+  
   /* pushing port */
   S->stack[S->sp++] = S->stack[idx];
 
   /* the reader is in Scheme land */
-  sly_vm_call(S, S->global_env.vars[S->proc_read].value, 1);
+  sly_vm_call(S, STK(proc), 1);
 
-  S->stack[S->sp++] = S->accum;
+  /* put result over procedure */
+  S->stack[S->sp-1] = S->accum;
 }
 
 void sly_write(sly_state_t* S, int idx1, int idx2)

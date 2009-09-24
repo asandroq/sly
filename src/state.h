@@ -69,12 +69,6 @@ struct sly_state_t {
   /* the program counter */
   uint32_t pc;
 
-  /* global index of the 'compile-toplevel' procedure */
-  uint32_t proc_compile;
-
-  /* global index of the 'read' procedure */
-  uint32_t proc_read;
-
   /* accumulator register */
   sly_object_t accum;
 

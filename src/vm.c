@@ -903,21 +903,6 @@ static void sly_destroy_module(sly_module_t *M)
   free(M->globals);
 }
 
-static int is_read(sly_string_t *str)
-{
-  static sly_char_t test_str[] = {'r', 'e', 'a', 'd'};
-
-  return str->size == 4 && memcmp(str->chars, test_str, 4 * sizeof(sly_char_t)) == 0;
-}
-
-static int is_compile_toplevel(sly_string_t *str)
-{
-  static sly_char_t test_str[] = {'c', 'o', 'm', 'p', 'i', 'l', 'e', '-',
-                                  't', 'o', 'p', 'l', 'e', 'v', 'e', 'l'};
-
-  return str->size == 16 && memcmp(str->chars, test_str, 16 * sizeof(sly_char_t)) == 0;
-}
-
 static uint32_t sly_link_module(sly_state_t* S, sly_module_t *mod)
 {
   sly_env_t env;
@@ -950,13 +935,6 @@ static uint32_t sly_link_module(sly_state_t* S, sly_module_t *mod)
     }
 
     env.vars[i].value.value.fixnum = dw;
-
-    /* caching procedures for the REPL */
-    if(is_compile_toplevel(mod->globals[i])) {
-      S->proc_compile = dw;
-    } else if(is_read(mod->globals[i])) {
-      S->proc_read = dw;
-    }
   }
 
   /* enlarging global environment */

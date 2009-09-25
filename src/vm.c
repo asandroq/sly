@@ -196,37 +196,38 @@ void sly_vm_dump(sly_state_t* S)
 {
   uint32_t i;
   char buf[64];
-  sly_object_t *port;
+  sly_object_t port;
 
-  port = &S->stack[2];
+  port.type = SLY_TYPE_INPUT_PORT;
+  port.value.gc = sly_io_create_stderr(S);
 
-  sly_io_write_c_string(S, "Instruction: ", port);
-  dump_instr(S, S->code[S->pc], port);
-  sly_io_newline(S, port);
+  sly_io_write_c_string(S, "Instruction: ", &port);
+  dump_instr(S, S->code[S->pc], &port);
+  sly_io_newline(S, &port);
 
-  sly_io_write_c_string(S, "Registers:", port);
-  sly_io_newline(S, port);
-  sly_io_write_c_string(S, "\taccum: ", port);
-  sly_io_write(S, &S->accum, port);
-  sly_io_newline(S, port);
-  sly_io_write_c_string(S, "\tclosure: ", port);
-  sly_io_write(S, &S->proc, port);
-  sly_io_newline(S, port);
+  sly_io_write_c_string(S, "Registers:", &port);
+  sly_io_newline(S, &port);
+  sly_io_write_c_string(S, "\taccum: ", &port);
+  sly_io_write(S, &S->accum, &port);
+  sly_io_newline(S, &port);
+  sly_io_write_c_string(S, "\tclosure: ", &port);
+  sly_io_write(S, &S->proc, &port);
+  sly_io_newline(S, &port);
   snprintf(buf, 64, "\tPC: %d", S->pc);
-  sly_io_write_c_string(S, buf, port);
-  sly_io_newline(S, port);
+  sly_io_write_c_string(S, buf, &port);
+  sly_io_newline(S, &port);
   snprintf(buf, 64, "\tFP: %d", S->fp);
-  sly_io_write_c_string(S, buf, port);
-  sly_io_newline(S, port);
+  sly_io_write_c_string(S, buf, &port);
+  sly_io_newline(S, &port);
 
-  sly_io_write_c_string(S, "Stack:", port);
+  sly_io_write_c_string(S, "Stack:", &port);
   for(i = 0; i < S->sp; i++) {
-    sly_io_write_c_string(S, " ", port);
-    sly_io_write(S, S->stack + i, port);
+    sly_io_write_c_string(S, " ", &port);
+    sly_io_write(S, S->stack + i, &port);
   }
 
-  sly_io_newline(S, port);
-  sly_io_newline(S, port);
+  sly_io_newline(S, &port);
+  sly_io_newline(S, &port);
 
 #if 0
   printf("Globals:\n");
@@ -235,11 +236,11 @@ void sly_vm_dump(sly_state_t* S)
     printf(" [ %d , ", i);
     fflush(NULL);
     if(var.symbol) {
-      sly_io_write_symbol(S, var.symbol, port);
+      sly_io_write_symbol(S, var.symbol, &port);
     }
     printf(" , ");
     fflush(NULL);
-    sly_io_write(S, &var.value, port);
+    sly_io_write(S, &var.value, &port);
     printf("]\n");
     fflush(NULL);
   }

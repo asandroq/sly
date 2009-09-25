@@ -136,7 +136,7 @@ static sly_state_t* sly_create_state(void)
    * stack
    */
 
-  S->sp = 0;
+  S->sp = 1;
   S->stack = (sly_object_t*)malloc(sizeof(sly_object_t) * 1024);
   if(S->stack) {
     S->stack_size = 1024;
@@ -146,22 +146,8 @@ static sly_state_t* sly_create_state(void)
     return NULL;
   }
 
-  /*
-   * pushing on the stack the fundamental ports
-   * this may seem a bootstrapping problem
-   * but the store is already set, only care
-   * with the stack pointer is needed
-   */
-  S->sp = 0;
-  S->stack[0].type = SLY_TYPE_INPUT_PORT;
-  S->stack[0].value.gc = sly_io_create_stdin(S);
-  S->sp = 1;
-  S->stack[1].type = SLY_TYPE_OUTPUT_PORT;
-  S->stack[1].value.gc = sly_io_create_stdout(S);
-  S->sp = 2;
-  S->stack[2].type = SLY_TYPE_OUTPUT_PORT;
-  S->stack[2].value.gc = sly_io_create_stderr(S);
-  S->sp = 3;
+  /* sentinel */
+  S->stack[0].type = SLY_TYPE_UNDEF;
 
   /*
    * symbol table

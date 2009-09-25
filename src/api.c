@@ -858,20 +858,23 @@ void sly_call(sly_state_t *S, uint32_t n_args)
 
 void sly_push_current_input_port(sly_state_t *S)
 {
-  /* for now, I'll grab the port at a fixed address */
-  S->stack[S->sp++] = S->stack[0];
+  sly_get_global(S, "current-input-port");
+  sly_vm_call(S, STK(S->sp-1), 0);
+  STK(S->sp-1) = S->accum;
 }
 
 void sly_push_current_output_port(sly_state_t *S)
 {
-  /* for now, I'll grab the port at a fixed address */
-  S->stack[S->sp++] = S->stack[1];
+  sly_get_global(S, "current-output-port");
+  sly_vm_call(S, STK(S->sp-1), 0);
+  STK(S->sp-1) = S->accum;
 }
 
 void sly_push_current_error_port(sly_state_t *S)
 {
-  /* for now, I'll grab the port at a fixed address */
-  S->stack[S->sp++] = S->stack[2];
+  sly_get_global(S, "current-error-port");
+  sly_vm_call(S, STK(S->sp-1), 0);
+  STK(S->sp-1) = S->accum;
 }
 
 void sly_newline(sly_state_t* S, int idx)

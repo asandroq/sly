@@ -161,7 +161,6 @@ static void collect_garbage(sly_store_t* S)
    * using Cheney's algorithm
    */
   void *scan;
-  sly_root_t *root;
   sly_object_t *obj;
   uint32_t old_size;
 
@@ -175,11 +174,6 @@ static void collect_garbage(sly_store_t* S)
   /* copying roots */
   while((obj = S->roots_cb(S->roots_cb_data))) {
     copy_object(S, obj);
-  }
-
-  /* extra roots */
-  for(root = S->roots; root; root = root->next) {
-    copy_object(S, &root->obj);
   }
 
   /* now scan to-space */
@@ -283,7 +277,6 @@ int sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud)
   S->capacity = SLY_INITIAL_SPACE_SIZE;
   S->to_space = S->from_space + (SLY_INITIAL_SPACE_SIZE);
 
-  S->roots = NULL;
   S->fobjs = NULL;
 
   S->roots_cb = cb;
@@ -294,16 +287,7 @@ int sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud)
 
 void sly_gc_finish(sly_store_t *S)
 {
-  sly_root_t *root;
   sly_fobj_t *fobj;
-
-  for(root = S->roots; root;) {
-    sly_root_t *t;
-
-    t = root->next;
-    free(root);
-    root = t;
-  }
 
   for(fobj = S->fobjs; fobj;) {
     sly_fobj_t *t;
@@ -350,40 +334,6 @@ void* sly_gc_alloc(sly_store_t *S, uint32_t size)
   S->size += size;
 
   return ret;
-}
-
-sly_object_t* sly_gc_new_root(sly_store_t *S)
-{
-  sly_root_t *link;
-
-  link = (sly_root_t*)malloc(sizeof(sly_root_t));
-  if(!link) {
-    return NULL;
-  }
-
-  link->obj.type = SLY_TYPE_UNDEF;
-  link->next = S->roots;
-  S->roots = link;
-
-  return &link->obj;
-}
-
-void sly_gc_release_root(sly_store_t *S, sly_object_t *obj)
-{
-  sly_root_t *prev, *root;
-
-  for(prev = NULL, root = S->roots; root; root = root->next) {
-    if(obj == &root->obj) {
-      if(prev) {
-        prev->next = root->next;
-      } else {
-        S->roots = root->next;
-      }
-      free(root);
-      break;
-    }
-    prev = root;
-  }
 }
 
 void sly_gc_add_port(sly_store_t *S, sly_port_t *port)

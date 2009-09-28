@@ -117,7 +117,7 @@ static sly_opcode_t global_opcodes[] = {
   {SLY_OP_LOAD,                   "LOAD",               NULL},
   {SLY_OP_MAKE_CLOSURE,           "MAKE-CLOSURE",       NULL},
   {SLY_OP_CALL,                   "CALL",               NULL},
-  {SLY_OP_JMP_IF,                 "JMP-IF",             NULL},
+  {SLY_OP_JMP_IF_NOT,             "JMP-IF-NOT",         NULL},
   {SLY_OP_JMP,                    "JMP",                NULL},
   {SLY_OP_LOAD_FREE,              "LOAD-FREE",          NULL},
   {SLY_OP_ASSIGN,                 "ASSIGN",             NULL},
@@ -564,8 +564,8 @@ static int sly_vm_run(sly_state_t* S)
       return_from_call(S);
       break;
 
-    case SLY_OP_JMP_IF:
-      if(!(S->accum.type == SLY_TYPE_BOOL && S->accum.value.bool == 0)) {
+    case SLY_OP_JMP_IF_NOT:
+      if(S->accum.type == SLY_TYPE_BOOL && S->accum.value.bool == 0) {
 	S->pc += EXTRACT_ARG(instr);
       }
       break;

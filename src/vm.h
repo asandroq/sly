@@ -81,7 +81,7 @@
 #define SLY_OP_LOAD_CHAR             121
 #define SLY_OP_LOAD                  122
 #define SLY_OP_MAKE_CLOSURE          123
-#define SLY_OP_JMP_IF                124
+#define SLY_OP_JMP_IF_NOT            124
 #define SLY_OP_JMP                   125
 #define SLY_OP_LOAD_FREE             126
 #define SLY_OP_ASSIGN                127

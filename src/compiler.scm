@@ -435,12 +435,13 @@
              (meaning-assignment (cadr e) (caddr e) r)
              (error "ill-formed 'set!'" e)))
         (else
-         (meaning-application (car e) (cdr e) r tail?)))
+         (let ((op (car e)))
+           (if (lambda-exp? op)
+               (meaning-closed-application (cadr op) (cdr e) (caddr op) r tail?)
+               (meaning-application op (cdr e) r tail?)))))
       (if (symbol? e)
           (meaning-reference e r)
           (meaning-quote e))))
-
-;; updates lexical address to 
 
 (define (meaning-reference n r)
   (vector 'refer
@@ -486,15 +487,15 @@
   (define (parse n* regular)
     (cond
      ((null? n*)
-      (meaning-internal (reverse regular) #f e r))
+      (meaning-internal (reverse regular) #f))
      ((symbol? n*)
-      (meaning-internal (reverse regular) n* e r))
+      (meaning-internal (reverse regular) n*))
      ((pair? n*)
       (parse (cdr n*) (cons (car n*) regular)))
      (else
       (error "ill-formed 'lambda' arguments" n*))))
 
-  (define (meaning-internal n* n e r)
+  (define (meaning-internal n* n)
     (let* ((an* (map (lambda (n)
                        (cons n (rename-var n)))
                      (if n
@@ -548,6 +549,42 @@
               m
               m*))))
 
+(define (meaning-closed-application n* e* e r tail?)
+
+  (define (parse n* regular)
+    (cond
+     ((null? n*)
+      (meaning-internal (reverse regular) #f))
+     ((symbol? n*)
+      (meaning-internal (reverse regular) n*))
+     ((pair? n*)
+      (parse (cdr n*) (cons (car n*) regular)))
+     (else
+      (error "ill-formed 'lambda' arguments" n*))))
+
+  (define (meaning-internal n* n)
+    (let* ((an* (map (lambda (n)
+                       (cons n (rename-var n)))
+                     (if n
+                         (append n* (list n))
+                         n*)))
+           (r2 (cons an* r))
+           (m (meaning e r2 tail?))
+           (m* (meaning-args e* r))
+           (locals (map cdr an*))
+           (sets (collect-sets m locals))
+           (m2 (flag-boxes m sets)))
+      (vector 'closed-apply
+              (append (if tail? '(tail) '())
+                      (list (cons (if n '>= '=) (length n*)))
+                      '())
+              locals
+              sets
+              m*
+              m2)))
+
+  (parse n* '()))
+
 (define (meaning-args e* r)
   (if (null? e*)
       (vector 'arg-null)
@@ -583,6 +620,7 @@
       (set! c (+ c 1))
       (string->symbol
        (string-append (symbol->string n)
+                      "v"
                       (number->string c))))))
 
 ;; tests is an expression is a valid lambda expression
@@ -636,6 +674,10 @@
     ((apply)
      (set-union (collect-free (vector-ref m 2) bound)
                 (collect-free (vector-ref m 3) bound)))
+    ((closed-apply)
+     (let ((new-bound (append (vector-ref m 2) bound)))
+       (set-union (collect-free (vector-ref m 4) new-bound)
+                  (collect-free (vector-ref m 5) new-bound))))
     ((arg-list)
      (set-union (collect-free (vector-ref m 1) bound)
                 (collect-free (vector-ref m 2) bound)))
@@ -665,6 +707,9 @@
     ((apply)
      (set-union (collect-sets (vector-ref m 2) bound)
                 (collect-sets (vector-ref m 3) bound)))
+    ((closed-apply)
+     (set-union (collect-sets (vector-ref m 4) bound)
+                (collect-sets (vector-ref m 5) bound)))
     ((arg-list)
      (set-union (collect-sets (vector-ref m 1) bound)
                 (collect-sets (vector-ref m 2) bound)))
@@ -685,18 +730,8 @@
                   (cons 'box flags)
                   flags))))
 
-  (define (lambda-handler visitor m sets)
-    (vector 'lambda
-            (vector-ref m 1)
-            (vector-ref m 2)
-            (vector-ref m 3)
-            (map visitor (vector-ref m 4))
-            (visitor (vector-ref m 5))))
-
   (visit (list (cons 'refer
-                     refer-handler)
-               (cons 'lambda
-                     lambda-handler))
+                     refer-handler))
          m
          sets))
 
@@ -1063,6 +1098,13 @@
                      (vector-ref m 1)
                      (visitor (vector-ref m 2))
                      (visitor (vector-ref m 3))))
+            ((closed-apply)
+             (vector 'closed-apply
+                     (vector-ref m 1)
+                     (vector-ref m 2)
+                     (vector-ref m 3)
+                     (visitor (vector-ref m 4))
+                     (visitor (vector-ref m 5))))
             ((arg-list)
              (vector 'arg-list
                      (visitor (vector-ref m 1))

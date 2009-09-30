@@ -837,7 +837,7 @@
             (loop (+ i 1) (cdr consts)))))
 
     ;; generate rest of code
-    (generate-code cs c)))
+    (generate-code cs c 0)))
 
 (define (collect-constants! cs m)
 
@@ -852,7 +852,7 @@
                      const-handler))
          m))
 
-(define (generate-code cs m)
+(define (generate-code cs m si)
   (case (vector-ref m 0)
     ((undef)
      (generate-undef cs))
@@ -861,21 +861,23 @@
     ((immed)
      (generate-immediate cs m))
     ((refer)
-     (generate-reference cs m #t))
+     (generate-reference cs m si #t))
     ((sequence)
-     (generate-sequence cs m))
+     (generate-sequence cs m si))
     ((call/cc)
-     (generate-call/cc cs m))
+     (generate-call/cc cs m si))
     ((define)
-     (generate-define cs m))
+     (generate-define cs m si))
     ((alternative)
-     (generate-alternative cs m))
+     (generate-alternative cs m si))
     ((lambda)
-     (generate-lambda cs m))
+     (generate-lambda cs m si))
     ((assign)
-     (generate-assignment cs m))
+     (generate-assignment cs m si))
     ((apply)
-     (generate-apply cs m))
+     (generate-apply cs m si))
+    ((closed-apply)
+     (generate-closed-apply cs m si))
     (else
      (error "unknown AST node" m))))
 
@@ -888,7 +890,7 @@
 (define (generate-immediate cs m)
   (emit-constant cs (vector-ref m 1)))
 
-(define (generate-reference cs m unbox?)
+(define (generate-reference cs m si unbox?)
   (let ((address (vector-ref m 3)))
     (if address
         (let ((kind (car address))
@@ -906,6 +908,8 @@
                 (instr cs 'LOAD3))
                (else
                 (instr1 cs 'LOAD pos))))
+            ((local)
+             (instr1 cs 'LOAD (+ si pos)))
             ((free)
              (instr1 cs 'LOAD-FREE pos))
             (else
@@ -919,11 +923,11 @@
               (instr1 cs 'GLOBAL-REF index)
               (instr1 cs 'CHECKED-GLOBAL-REF index))))))
 
-(define (generate-sequence cs m)
-  (generate-code cs (vector-ref m 1))
-  (generate-code cs (vector-ref m 2)))
+(define (generate-sequence cs m si)
+  (generate-code cs (vector-ref m 1) si)
+  (generate-code cs (vector-ref m 2) si))
 
-(define (generate-call/cc cs m)
+(define (generate-call/cc cs m si)
   
   ;; creates a closure that will restore a saved
   ;; continuation if called - the continuation
@@ -949,20 +953,20 @@
     (instr cs 'PUSH)
     ;; calling closure given to call/cc with
     ;; continuation-restoring closure as sole argument
-    (generate-lambda cs (vector-ref m 1))
+    (generate-lambda cs (vector-ref m 1) si)
     (instr1 cs (if tail? 'TAIL-CALL 'CALL) 1)
     ;; back-patching return address
     (or tail? (patch-instr! cs i (code-size cs)))))
 
-(define (generate-alternative cs m)
+(define (generate-alternative cs m si)
   (let ((testc (vector-ref m 1))
         (thenc (vector-ref m 2))
         (elsec (vector-ref m 3)))
-    (generate-code cs testc)
+    (generate-code cs testc si)
     (let ((i (code-size cs)))
       ;; this will be back-patched later
       (instr1 cs 'JMP-IF-NOT 0)
-      (generate-code cs thenc)
+      (generate-code cs thenc si)
       (if (eqv? (vector-ref elsec 0) 'undef)
           (let ((j (code-size cs)))
             (patch-instr! cs i (- j i 1)))
@@ -971,11 +975,11 @@
             (instr1 cs 'JMP 0)
             (let ((k (code-size cs)))
               (patch-instr! cs i (- k i 1))
-              (generate-code cs elsec)
+              (generate-code cs elsec si)
               (let ((m (code-size cs)))
                 (patch-instr! cs j (- m j 1)))))))))
 
-(define (generate-lambda cs m)
+(define (generate-lambda cs m si)
   (let ((arity (vector-ref m 1))
         (bound (vector-ref m 2))
         (sets  (vector-ref m 3))
@@ -994,18 +998,18 @@
                  (instr1 cs 'ARITY>= (cdr arity))
                  (instr1 cs 'LISTIFY (cdr arity))))
               (make-boxes cs bound sets)
-              (generate-code cs (vector-ref m 5))
+              (generate-code cs (vector-ref m 5) 0)
               (instr cs 'RETURN)
               (let ((j (code-size cs)))
                 ;; back-patching jump over closure code
                 (patch-instr! cs i (- j i 1)))))
           (let ((ref (car f)))
-            (generate-reference cs ref #f)
+            (generate-reference cs ref si #f)
             (instr cs 'PUSH)
             (loop (cdr f)))))))
 
-(define (generate-assignment cs m)
-  (generate-code cs (vector-ref m 4))
+(define (generate-assignment cs m si)
+  (generate-code cs (vector-ref m 4) si)
   (let ((address (vector-ref m 3)))
     (if address
         (let ((kind (car address))
@@ -1013,6 +1017,8 @@
           (case kind
             ((bound)
              (instr1 cs 'ASSIGN pos))
+            ((local)
+             (instr1 cs 'ASSIGN (+ si pos)))
             ((free)
              (instr1 cs 'ASSIGN-FREE pos))
             (else
@@ -1023,12 +1029,12 @@
               (instr1 cs 'GLOBAL-SET index)
               (instr1 cs 'CHECKED-GLOBAL-SET index))))))
 
-(define (generate-apply cs m)
+(define (generate-apply cs m si)
   (if (memq 'prim (vector-ref m 1))
-      (generate-primitive-apply cs m)
-      (generate-common-apply cs m)))
+      (generate-primitive-apply cs m si)
+      (generate-common-apply cs m si)))
 
-(define (generate-primitive-apply cs m)
+(define (generate-primitive-apply cs m si)
   (let* ((ref (vector-ref m 2))
          (args (vector-ref m 3))
          (nargs (number-of-arguments args))
@@ -1042,38 +1048,47 @@
                 ((0)
                  (instr cs code))
                 ((1)
-                 (generate-code cs (vector-ref args 1))
+                 (generate-code cs (vector-ref args 1) si)
                  (instr cs code))
                 ((2)
-                 (generate-code cs (vector-ref args 1))
+                 (generate-code cs (vector-ref args 1) si)
                  (instr cs 'PUSH)
-                 (generate-code cs (vector-ref (vector-ref args 2) 1))
+                 (generate-code cs (vector-ref (vector-ref args 2) 1) si)
                  (instr cs code))
                 (else
                  (error "Primitive with unknown arity")))
               (error "Primitive called with wrong arity!" prim)))
         (error "Unknown primitive"))))
 
-(define (generate-common-apply cs m)
+(define (generate-common-apply cs m si)
   (let ((i (code-size cs))
         (tail? (memq 'tail (vector-ref m 1))))
     ;; this is the return address, will be back-patched later
     (or tail? (instr1 cs 'FRAME 0))
-    (let ((len (generate-push-arguments cs (vector-ref m 3))))
-      (generate-code cs (vector-ref m 2))
+    (let ((len (generate-push-arguments cs (vector-ref m 3) si)))
+      (generate-code cs (vector-ref m 2) si)
       (instr1 cs (if tail? 'TAIL-CALL 'CALL) len)
       ;; back-patching return address
       ;; this not a position-independent value
       (or tail? (patch-instr! cs i (code-size cs))))))
 
-(define (generate-push-arguments cs m)
+(define (generate-closed-apply cs m si)
+  (let ((tail? (memq 'tail (vector-ref m 1)))
+        (locals (vector-ref m 2))
+        (sets (vector-ref m 3))
+        (len (generate-push-arguments cs (vector-ref m 4) si)))
+    (make-boxes cs locals sets)
+    (generate-code cs (vector-ref m 5) si)
+    (or tail? (instr1 cs 'POP len))))
+
+(define (generate-push-arguments cs m si)
   (let loop ((len 0)
              (m m))
     (let ((kind (vector-ref m 0)))
       (if (eq? kind 'arg-null)
           len
           (let ((arg (vector-ref m 1)))
-            (generate-code cs arg)
+            (generate-code cs arg si)
             (instr cs 'PUSH)
             (loop (+ len 1) (vector-ref m 2)))))))
 

@@ -71,14 +71,6 @@
       (instr cs 'RETURN)
       cs)))
 
-;; compiles toplevel
-(define (meaning-toplevel e+)
-  (if (null? (cdr e+))
-      (meaning (car e+) '() #t)
-      (let ((m (meaning (car e+) '() #f))
-            (m+ (meaning-toplevel (cdr e+))))
-        (vector 'sequence m m+))))
-
 ;; already seen globals
 (define *defined-globals* '())
 
@@ -395,6 +387,12 @@
   (and (pair? e)
        (eq? (car e) 'define)))
 
+;; compiles toplevel
+(define (meaning-toplevel e+)
+  (let* ((m+ (meaning-sequence e+ '() #t))
+         (locals (collect-locals m+ 0)))
+    (calculate-addresses m+ '() '() locals)))
+
 ;;
 ;; transforms expressions into a syntax tree,
 ;; calculates lexical addresses, collect free
@@ -506,8 +504,9 @@
            (bound (map cdr an*))
            (free (collect-free m bound))
            (sets (collect-sets m bound))
+           (locals (collect-locals m 0))
            (m2 (flag-boxes m sets))
-           (m3 (calculate-addresses m2 bound free)))
+           (m3 (calculate-addresses m2 bound free locals)))
       (vector 'lambda
               (cons (if n '>= '=)
                     (length n*))
@@ -698,12 +697,13 @@
     ((lambda)
      (collect-sets (vector-ref m 5) bound))
     ((assign)
-     (let ((n (vector-ref m 1))
-           (an (vector-ref m 2)))
-       (if (and (not (eq? n an))
-                (memq an bound))
-           (list an)
-           '())))
+     (set-union (let ((n (vector-ref m 1))
+                      (an (vector-ref m 2)))
+                  (if (and (not (eq? n an))
+                           (memq an bound))
+                      (list an)
+                      '()))
+                (collect-sets (vector-ref m 4) bound)))
     ((apply)
      (set-union (collect-sets (vector-ref m 2) bound)
                 (collect-sets (vector-ref m 3) bound)))
@@ -713,6 +713,37 @@
     ((arg-list)
      (set-union (collect-sets (vector-ref m 1) bound)
                 (collect-sets (vector-ref m 2) bound)))
+    (else
+     '())))
+
+(define (collect-locals m level)
+  (case (vector-ref m 0)
+    ((sequence)
+     (set-union (collect-locals (vector-ref m 1) level)
+                (collect-locals (vector-ref m 2) level)))
+    ((alternative)
+     (set-union (collect-locals (vector-ref m 2) level)
+                (set-union (collect-locals (vector-ref m 3) level)
+                           (collect-locals (vector-ref m 4) level))))
+    ((assign)
+     (collect-locals (vector-ref m 4) level))
+    ((apply)
+     (set-union (collect-locals (vector-ref m 2) level)
+                (collect-locals (vector-ref m 3) level)))
+    ((closed-apply)
+     (set-union (let loop ((locals (vector-ref m 2))
+                           (len level)
+                           (res '()))
+                  (if (null? locals)
+                      (append res (collect-locals (vector-ref m 5)
+                                                  (+ level len)))
+                      (loop (cdr locals)
+                            (+ len 1)
+                            (cons (cons (car locals) len) res))))
+                (collect-locals (vector-ref m 4) level)))
+    ((arg-list)
+     (set-union (collect-locals (vector-ref m 1) level)
+                (collect-locals (vector-ref m 2) level)))
     (else
      '())))
 
@@ -735,9 +766,9 @@
          m
          sets))
 
-(define (calculate-addresses m bound free)
+(define (calculate-addresses m bound free locals)
 
-  (define (refer-handler visitor m bound free)
+  (define (refer-handler visitor m bound free locals)
     (let ((an (vector-ref m 2)))
       (vector 'refer
               (vector-ref m 1)
@@ -749,10 +780,13 @@
                ((index-of an free) =>
                 (lambda (i)
                   (cons 'free i)))
+               ((assv an locals) =>
+                (lambda (i)
+                  (cons 'local (cdr i))))
                (else #f))
               (vector-ref m 4))))
 
-  (define (assign-handler visitor m bound free)
+  (define (assign-handler visitor m bound free locals)
     (let ((an (vector-ref m 2)))
       (vector 'assign
               (vector-ref m 1)
@@ -764,10 +798,13 @@
                ((index-of an free) =>
                 (lambda (i)
                   (cons 'free i)))
+               ((assv an locals) =>
+                (lambda (i)
+                  (cons 'local (cdr i))))
                (else #f))
               (visitor (vector-ref m 4)))))
 
-  (define (lambda-handler visitor m bound free)
+  (define (lambda-handler visitor m bound free locals)
     (vector 'lambda
             (vector-ref m 1)
             (vector-ref m 2)
@@ -783,7 +820,7 @@
                      lambda-handler))
          m
          bound
-         free))
+         free locals))
 
 ;; this pass generates the code for the virtual machine
 (define (generate-toplevel-code cs m)

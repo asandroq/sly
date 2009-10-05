@@ -997,8 +997,8 @@
                 ((>=)
                  (instr1 cs 'ARITY>= (cdr arity))
                  (instr1 cs 'LISTIFY (cdr arity))))
-              (make-boxes cs bound sets)
-              (generate-code cs (vector-ref m 5) 0)
+              (make-boxes cs bound sets 0)
+              (generate-code cs (vector-ref m 5) (length bound))
               (instr cs 'RETURN)
               (let ((j (code-size cs)))
                 ;; back-patching jump over closure code
@@ -1077,7 +1077,7 @@
         (locals (vector-ref m 2))
         (sets (vector-ref m 3))
         (len (generate-push-arguments cs (vector-ref m 4) si)))
-    (make-boxes cs locals sets)
+    (make-boxes cs locals sets si)
     (generate-code cs (vector-ref m 5) si)
     (or tail? (instr1 cs 'POP len))))
 
@@ -1094,10 +1094,10 @@
 
 ;; Create instructions to box arguments to closure
 ;; that are assigned somewhere in the code
-(define (make-boxes cs vars sets)
+(define (make-boxes cs vars sets si)
   (for-each (lambda (v)
 	      (and (memq v sets)
-		   (instr1 cs 'INSERT-BOX (index-of v vars))))
+		   (instr1 cs 'INSERT-BOX (+ si (index-of v vars)))))
 	    vars))
 
 (define (number-of-arguments m)

@@ -675,7 +675,7 @@
                 (collect-free (vector-ref m 3) bound)))
     ((closed-apply)
      (let ((new-bound (append (vector-ref m 2) bound)))
-       (set-union (collect-free (vector-ref m 4) new-bound)
+       (set-union (collect-free (vector-ref m 4) bound)
                   (collect-free (vector-ref m 5) new-bound))))
     ((arg-list)
      (set-union (collect-free (vector-ref m 1) bound)

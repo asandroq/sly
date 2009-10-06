@@ -27,8 +27,8 @@
   (cond
    ((and (pair? x)
          (pair? y))
-    (and (eq? (car x)
-              (car y))
+    (and (equal? (car x)
+                 (car y))
          (equal? (cdr x)
                  (cdr y))))
    (else

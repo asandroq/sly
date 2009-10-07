@@ -866,8 +866,6 @@
      (generate-sequence cs m si))
     ((call/cc)
      (generate-call/cc cs m si))
-    ((define)
-     (generate-define cs m si))
     ((alternative)
      (generate-alternative cs m si))
     ((lambda)
@@ -1173,6 +1171,447 @@
              m)))))
 
   (visitor m))
+
+;;
+;; AST nodes
+;;
+
+(define (##make-undef-node)
+  (vector '##undef))
+
+(define (##undef-node? n)
+  (##node-type? n '##undef))
+
+(define (##make-immed-node a)
+  (vector '##immed a))
+
+(define (##immed-node? n)
+  (##node-type? n '##immed))
+
+(define (##immed-node-value n)
+  (if (##immed-node? n)
+      (vector-ref n 1)
+      (error "not a immed node")))
+
+(define (##immed-node-value-set! n a)
+  (if (##immed-node? n)
+      (vector-set! n 1 a)
+      (error "not a immed node")))
+
+(define (##make-const-node a)
+  (vector '##const a))
+
+(define (##const-node? n)
+  (##node-type? n '##const))
+
+(define (##const-node-value n)
+  (if (##const-node? n)
+      (vector-ref n 1)
+      (error "not a const node")))
+
+(define (##const-node-value-set! n a)
+  (if (##const-node? n)
+      (vector-set! n 1 a)
+      (error "not a const node")))
+
+(define (##make-reference-node n an k p b)
+  (vector '##reference n an k p b))
+
+(define (##reference-node? n)
+  (##node-type? n '##reference))
+
+(define (##reference-node-name n)
+  (if (##reference-node? n)
+      (vector-ref n 1)
+      (error "not a reference node")))
+
+(define (##reference-node-name-set! n a)
+  (if (##reference-node? n)
+      (vector-set! n 1 a)
+      (error "not a reference node")))
+
+(define (##reference-node-alpha n)
+  (if (##reference-node? n)
+      (vector-ref n 2)
+      (error "not a reference node")))
+
+(define (##reference-node-alpha-set! n a)
+  (if (##reference-node? n)
+      (vector-set! n 2 a)
+      (error "not a reference node")))
+
+(define (##reference-node-kind n)
+  (if (##reference-node? n)
+      (vector-ref n 3)
+      (error "not a reference node")))
+
+(define (##reference-node-kind-set! n a)
+  (if (##reference-node? n)
+      (vector-set! n 3 a)
+      (error "not a reference node")))
+
+(define (##reference-node-position n)
+  (if (##reference-node? n)
+      (vector-ref n 4)
+      (error "not a reference node")))
+
+(define (##reference-node-position-set! n a)
+  (if (##reference-node? n)
+      (vector-set! n 4 a)
+      (error "not a reference node")))
+
+(define (##reference-node-box? n)
+  (if (##reference-node? n)
+      (vector-ref n 5)
+      (error "not a reference node")))
+
+(define (##reference-node-box?-set! n a)
+  (if (##reference-node? n)
+      (vector-set! n 5 a)
+      (error "not a reference node")))
+
+(define (##make-sequence-node f r)
+  (vector '##sequence f r))
+
+(define (##sequence-node? n)
+  (##node-type? n '##sequence))
+
+(define (##sequence-node-first n)
+  (if (##sequence-node? n)
+      (vector-ref n 1)
+      (error "not a sequence node")))
+
+(define (##sequence-node-first-set! n a)
+  (if (##sequence-node? n)
+      (vector-set! n 1 a)
+      (error "not a sequence node")))
+
+(define (##sequence-node-rest n)
+  (if (##sequence-node? n)
+      (vector-ref m 2)
+      (error "not a sequence node")))
+
+(define (##sequence-node-rest-set! n a)
+  (if (##sequence-node? n)
+      (vector-set! n 2 a)
+      (error "not a sequence node")))
+
+(define (##make-call/cc-node l t)
+  (vector '##call/cc l t))
+
+(define (##call/cc-node? n)
+  (##node-type? n '##call/cc))
+
+(define (##call/cc-node-lambda n)
+  (if (##call/cc-node? n)
+      (vector-ref n 1)
+      (error "not a call/cc node")))
+
+(define (##call/cc-node-lambda-set! n a)
+  (if (##call/cc-node? n)
+      (vector-set! n 1 a)
+      (error "not a call/cc node")))
+
+(define (##call/cc-node-tail? n)
+  (if (##call/cc-node? n)
+      (vector-ref n 2)
+      (error "not a call/cc node")))
+
+(define (##call/cc-node-tail?-set! n a)
+  (if (##call/cc-node? n)
+      (vector-set! n 2 a)
+      (error "not a call/cc node")))
+
+(define (##make-alternative-node t y n)
+  (vector '##alternative t y n))
+
+(define (##alternative-node? n)
+  (##node-type? n '##alternative))
+
+(define (##alternative-node-test n)
+  (if (##alternative-node? n)
+      (vector-ref n 1)
+      (error "not an alternative node")))
+
+(define (##alternative-node-test-set! n a)
+  (if (##alternative-node? n)
+      (vector-set! n 1 a)
+      (error "not an alternative node")))
+
+(define (##alternative-node-then n)
+  (if (##alternative-node? n)
+      (vector-ref n 2)
+      (error "not an alternative node")))
+
+(define (##alternative-node-then-set! n a)
+  (if (##alternative-node? n)
+      (vector-set! n 2 a)
+      (error "not an alternative node")))
+
+(define (##alternative-node-else n)
+  (if (##alternative-node? n)
+      (vector-ref n 3)
+      (error "not an alternative node")))
+
+(define (##alternative-node-else-set! n a)
+  (if (##alternative-node? n)
+      (vector-set! n 3 a)
+      (error "not an alternative node")))
+
+(define (##make-lambda-node a b s f bd)
+  (vector '##lambda a b s f bd))
+
+(define (##lambda-node? n)
+  (##node-type? n '##lambda))
+
+(define (##lambda-node-arity n)
+  (if (##lambda-node? n)
+      (vector-ref n 1)
+      (error "not a lambda node")))
+
+(define (##lambda-node-arity-set! n a)
+  (if (##lambda-node? n)
+      (vector-set! n 1 a)
+      (error "not a lambda node")))
+
+(define (##lambda-node-bound n)
+  (if (##lambda-node? n)
+      (vector-ref n 2)
+      (error "not a lambda node")))
+
+(define (##lambda-node-bound-set! n a)
+  (if (##lambda-node? n)
+      (vector-set! n 2 a)
+      (error "not a lambda node")))
+
+(define (##lambda-node-sets n)
+  (if (##lambda-node? n)
+      (vector-ref n 3)
+      (error "not a lambda node")))
+
+(define (##lambda-node-sets-set! n a)
+  (if (##lambda-node? n)
+      (vector-set! n 3 a)
+      (error "not a lambda node")))
+
+(define (##lambda-node-free n)
+  (if (##lambda-node? n)
+      (vector-ref n 4)
+      (error "not a lambda node")))
+
+(define (##lambda-node-free-set! n a)
+  (if (##lambda-node? n)
+      (vector-set! n 4 a)
+      (error "not a lambda node")))
+
+(define (##lambda-node-body n)
+  (if (##lambda-node? n)
+      (vector-ref n 5)
+      (error "not a lambda node")))
+
+(define (##lambda-node-body-set! n a)
+  (if (##lambda-node? n)
+      (vector-set! n 5 a)
+      (error "not a lambda node")))
+
+(define (##make-assign-node n a k p b)
+  (vector '##assign n a k p b))
+
+(define (##assign-node? n)
+  (##node-type? n '##assign))
+
+(define (##assign-node-name n)
+  (if (##assign-node? n)
+      (vector-ref n 1)
+      (error "not an assign node")))
+
+(define (##assign-node-name-set! n a)
+  (if (##assign-node? n)
+      (vector-set! n 1 a)
+      (error "not an assign node")))
+
+(define (##assign-node-alpha n)
+  (if (##assign-node? n)
+      (vector-ref n 2)
+      (error "not an assign node")))
+
+(define (##assign-node-alpha-set! n a)
+  (if (##assign-node? n)
+      (vector-set! n 2 a)
+      (error "not an assign node")))
+
+(define (##assign-node-kind n)
+  (if (##assign-node? n)
+      (vector-ref n 3)
+      (error "not an assign node")))
+
+(define (##assign-node-kind-set! n a)
+  (if (##assign-node? n)
+      (vector-set! n 3 a)
+      (error "not an assign node")))
+
+(define (##assign-node-position n)
+  (if (##assign-node? n)
+      (vector-ref n 4)
+      (error "not an assign node")))
+
+(define (##assign-node-position-set! n a)
+  (if (##assign-node? n)
+      (vector-set! n 4 a)
+      (error "not an assign node")))
+
+(define (##assign-node-body n)
+  (if (##assign-node? n)
+      (vector-ref n 5)
+      (error "not an assign node")))
+
+(define (##assign-node-body-set! n a)
+  (if (##assign-node? n)
+      (vector-set! n 5 a)
+      (error "not an assign node")))
+
+(define (##make-apply-node o a t p)
+  (vector '##apply o a t p))
+
+(define (##apply-node? n)
+  (##node-type? n '##apply))
+
+(define (##apply-node-operator n)
+  (if (##apply-node? n)
+      (vector-ref n 1)
+      (error "not an apply node")))
+
+(define (##apply-node-operator-set! n a)
+  (if (##apply-node? n)
+      (vector-set! n 1 a)
+      (error "not an apply node")))
+
+(define (##apply-node-args n)
+  (if (##apply-node? n)
+      (vector-ref n 2)
+      (error "not an apply node")))
+
+(define (##apply-node-args-set! n a)
+  (if (##apply-node? n)
+      (vector-set! n 2 a)
+      (error "not an apply node")))
+
+(define (##apply-node-tail? n)
+  (if (##apply-node? n)
+      (vector-ref n 3)
+      (error "not an apply node")))
+
+(define (##apply-node-tail?-set! n a)
+  (if (##apply-node? n)
+      (vector-set! n 3 a)
+      (error "not an apply node")))
+
+(define (##apply-node-prim? n)
+  (if (##apply-node? n)
+      (vector-ref n 4)
+      (error "not an apply node")))
+
+(define (##apply-node-prim?-set! n a)
+  (if (##apply-node? n)
+      (vector-set! n 4 a)
+      (error "not an apply node")))
+
+(define (##make-capply-node a v ag s b t)
+  (vector '##capply a v ag s b t))
+
+(define (##capply-node? n)
+  (##node-type? n '##capply))
+
+(define (##capply-node-arity n)
+  (if (##capply-node? n)
+      (vector-ref n 1)
+      (error "not a capply node")))
+
+(define (##capply-node-arity-set! n a)
+  (if (##capply-node? n)
+      (vector-set! n 1 a)
+      (error "not a capply node")))
+
+(define (##capply-node-vars n)
+  (if (##capply-node? n)
+      (vector-ref n 2)
+      (error "not a capply node")))
+
+(define (##capply-node-vars-set! n a)
+  (if (##capply-node? n)
+      (vector-set! n 2 a)
+      (error "not a capply node")))
+
+(define (##capply-node-args n)
+  (if (##capply-node? n)
+      (vector-ref n 3)
+      (error "not a capply node")))
+
+(define (##capply-node-args-set! n a)
+  (if (##capply-node? n)
+      (vector-set! n 3 a)
+      (error "not a capply node")))
+
+(define (##capply-node-sets n)
+  (if (##capply-node? n)
+      (vector-ref n 4)
+      (error "not a capply node")))
+
+(define (##capply-node-sets-set! n a)
+  (if (##capply-node? n)
+      (vector-set! n 4 a)
+      (error "not a capply node")))
+
+(define (##capply-node-body n)
+  (if (##capply-node? n)
+      (vector-ref n 5)
+      (error "not a capply node")))
+
+(define (##capply-node-body-set! n a)
+  (if (##capply-node? n)
+      (vector-set! n 5 a)
+      (error "not a capply node")))
+
+(define (##capply-node-tail? n)
+  (if (##capply-node? n)
+      (vector-ref n 6)
+      (error "not a capply node")))
+
+(define (##capply-node-tail?-set! n a)
+  (if (##capply-node? n)
+      (vector-set! n 6 a)
+      (error "not a capply node")))
+
+(define (##make-args-node f r)
+  (vector '##args f r))
+
+(define (##args-node? n)
+  (##node-type? n '##args))
+
+(define (##args-node-first n)
+  (if (##args-node? n)
+      (vector-ref n 1)
+      (error "not an args node")))
+
+(define (##args-node-first-set! n a)
+  (if (##args-node? n)
+      (vector-set! n 1 a)
+      (error "not an args node")))
+
+(define (##args-node-rest n)
+  (if (##args-node? n)
+      (vector-ref n 2)
+      (error "not an args node")))
+
+(define (##args-node-rest-set! n a)
+  (if (##args-node? n)
+      (vector-set! n 2 a)
+      (error "not an args node")))
+
+
+(define (##node-type? n t)
+  (and (vector? n)
+       (eqv? t (vector-ref n 0))))
 
 ;;
 ;; low-level code generation

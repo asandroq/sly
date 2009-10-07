@@ -571,16 +571,17 @@
            (m (meaning e r2 tail?))
            (m* (meaning-args e* r))
            (locals (map cdr an*))
-           (sets (collect-sets m locals))
-           (m2 (flag-boxes m sets)))
+           (refs (map (lambda (n) (meaning-reference n r2)) locals))
+           (sets (collect-sets m locals)))
       (vector 'closed-apply
               (append (if tail? '(tail) '())
                       (list (cons (if n '>= '=) (length n*)))
                       '())
               locals
               sets
+              (map (lambda (r) (flag-boxes r sets)) refs)
               m*
-              m2)))
+              (flag-boxes m sets))))
 
   (parse n* '()))
 
@@ -675,8 +676,8 @@
                 (collect-free (vector-ref m 3) bound)))
     ((closed-apply)
      (let ((new-bound (append (vector-ref m 2) bound)))
-       (set-union (collect-free (vector-ref m 4) bound)
-                  (collect-free (vector-ref m 5) new-bound))))
+       (set-union (collect-free (vector-ref m 5) bound)
+                  (collect-free (vector-ref m 6) new-bound))))
     ((arg-list)
      (set-union (collect-free (vector-ref m 1) bound)
                 (collect-free (vector-ref m 2) bound)))
@@ -708,8 +709,8 @@
      (set-union (collect-sets (vector-ref m 2) bound)
                 (collect-sets (vector-ref m 3) bound)))
     ((closed-apply)
-     (set-union (collect-sets (vector-ref m 4) bound)
-                (collect-sets (vector-ref m 5) bound)))
+     (set-union (collect-sets (vector-ref m 5) bound)
+                (collect-sets (vector-ref m 6) bound)))
     ((arg-list)
      (set-union (collect-sets (vector-ref m 1) bound)
                 (collect-sets (vector-ref m 2) bound)))
@@ -735,11 +736,11 @@
                            (len level)
                            (res '()))
                   (if (null? locals)
-                      (append res (collect-locals (vector-ref m 5) len))
+                      (append res (collect-locals (vector-ref m 6) len))
                       (loop (cdr locals)
                             (+ len 1)
                             (cons (cons (car locals) len) res))))
-                (collect-locals (vector-ref m 4) level)))
+                (collect-locals (vector-ref m 5) level)))
     ((arg-list)
      (set-union (collect-locals (vector-ref m 1) level)
                 (collect-locals (vector-ref m 2) level)))
@@ -996,7 +997,7 @@
                 ((>=)
                  (instr1 cs 'ARITY>= (cdr arity))
                  (instr1 cs 'LISTIFY (cdr arity))))
-              (make-boxes cs bound sets 0)
+              (make-boxes cs bound sets)
               (generate-code cs (vector-ref m 5) (length bound))
               (instr cs 'RETURN)
               (let ((j (code-size cs)))
@@ -1073,11 +1074,10 @@
 
 (define (generate-closed-apply cs m si)
   (let ((tail? (memq 'tail (vector-ref m 1)))
-        (locals (vector-ref m 2))
         (sets (vector-ref m 3))
-        (len (generate-push-arguments cs (vector-ref m 4) si)))
-    (make-boxes cs locals sets si)
-    (generate-code cs (vector-ref m 5) si)
+        (len (generate-push-arguments cs (vector-ref m 5) si)))
+    (make-local-boxes cs (vector-ref m 4) sets si)
+    (generate-code cs (vector-ref m 6) si)
     (or tail? (instr1 cs 'POP len))))
 
 (define (generate-push-arguments cs m si)
@@ -1093,11 +1093,19 @@
 
 ;; Create instructions to box arguments to closure
 ;; that are assigned somewhere in the code
-(define (make-boxes cs vars sets si)
+(define (make-boxes cs vars sets)
   (for-each (lambda (v)
 	      (and (memq v sets)
-		   (instr1 cs 'INSERT-BOX (+ si (index-of v vars)))))
+		   (instr1 cs 'INSERT-BOX (index-of v vars))))
 	    vars))
+
+(define (make-local-boxes cs locals sets si)
+  (for-each (lambda (l)
+              (and (memq (vector-ref l 2) sets)
+                   (instr1 cs
+                           'INSERT-BOX
+                           (+ si (cdr (vector-ref l 3))))))
+            locals))
 
 (define (number-of-arguments m)
   (let loop ((len 0)
@@ -1154,8 +1162,9 @@
                      (vector-ref m 1)
                      (vector-ref m 2)
                      (vector-ref m 3)
-                     (visitor (vector-ref m 4))
-                     (visitor (vector-ref m 5))))
+                     (map visitor (vector-ref m 4))
+                     (visitor (vector-ref m 5))
+                     (visitor (vector-ref m 6))))
             ((arg-list)
              (vector 'arg-list
                      (visitor (vector-ref m 1))

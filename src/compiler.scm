@@ -393,8 +393,10 @@
 ;; compiles toplevel
 (define (meaning-toplevel e+)
   (let* ((m+ (meaning-sequence e+ '() #t))
-         (locals (collect-locals m+ 0)))
-    (calculate-addresses m+ '() '() locals)))
+         (locals (##collect-locals m+))
+         (sets (##collect-sets m+ locals))
+         (env (##build-environment '() locals '() sets)))
+    (##make-toplevel-node env m+)))
 
 ;;
 ;; transforms expressions into a syntax tree,
@@ -489,49 +491,32 @@
   (define (meaning-internal n* n)
     (let* ((an* (map (lambda (n)
                        (cons n (rename-var n)))
-                     (if n
-                         (append n* (list n))
-                         n*)))
+                     (if n (append n* (list n)) n*)))
            (r2 (cons an* r))
            (m (meaning e r2 #t))
            (bound (map cdr an*))
            (free (##collect-free m bound))
            (sets (##collect-sets m bound))
            (locals (##collect-locals m))
-           (env (##build-environment bound locals free sets))
-           (##flag-boxes! m sets))
-      (##make-lambda-node (length n*) (and n #t) env m)))
+           (env (##build-environment bound locals free sets)))
+      (##flag-boxes! m sets)
+      (##make-lambda-node (length n*) (not n) env m)))
 
   (parse n* '()))
 
 (define (meaning-assignment n e r)
   (let ((n2 (lookup n r))
         (prim? (assq n *primitives*)))
-    (if (and prim?
-             (eq? n n2))
+    (if (and prim? (not n2))
         (error "assignment to primitive not allowed" n)
-        (vector 'assign
-                n
-                n2
-                #f
-                (meaning e r #f)))))
+        (##make-assign-node n n2 (meaning e r #f)))))
 
 (define (meaning-application e e* r tail?)
   (let ((m  (meaning e r #f))
         (m* (meaning-args e* r)))
-    (let* ((prim (if (and (eq? (vector-ref m 0)
-                               'refer)
-                          (assq (vector-ref m 1)
-                                *primitives*))
-                     (list 'prim)
-                     '()))
-           (flags (if tail?
-                      (cons 'tail prim)
-                      prim)))
-      (vector 'apply
-              flags
-              m
-              m*))))
+    (let ((prim? (and (##reference-node? m)
+                      (assq (##reference-node-name m) *primitives*) #t)))
+      (##make-apply-node m m* tail? prim?))))
 
 (define (meaning-closed-application n* e* e r tail?)
 
@@ -549,24 +534,12 @@
   (define (meaning-internal n* n)
     (let* ((an* (map (lambda (n)
                        (cons n (rename-var n)))
-                     (if n
-                         (append n* (list n))
-                         n*)))
+                     (if n (append n* (list n)) n*)))
            (r2 (cons an* r))
            (m (meaning e r2 tail?))
            (m* (meaning-args e* r))
-           (locals (map cdr an*))
-           (refs (map (lambda (n) (meaning-reference n r2)) locals))
-           (sets (collect-sets m locals)))
-      (vector 'closed-apply
-              (append (if tail? '(tail) '())
-                      (list (cons (if n '>= '=) (length n*)))
-                      '())
-              locals
-              sets
-              (map (lambda (r) (flag-boxes r sets)) refs)
-              m*
-              (flag-boxes m sets))))
+           (locals (map cdr an*)))
+      (##make-capply-node (length n*) (not n) locals m* m tail?)))
 
   (parse n* '()))
 
@@ -642,7 +615,7 @@
                           (##collect-free (##alternative-node-else m) bound))))
    ((##lambda-node? m)
     (##collect-free (##lambda-node-body m)
-                  (append (##env-node-bound m) bound)))
+                    (append (##env-node-bound (##lambda-node-env m)) bound)))
    ((##assign-node? m)
     (set-union (let ((aname (##assign-node-alpha m)))
                  (if (and aname (not (memq aname bound))) (list aname) '()))
@@ -672,8 +645,7 @@
                (set-union (##collect-sets (##alternative-node-then m) bound)
                           (##collect-sets (##alternative-node-else m) bound))))
    ((##lambda-node? m)
-    (##collect-sets (##lambda-node-body m)
-                  (append (##env-node-bound m) bound)))
+    (##collect-sets (##lambda-node-body m) bound))
    ((##assign-node? m)
     (set-union (let ((aname (##assign-node-alpha m)))
                  (if (and aname (memq aname bound)) (list aname) '()))
@@ -683,7 +655,7 @@
                (##collect-sets (##apply-node-args m) bound)))
    ((##capply-node? m)
     (set-union (##collect-sets (##capply-node-args m) bound)
-               (##collect-sets (##capply-node-body m) bound))())
+               (##collect-sets (##capply-node-body m) bound)))
    ((##args-node? m)
     (set-union (##collect-sets (##args-node-first m) bound)
                (##collect-sets (##args-node-rest  m) bound)))
@@ -714,24 +686,19 @@
     (else
      '())))
 
-;; flags references to assigned variables as boxes
-(define (flag-boxes m sets)
+;; flags assigned variables as boxes
+(define (##flag-boxes! m sets)
 
-  (define (refer-handler visitor m sets)
-    (let ((an (vector-ref m 2))
-          (flags (vector-ref m 4)))
-      (vector 'refer
-              (vector-ref m 1)
-              an
-              (vector-ref m 3)
-              (if (memq an sets)
-                  (cons 'box flags)
-                  flags))))
+  ;; flag free variables of lambda as boxes if assigned
+  (define (lambda-handler visitor m sets)
+    (let loop ((env (##lambda-node-env m)))
+      (if (not (null? env))
+          (let ((entry (car env)))
+            (if (memq (car entry) sets)
+                (##env-node-boxed?-set! (cdr entry) #t))
+            (loop (cdr env))))))
 
-  (visit (list (cons 'refer
-                     refer-handler))
-         m
-         sets))
+  (##visit (list (cons '##lambda lambda-handler)) m sets))
 
 (define (##build-environment bound locals free sets)
   (let ((bound-env (let lp ((i 0)
@@ -758,64 +725,19 @@
                                           (##make-env-node f 'free i #f))
                                     res))))))
         (local-env (map (lambda (l)
-                          (cons l (##make-env-node l 'local 0 #f))))))
+                          (cons l (##make-env-node l 'local 0 #f)))
+                        locals)))
     (append bound-env free-env local-env)))
 
-(define (calculate-addresses m bound free locals)
-
-  (define (refer-handler visitor m bound free locals)
-    (let ((an (vector-ref m 2)))
-      (vector 'refer
-              (vector-ref m 1)
-              an
-              (cond
-               ((index-of an bound) =>
-                (lambda (i)
-                  (cons 'bound i)))
-               ((index-of an free) =>
-                (lambda (i)
-                  (cons 'free i)))
-               ((assv an locals) =>
-                (lambda (i)
-                  (cons 'local (cdr i))))
-               (else #f))
-              (vector-ref m 4))))
-
-  (define (assign-handler visitor m bound free locals)
-    (let ((an (vector-ref m 2)))
-      (vector 'assign
-              (vector-ref m 1)
-              an
-              (cond
-               ((index-of an bound) =>
-                (lambda (i)
-                  (cons 'bound i)))
-               ((index-of an free) =>
-                (lambda (i)
-                  (cons 'free i)))
-               ((assv an locals) =>
-                (lambda (i)
-                  (cons 'local (cdr i))))
-               (else #f))
-              (visitor (vector-ref m 4)))))
-
-  (define (lambda-handler visitor m bound free locals)
-    (vector 'lambda
-            (vector-ref m 1)
-            (vector-ref m 2)
-            (vector-ref m 3)
-            (map visitor (vector-ref m 4))
-            (vector-ref m 5)))
-
-  (visit (list (cons 'refer
-                     refer-handler)
-               (cons 'assign
-                     assign-handler)
-               (cons 'lambda
-                     lambda-handler))
-         m
-         bound
-         free locals))
+(define (##env-node-bound env)
+  (let loop ((env env)
+             (res '()))
+    (if (null? env)
+        res
+        (let ((entry (car env)))
+          (if (eqv? (##env-node-kind (cdr entry)) 'bound)
+              (loop (cdr env) (cons (car entry) res))
+              (loop (cdr env) res))))))
 
 ;; this pass generates the code for the virtual machine
 (define (generate-toplevel-code cs m)
@@ -1136,19 +1058,11 @@
              (visitor (##apply-node-operator m))
              (visitor (##apply-node-args m)))
             ((##capply)
-             (vector 'closed-apply
-                     (vector-ref m 1)
-                     (vector-ref m 2)
-                     (vector-ref m 3)
-                     (map visitor (vector-ref m 4))
-                     (visitor (vector-ref m 5))
-                     (visitor (vector-ref m 6))))
-            ((arg-list)
-             (vector 'arg-list
-                     (visitor (vector-ref m 1))
-                     (visitor (vector-ref m 2))))
-            (else
-             m)))))
+             (visitor (##capply-node-args m))
+             (visitor (##capply-node-body m)))
+            ((##args)
+             (visitor (##args-node-first m))
+             (visitor (##args-node-rest  m)))))))
 
   (visitor m))
 
@@ -1222,7 +1136,7 @@
 
 (define (##sequence-node-rest n)
   (if (##sequence-node? n)
-      (vector-ref m 2)
+      (vector-ref n 2)
       (error "not a sequence node")))
 
 (define (##sequence-node-rest-set! n a)
@@ -1384,6 +1298,32 @@
       (vector-set! n 4 a)
       (error "not a lambda node")))
 
+(define (##make-toplevel-node e b)
+  (vector '##toplevel e b))
+
+(define (##toplevel-node? n)
+  (##node-type? n '##toplevel))
+
+(define (##toplevel-node-env n)
+  (if (##toplevel-node? n)
+      (vector-ref n 1)
+      (error "not a toplevel node")))
+
+(define (##toplevel-node-env-set! n a)
+  (if (##toplevel-node? n)
+      (vector-set! n 1 a)
+      (error "not a toplevel node")))
+
+(define (##toplevel-node-body n)
+  (if (##toplevel-node? n)
+      (vector-ref n 2)
+      (error "not a toplevel node")))
+
+(define (##toplevel-node-body-set! n a)
+  (if (##toplevel-node? n)
+      (vector-set! n 2 a)
+      (error "not a toplevel node")))
+
 (define (##make-assign-node n a b)
   (vector '##assign n a b))
 
@@ -1412,12 +1352,12 @@
 
 (define (##assign-node-body n)
   (if (##assign-node? n)
-      (vector-ref n 5)
+      (vector-ref n 3)
       (error "not an assign node")))
 
 (define (##assign-node-body-set! n a)
   (if (##assign-node? n)
-      (vector-set! n 5 a)
+      (vector-set! n 3 a)
       (error "not an assign node")))
 
 (define (##make-apply-node o a t p)
@@ -1467,7 +1407,7 @@
       (error "not an apply node")))
 
 (define (##make-capply-node a r v ag b t)
-  (vector '##capply a v ag s b t))
+  (vector '##capply a r v ag b t))
 
 (define (##capply-node? n)
   (##node-type? n '##capply))

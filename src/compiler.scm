@@ -396,6 +396,7 @@
          (locals (##collect-locals m+))
          (sets (##collect-sets m+ locals))
          (env (##build-environment '() locals '() sets)))
+    (##flag-boxes! m+ sets)
     (##make-toplevel-node env m+)))
 
 ;;
@@ -725,7 +726,7 @@
                                           (##make-env-node f 'free i #f))
                                     res))))))
         (local-env (map (lambda (l)
-                          (cons l (##make-env-node l 'local 0 #f)))
+                          (cons l (##make-env-node l 'local 0 (and (memq l sets) #t))))
                         locals)))
     (append bound-env free-env local-env)))
 

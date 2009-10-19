@@ -67,7 +67,7 @@
     (set! *defined-globals*
           (append defs *defined-globals*))
     (let  ((m (meaning-toplevel t+)))
-      (generate-toplevel-code cs m)
+      (##generate-toplevel-code cs m)
       (instr cs 'RETURN)
       cs)))
 
@@ -451,7 +451,7 @@
   (##make-reference-node n (lookup n r)))
 
 (define (meaning-quote e)
-  (##make-const-node e))
+  (##make-const-node e #f))
 
 (define (meaning-sequence e+ r tail?)
   (if (null? (cdr e+))
@@ -552,7 +552,7 @@
 
 (define *undef* (list 'undef))
 
-(define (immediate? x)
+(define (##immediate? x)
   (or (char? x)
       (boolean? x)
       (integer? x)
@@ -616,7 +616,7 @@
                           (##collect-free (##alternative-node-else m) bound))))
    ((##lambda-node? m)
     (##collect-free (##lambda-node-body m)
-                    (append (##env-node-bound (##lambda-node-env m)) bound)))
+                    (append (##collect-env-node-by-kind (##lambda-node-env m) 'bound) bound)))
    ((##assign-node? m)
     (set-union (let ((aname (##assign-node-alpha m)))
                  (if (and aname (not (memq aname bound))) (list aname) '()))
@@ -730,19 +730,23 @@
                         locals)))
     (append bound-env free-env local-env)))
 
-(define (##env-node-bound env)
+(define (##collect-env-node-by-kind env kind)
   (let loop ((env env)
              (res '()))
     (if (null? env)
-        res
+        (reverse res)
         (let ((entry (car env)))
-          (if (eqv? (##env-node-kind (cdr entry)) 'bound)
+          (if (eqv? (##env-node-kind (cdr entry)) kind)
               (loop (cdr env) (cons (car entry) res))
               (loop (cdr env) res))))))
 
 ;; this pass generates the code for the virtual machine
-(define (generate-toplevel-code cs m)
-  (let ((c (collect-constants! cs m)))
+(define (##generate-toplevel-code cs m)
+  (let ((env (##toplevel-node-env m))
+        (body (##toplevel-node-body m)))
+
+    ;; install constants into compiler state
+    (##collect-constants! cs body)
 
     ;; emit code to initialise constants before
     ;; entering real code
@@ -750,100 +754,91 @@
                (consts (vector-ref cs 1)))
       (if (not (null? consts))
           (let ((const (car consts)))
-            (emit-constant cs const)
+            (##emit-constant cs const)
             (instr1 cs 'CONST-INIT i)
             (loop (+ i 1) (cdr consts)))))
 
     ;; generate rest of code
-    (generate-code cs c 0)))
+    (##generate-code cs body env 0)))
 
-(define (collect-constants! cs m)
+(define (##collect-constants! cs m)
 
   (define (const-handler visitor m)
-    (let ((c (vector-ref m 1)))
-      (if (immediate? c)
-          (vector 'immed c)
-          (let ((index (install-constant! cs c)))
-            (vector 'const index)))))
+    (let ((value (##const-node-value m)))
+      (if (not (##immediate? value))
+          (let ((index (##install-constant! cs value)))
+            (##const-node-index-set! m index)))))
 
-  (visit (list (cons 'const
-                     const-handler))
-         m))
+  (##visit (list (cons '##const const-handler)) m))
 
-(define (generate-code cs m si)
-  (case (vector-ref m 0)
-    ((undef)
-     (generate-undef cs))
-    ((const)
-     (generate-constant cs m))
-    ((immed)
-     (generate-immediate cs m))
-    ((refer)
-     (generate-reference cs m si #t))
-    ((sequence)
-     (generate-sequence cs m si))
-    ((call/cc)
-     (generate-call/cc cs m si))
-    ((alternative)
-     (generate-alternative cs m si))
-    ((lambda)
-     (generate-lambda cs m si))
-    ((assign)
-     (generate-assignment cs m si))
-    ((apply)
-     (generate-apply cs m si))
-    ((closed-apply)
-     (generate-closed-apply cs m si))
+(define (##generate-code cs m env si)
+  (cond
+    ((##const-node? m)
+     (##generate-constant cs m))
+    ((##reference-node? m)
+     (##generate-reference cs m env si #t))
+    ((##sequence-node? m)
+     (##generate-sequence cs m env si))
+    ((##call/cc-node? m)
+     (##generate-call/cc cs m env si))
+    ((##alternative-node? m)
+     (##generate-alternative cs m env si))
+    ((##lambda-node? m)
+     (##generate-lambda cs m env si))
+    ((##assign-node? m)
+     (##generate-assignment cs m env si))
+    ((##apply-node? m)
+     (generate-apply cs m env si))
+    ((##capply-node? m)
+     (##generate-capply cs m env si))
     (else
      (error "unknown AST node" m))))
 
-(define (generate-undef cs)
-  (instr cs 'LOAD-UNDEF))
+(define (##generate-constant cs m)
+  (let ((value (##const-node-value m)))
+    (if (##immediate? value)
+        (##emit-constant cs value)
+        (instr1 cs 'CONST (##const-node-index m)))))
 
-(define (generate-constant cs m)
-  (instr1 cs 'CONST (vector-ref m 1)))
-
-(define (generate-immediate cs m)
-  (emit-constant cs (vector-ref m 1)))
-
-(define (generate-reference cs m si unbox?)
-  (let ((address (vector-ref m 3)))
-    (if address
-        (let ((kind (car address))
-              (pos  (cdr address)))
-          (case kind
-            ((bound)
-             (case pos
-               ((0)
-                (instr cs 'LOAD0))
-               ((1)
-                (instr cs 'LOAD1))
-               ((2)
-                (instr cs 'LOAD2))
-               ((3)
-                (instr cs 'LOAD3))
-               (else
-                (instr1 cs 'LOAD pos))))
-            ((local)
-             (instr1 cs 'LOAD (+ si pos)))
-            ((free)
-             (instr1 cs 'LOAD-FREE pos))
-            (else
-             (error "unknown binding type" m)))
-          (and unbox?
-               (memq 'box (vector-ref m 4))
-               (instr cs 'OPEN-BOX)))
-        (let* ((var (vector-ref m 1))
+(define (##generate-reference cs m env si unbox?)
+  (let ((alpha (##reference-node-alpha m)))
+    (if alpha
+        (let ((rec (assv alpha env)))
+          (if rec
+              (let* ((env (cdr rec))
+                     (kind (##env-node-kind env))
+                     (pos (##env-node-position env))
+                     (boxed? (##env-node-boxed? env)))
+                (case kind
+                  ((bound local)
+                   (case pos
+                     ((0)
+                      (instr cs 'LOAD0))
+                     ((1)
+                      (instr cs 'LOAD1))
+                     ((2)
+                      (instr cs 'LOAD2))
+                     ((3)
+                      (instr cs 'LOAD3))
+                     (else
+                      (instr1 cs 'LOAD pos))))
+                  ((free)
+                   (instr1 cs 'LOAD-FREE pos))
+                  (else
+                   (error "unknown binding type" m)))
+                (and unbox? boxed? (instr cs 'OPEN-BOX)))
+              (error "reference not found")))
+        (let* ((var (##reference-node-name m))
                (index (install-global! cs var)))
           (if (memq var *defined-globals*)
               (instr1 cs 'GLOBAL-REF index)
               (instr1 cs 'CHECKED-GLOBAL-REF index))))))
 
-(define (generate-sequence cs m si)
-  (generate-code cs (vector-ref m 1) si)
-  (generate-code cs (vector-ref m 2) si))
+(define (generate-sequence cs m env si)
+  (##generate-code cs (##sequence-node-first m) env si)
+  (##generate-code cs (##sequence-node-rest  m) env si))
 
-(define (generate-call/cc cs m si)
+(define (##generate-call/cc cs m env si)
   
   ;; creates a closure that will restore a saved
   ;; continuation if called - the continuation
@@ -860,7 +855,7 @@
     (instr cs 'RETURN))
 
   (let ((i (code-size cs))
-        (tail? (memq 'tail (vector-ref m 2))))
+        (tail? (##call/cc-node-tail? m)))
     ;; this is the return address, will be back-patched later
     (or tail? (instr1 cs 'FRAME 0))
     (instr cs 'SAVE-CONT)
@@ -869,21 +864,21 @@
     (instr cs 'PUSH)
     ;; calling closure given to call/cc with
     ;; continuation-restoring closure as sole argument
-    (generate-lambda cs (vector-ref m 1) si)
+    (##generate-lambda cs (##call/cc-node-lambda m) env (+ si 1))
     (instr1 cs (if tail? 'TAIL-CALL 'CALL) 1)
     ;; back-patching return address
     (or tail? (patch-instr! cs i (code-size cs)))))
 
-(define (generate-alternative cs m si)
-  (let ((testc (vector-ref m 1))
-        (thenc (vector-ref m 2))
-        (elsec (vector-ref m 3)))
-    (generate-code cs testc si)
+(define (##generate-alternative cs m env si)
+  (let ((testc (##alternative-node-test m))
+        (thenc (##alternative-node-then m))
+        (elsec (##alternative-node-else m)))
+    (##generate-code cs testc env si)
     (let ((i (code-size cs)))
       ;; this will be back-patched later
       (instr1 cs 'JMP-IF-NOT 0)
-      (generate-code cs thenc si)
-      (if (eqv? (vector-ref elsec 0) 'undef)
+      (##generate-code cs thenc env si)
+      (if (##undef-node? elsec)
           (let ((j (code-size cs)))
             (patch-instr! cs i (- j i 1)))
           (let ((j (code-size cs)))
@@ -891,12 +886,13 @@
             (instr1 cs 'JMP 0)
             (let ((k (code-size cs)))
               (patch-instr! cs i (- k i 1))
-              (generate-code cs elsec si)
+              (##generate-code cs elsec env si)
               (let ((m (code-size cs)))
                 (patch-instr! cs j (- m j 1)))))))))
 
-(define (generate-lambda cs m si)
-  (let ((arity (vector-ref m 1))
+(define (##generate-lambda cs m env si)
+  (let ((arity (##lambda-node-arity m))
+        (regular? (##lambda-node-regular? m))
         (bound (vector-ref m 2))
         (sets  (vector-ref m 3))
         (free  (vector-ref m 4)))
@@ -920,7 +916,7 @@
                 ;; back-patching jump over closure code
                 (patch-instr! cs i (- j i 1)))))
           (let ((ref (car f)))
-            (generate-reference cs ref si #f)
+            (##generate-reference cs ref si #f)
             (instr cs 'PUSH)
             (loop (cdr f)))))))
 
@@ -1077,8 +1073,8 @@
 (define (##undef-node? n)
   (##node-type? n '##undef))
 
-(define (##make-const-node a)
-  (vector '##const a))
+(define (##make-const-node v i)
+  (vector '##const v i))
 
 (define (##const-node? n)
   (##node-type? n '##const))
@@ -1091,6 +1087,16 @@
 (define (##const-node-value-set! n a)
   (if (##const-node? n)
       (vector-set! n 1 a)
+      (error "not a const node")))
+
+(define (##const-node-index n)
+  (if (##const-node? n)
+      (vector-ref n 2)
+      (error "not a const node")))
+
+(define (##const-node-index-set! n a)
+  (if (##const-node? n)
+      (vector-set! n 2 a)
       (error "not a const node")))
 
 (define (##make-reference-node n an)
@@ -1617,7 +1623,7 @@
 (define (patch-instr! cs i arg)
   (vector-set! (vector-ref (vector-ref cs 3) i) 1 arg))
 
-(define (install-constant! cs val)
+(define (##install-constant! cs val)
   (let* ((consts (vector-ref cs 1))
          (index (index-of val consts)))
     (or index
@@ -1633,9 +1639,9 @@
           (vector-set! cs 0 (append globals (list var)))
           new-index))))
 
-(define (emit-constant cs c)
+(define (##emit-constant cs c)
   (cond
-   ((immediate? c)
+   ((##immediate? c)
     (emit-immediate cs c))
    ((pair? c)
     (emit-pair cs c))
@@ -1650,9 +1656,9 @@
     (error "unimplemented complex constant" c))))
 
 (define (emit-pair cs p)
-  (emit-constant cs (car p))
+  (##emit-constant cs (car p))
   (instr cs 'PUSH)
-  (emit-constant cs (cdr p))
+  (##emit-constant cs (cdr p))
   (instr cs 'CONS))
 
 (define (emit-string cs str)
@@ -1679,7 +1685,7 @@
             (instr cs 'PUSH)
             (emit-immediate cs i)
             (instr cs 'PUSH)
-            (emit-constant cs (vector-ref vec i))
+            (##emit-constant cs (vector-ref vec i))
             (instr cs 'VECTOR-SET)
             (loop (+ i 1)))))))
 

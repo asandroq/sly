@@ -920,22 +920,24 @@
             (instr cs 'PUSH)
             (loop (cdr f)))))))
 
-(define (generate-assignment cs m si)
-  (generate-code cs (vector-ref m 4) si)
-  (let ((address (vector-ref m 3)))
-    (if address
-        (let ((kind (car address))
-              (pos  (cdr address)))
-          (case kind
-            ((bound)
-             (instr1 cs 'ASSIGN pos))
-            ((local)
-             (instr1 cs 'ASSIGN (+ si pos)))
-            ((free)
-             (instr1 cs 'ASSIGN-FREE pos))
-            (else
-             (error "unknown binding type" m))))
-        (let* ((var (vector-ref m 1))
+(define (##generate-assignment cs m env si)
+  (##generate-code cs (##assign-node-body m) env si)
+  (let ((alpha (##reference-node-alpha m)))
+    (if alpha
+        (let ((rec (assv alpha env)))
+          (if rec
+              (let* ((env (cdr rec))
+                     (kind (##env-node-kind env))
+                     (pos (##env-node-position env)))
+                (case kind
+                  ((bound local)
+                   (instr1 cs 'ASSIGN pos))
+                  ((free)
+                   (instr1 cs 'ASSIGN-FREE pos))
+                  (else
+                   (error "unknown binding type" m))))
+              (error "reference not found")))
+        (let* ((var (##reference-node-name m))
                (index (install-global! cs var)))
           (if (memq var *defined-globals*)
               (instr1 cs 'GLOBAL-SET index)

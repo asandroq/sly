@@ -115,20 +115,20 @@
 (define (simplify-and exp)
   (let ((exps (cdr exp)))
     (if (null? exps)
-	'#t
+        #t
 	(let ((test (simplify (car exps)))
 	      (rest (cdr exps)))
 	  (if (null? rest)
 	      (let ((var (gensym)))
 		(simplify
 		 (list 'let (list (list var test))
-		       (list 'if var var '#f))))
-	      (list 'if test (simplify (cons 'and rest)) '#f))))))
+		       (list 'if var var #f))))
+	      (list 'if test (simplify (cons 'and rest)) #f))))))
 
 (define (simplify-or exp)
   (let ((exps (cdr exp)))
     (if (null? exps)
-	'#f
+	#f
 	(let ((test (simplify (car exps)))
 	      (rest (cdr exps)))
 	  (if (null? rest)
@@ -389,6 +389,78 @@
        (pair? (cddr e))
        (null? (cdddr e))
        (eq? (car e) 'define)))
+
+;;
+;; this pass transforms expressions into continuation-passing
+;; style
+;;
+
+(define (cps e k)
+  (if (pair? e)
+      (case (car e)
+        ((quote)
+         (list k e))
+        ((begin)
+         (cps-sequence (cdr e) k))
+        ((if)
+         (cps-if (cadr e) (caddr e) (cadddr e) k))
+        ((lambda)
+         (cps-lambda (cadr e) (caddr e) k))
+        ((set!)
+         (cps-assignment (cadr e) (caddr e) k))
+        (else
+         (cps-application (car e) (cdr e) k)))
+      (list k e)))
+
+(define (cps-sequence e+ k)
+  (if (null? (cdr e+))
+      (cps (car e+) k)
+      (let* ((rest (cps-sequence (cdr e+) k))
+             (val (gensym))
+             (kk (list 'lambda (list val) rest)))
+        (cps (car e+) kk))))
+
+(define (cps-if test conseq altern k)
+  (let* ((k-conseq (cps conseq k))
+         (k-altern (cps altern k))
+         (val (gensym))
+         (kk (list 'lambda
+                   (list val)
+                   (list 'if val k-conseq k-altern))))
+    (cps test kk)))
+
+(define (cps-lambda args body k)
+  (let ((kk (gensym)))
+    (list k (list 'lambda (cons kk args) (cps body kk)))))
+
+(define (cps-assignment var arg k)
+  (let* ((val (gensym))
+         (kk (list 'lambda
+                   (list val)
+                   (list k (list 'set! var val)))))
+    (cps arg kk)))
+
+(define (cps-application op args k)
+  (let loop ((aa args)
+             (vals '()))
+    (if (null? aa)
+        (let loop ((args args)
+                   (vals vals)
+                   (code (if (and (symbol? op)
+                                  (assv op *primitives*))
+                             (list k (cons op vals))
+                             (let* ((op-val (gensym))
+                                    (kk (list 'lambda
+                                              (list op-val)
+                                              (cons op-val (cons k vals)))))
+                               (cps op kk)))))
+          (if (null? args)
+              code
+              (let* ((arg (car args))
+                     (val (car vals))
+                     (kk (list 'lambda (list val) code)))
+                (loop (cdr args) (cdr vals) (cps arg kk)))))
+        (loop (cdr aa) (cons (gensym) vals)))))
 
 ;; compiles toplevel
 (define (meaning-toplevel e+)

@@ -402,6 +402,8 @@
          (list k e))
         ((begin)
          (cps-sequence (cdr e) k))
+        ((define)
+         (cps-define (cadr e) (caddr e) k))
         ((if)
          (cps-if (cadr e) (caddr e) (cadddr e) k))
         ((lambda)
@@ -419,6 +421,13 @@
              (val (gensym))
              (kk (list 'lambda (list val) rest)))
         (cps (car e+) kk))))
+
+(define (cps-define n e k)
+  (let* ((val (gensym))
+         (kk (list 'lambda
+                   (list val)
+                   (list k (list '##define-global! (list 'quote n) val)))))
+    (cps e kk)))
 
 (define (cps-if test conseq altern k)
   (let* ((k-conseq (cps conseq k))

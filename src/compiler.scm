@@ -394,17 +394,39 @@
            (list 'quasiquote
                  (qq-expand (cadr e) (+ level 1))))
           ((unquote)
-           (if (= level 1)
-               (simplify (cadr e))
+           (if (> level 0)
                (list 'unquote
-                     (qq-expand (cadr e ) (- level 1)))))
+                     (qq-expand (cadr e ) (- level 1)))
+               (simplify (cadr e))))
           (else
-           (list 'cons
-                 (qq-expand (car e) level)
+           (list 'append
+                 (qq-expand-list (car e) level)
                  (qq-expand (cdr e) level))))
         (list 'quote e)))
 
-  (qq-expand e 1))
+  (define (qq-expand-list e level)
+    (if (pair? e)
+        (case (car e)
+          ((quasiquote)
+           (list (list 'quasiquote
+                       (qq-expand (cadr e) (+ level 1)))))
+          ((unquote unquote-splicing)
+           (cond
+            ((> level 0)
+             (list 'list (list (car e)
+                               (qq-expand (cadr e ) (- level 1)))))
+            ((eqv? (car e) 'unquote)
+             (list 'list (simplify (cadr e))))
+            (else
+             (list 'append (simplify (cadr e))))))
+          (else
+           (list 'list
+                 (list 'append
+                       (qq-expand-list (car e) level)
+                       (qq-expand (cdr e) level)))))
+        (list 'quote (list e))))
+
+  (qq-expand e 0))
 
 (define (define-exp? e)
   (and (pair? e)

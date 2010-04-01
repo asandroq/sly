@@ -107,6 +107,8 @@
 	   (simplify-letrec exp))
           ((quote)
            exp)
+          ((quasiquote)
+           (##qq-expand (cadr exp)))
 	  (else
 	   (map simplify exp))))
       exp))
@@ -382,6 +384,27 @@
           (if (define-exp? e)
               (loop (cons e defs) (cdr es))
               (rest (map simplify-define (reverse defs)) es))))))
+
+(define (##qq-expand e)
+
+  (define (qq-expand e level)
+    (if (pair? e)
+        (case (car e)
+          ((quasiquote)
+           (list 'quasiquote
+                 (qq-expand (cadr e) (+ level 1))))
+          ((unquote)
+           (if (= level 1)
+               (simplify (cadr e))
+               (list 'unquote
+                     (qq-expand (cadr e ) (- level 1)))))
+          (else
+           (list 'cons
+                 (qq-expand (car e) level)
+                 (qq-expand (cdr e) level))))
+        (list 'quote e)))
+
+  (qq-expand e 1))
 
 (define (define-exp? e)
   (and (pair? e)

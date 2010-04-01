@@ -426,7 +426,7 @@
   (let* ((val (gensym))
          (kk (list 'lambda
                    (list val)
-                   (list k (list '##define-global! (list 'quote n) val)))))
+                   (list '##define-global! (list 'quote n) val))))
     (cps e kk)))
 
 (define (cps-if test conseq altern k)
@@ -496,10 +496,6 @@
          (if (> (length e) 1)
              (meaning-sequence (cdr e) r tail?)
              (error "empty 'begin'" e)))
-        ((call/cc)
-         (if (= (length e) 2)
-             (meaning-call/cc (cadr e) r tail?)
-             (error "empty 'call/cc'" e)))
         ((define)
          (meaning-define (cadr e) (caddr e)))
         ((if)

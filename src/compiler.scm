@@ -393,11 +393,15 @@
           ((quasiquote)
            (list 'quasiquote
                  (qq-expand (cadr e) (+ level 1))))
-          ((unquote)
-           (if (> level 0)
-               (list 'unquote
-                     (qq-expand (cadr e ) (- level 1)))
-               (simplify (cadr e))))
+          ((unquote unquote-splicing)
+           (cond
+            ((> level 0)
+             (list (car e)
+                   (qq-expand (cadr e ) (- level 1))))
+            ((eqv? (car e) 'unquote)
+             (simplify (cadr e)))
+            (else
+             (error "Illegal use if unquote-splicing"))))
           (else
            (list 'append
                  (qq-expand-list (car e) level)
@@ -418,7 +422,7 @@
             ((eqv? (car e) 'unquote)
              (list 'list (simplify (cadr e))))
             (else
-             (list 'append (simplify (cadr e))))))
+             (simplify (cadr e)))))
           (else
            (list 'list
                  (list 'append

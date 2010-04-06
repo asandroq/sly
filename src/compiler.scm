@@ -385,6 +385,74 @@
               (loop (cons e defs) (cdr es))
               (rest (map simplify-define (reverse defs)) es))))))
 
+(define (define-exp? e)
+  (and (pair? e)
+       (pair? (cdr e))
+       (pair? (cddr e))
+       (null? (cdddr e))
+       (eq? (car e) 'define)))
+
+;;;
+;;; macro expansion
+;;;
+
+
+(define (##expand e)
+  (if (pair? e)
+      (let ((op (car e)))
+        (if (symbol? op)
+            (cond
+             ((eqv? 'unquote op)
+              (##qq-expand (cadr e)))
+             ((assv op scheme-report-env) =>
+              (lambda (op-exp)
+                ((cdr op-exp) '() e)))
+             (else
+              (cons op (map ##expand (cdr e)))))
+            (map ##expand e)))
+      e))
+
+(define (##or-expander syn-env exp)
+  (let ((ops (##make-syntactic-closure-list syn-env
+                                            '()
+                                            (cdr exp))))
+    (cond
+     ((null? ops) (##make-syntactic-closure scheme-report-env '() #f))
+     ((null? (cdr ops)) (car ops))
+     (else (##make-syntactic-closure scheme-report-env
+                                     '()
+                                     `(let ((temp ,(car ops)))
+                                        (if temp
+                                            temp
+                                            (or ,@(cdr ops)))))))))
+
+(define (##let-expander syn-env exp)
+  (let ((identifiers (map car (cadr exp))))
+    (##make-syntactic-closure scheme-report-env
+                              '()
+                              `((lambda ,identifiers
+                                  ,@(##make-syntactic-closure-list syn-env
+                                                                   identifiers
+                                                                   (cddr exp)))
+                                ,@(##make-syntactic-closure-list syn-env
+                                                                 '()
+                                                                 (map cadr (cadr exp)))))))
+
+;; helper procedure to close a list of expressions
+(define (##make-syntactic-closure-list syn-env free exps)
+  (map (lambda (exp)
+         (##make-syntactic-closure syn-env free exp))
+       exps))
+
+;; creates a new syntactic closure closing 'exp'
+;; with 'env' letting 'free' free
+(define (##make-syntactic-closure env free exp)
+  (vector 'syntactic-closure free env exp))
+
+(define scheme-report-env
+  `((let . ,##let-expander)
+    (or  . ,##or-expander)))
+
 (define (##qq-expand e)
 
   (define (qq-expand e level)
@@ -432,12 +500,9 @@
 
   (qq-expand e 0))
 
-(define (define-exp? e)
-  (and (pair? e)
-       (pair? (cdr e))
-       (pair? (cddr e))
-       (null? (cdddr e))
-       (eq? (car e) 'define)))
+;;;
+;;; core language compilation
+;;;
 
 ;; compiles toplevel
 (define (meaning-toplevel e+)

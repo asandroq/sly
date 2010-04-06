@@ -402,9 +402,9 @@
       (let ((op (car e)))
         (if (symbol? op)
             (cond
-             ((eqv? 'unquote op)
+             ((eqv? 'quasiquote op)
               (##qq-expand (cadr e)))
-             ((assv op scheme-report-env) =>
+             ((assv op scheme-syntactic-env) =>
               (lambda (op-exp)
                 ((cdr op-exp) '() e)))
              (else
@@ -417,9 +417,9 @@
                                             '()
                                             (cdr exp))))
     (cond
-     ((null? ops) (##make-syntactic-closure scheme-report-env '() #f))
+     ((null? ops) (##make-syntactic-closure scheme-syntactic-env '() #f))
      ((null? (cdr ops)) (car ops))
-     (else (##make-syntactic-closure scheme-report-env
+     (else (##make-syntactic-closure scheme-syntactic-env
                                      '()
                                      `(let ((temp ,(car ops)))
                                         (if temp
@@ -428,15 +428,16 @@
 
 (define (##let-expander syn-env exp)
   (let ((identifiers (map car (cadr exp))))
-    (##make-syntactic-closure scheme-report-env
-                              '()
-                              `((lambda ,identifiers
-                                  ,@(##make-syntactic-closure-list syn-env
-                                                                   identifiers
-                                                                   (cddr exp)))
-                                ,@(##make-syntactic-closure-list syn-env
-                                                                 '()
-                                                                 (map cadr (cadr exp)))))))
+    (##make-syntactic-closure
+     scheme-syntactic-env
+     '()
+     `((lambda ,identifiers
+         ,@(##make-syntactic-closure-list syn-env
+                                          identifiers
+                                          (cddr exp)))
+       ,@(##make-syntactic-closure-list syn-env
+                                        '()
+                                        (map cadr (cadr exp)))))))
 
 ;; helper procedure to close a list of expressions
 (define (##make-syntactic-closure-list syn-env free exps)
@@ -447,9 +448,29 @@
 ;; creates a new syntactic closure closing 'exp'
 ;; with 'env' letting 'free' free
 (define (##make-syntactic-closure env free exp)
-  (vector 'syntactic-closure free env exp))
 
-(define scheme-report-env
+  (define (expand e)
+    (if (pair? e)
+        (let ((op (car e)))
+          (cond
+           ((eqv? op 'quote)
+            (cadr e))
+           ((eqv? op 'lambda)
+            '())
+           ((assv op env) =>
+            (lambda (op-expander)
+              (let ((maybe-expander (cdr op-expander)))
+                (if (procedure? maybe-expander)
+                    (maybe-expander env e)
+                    (cons op (map (cdr e)))))))
+           (else
+            (cons op (map expand (cdr e))))))
+        e))
+
+  (let ((cexp (expand exp)))
+    (vector 'syntactic-closure free env cexp)))
+
+(define scheme-syntactic-env
   `((let . ,##let-expander)
     (or  . ,##or-expander)))
 

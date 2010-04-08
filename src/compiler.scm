@@ -396,34 +396,41 @@
 ;;; macro expansion
 ;;;
 
-;; expands a top-level expression
-(define (##expand e)
+;; expands syntactic closures away from s-exps
+(define (##expand env e)
 
-  (define (expand-syntactic-closure sc)
-    (let ((env (##syntactic-closure-env sc))
-          (exp (##syntactic-closure-exp sc)))
-      (cond
-       ((##syntactic-closure? exp)
-        (expand-syntactic-closure exp))
-       ((pair? exp)
-        (let ((op (car exp)))
-          (cond
-           ((eqv? op 'quote)
-            exp)
-           ((assv op env) =>
-            (lambda (p)
-              (let ((expander (cdr p)))
-                (expand-syntactic-closure (expander env exp)))))
-           (else (map ##expand exp)))))
-       (else exp))))
+  (define (expand-list env e+)
+    (map (lambda (e) (##expand env e)) e+))
+
+  (define (expand-syntactic-closure user-env sc)
+    (let* ((sc-env (##syntactic-closure-env sc))
+           (exp (##syntactic-closure-exp sc))
+           (free (##syntactic-closure-free sc))
+           (op (if (pair? exp) (car exp) exp))
+           (env (if (memq op free) user-env sc-env)))
+      (##expand env exp)))
 
   (cond
-   ((pair? e)
-    (case (car e)
-      ((quote) e)
-      (else (map ##expand e))))
    ((##syntactic-closure? e)
-    (expand-syntactic-closure e))
+    (expand-syntactic-closure env e))
+   ((symbol? e)
+    (let ((pair (assv e env)))
+      (if pair (cdr pair) e)))
+   ((pair? e)
+    (let ((op (car e)))
+      (cond
+       ((assv op env) =>
+        (lambda (pair)
+          (##expand env ((cdr pair) env e))))
+        ((eq? op 'quote) e)
+        ((eq? op 'lambda)
+         (let ((new-env (map (lambda (n)
+                               (cons n (rename-var n)))
+                             (cadr e))))
+           `(lambda ,(map cdr new-env)
+              ,@(expand-list (append new-env env) (cddr e)))))
+        ((memq op '(begin if set!)) `(,(car e) ,@(expand-list env (cdr e))))
+        (else (expand-list env e)))))
    (else e)))
 
 ;; helper procedure to close a list of expressions
@@ -452,37 +459,37 @@
   (vector-ref sc 3))
 
 (define scheme-syntactic-env
-  (letrec ((or-expander (lambda (syn-env exp)
-                          (let ((ops (##make-syntactic-closure-list syn-env
-                                                                    '()
-                                                                    (cdr exp))))
-                            (cond
-                             ((null? ops) (##make-syntactic-closure scheme-syntactic-env '() #f))
-                             ((null? (cdr ops)) (car ops))
-                             (else (##make-syntactic-closure scheme-syntactic-env
-                                                             '()
-                                                             `(let ((temp ,(car ops)))
-                                                                (if temp
-                                                                    temp
-                                                                    (or ,@(cdr ops))))))))))
-           (let-expander (lambda (syn-env exp)
-                           (let ((identifiers (map car (cadr exp))))
-                             (##make-syntactic-closure
-                              scheme-syntactic-env
-                              '()
-                              `((lambda ,identifiers
-                                  ,@(##make-syntactic-closure-list syn-env
-                                                                   identifiers
-                                                                   (cddr exp)))
-                                ,@(##make-syntactic-closure-list syn-env
+  (let ((or-expander (lambda (syn-env exp)
+                       (let ((ops (##make-syntactic-closure-list syn-env
                                                                  '()
-                                                                 (map cadr (cadr exp)))))))))
+                                                                 (cdr exp))))
+                         (cond
+                          ((null? ops)
+                           (##make-syntactic-closure scheme-syntactic-env '() #f))
+                          ((null? (cdr ops))
+                           (car ops))
+                          (else
+                           (##make-syntactic-closure scheme-syntactic-env
+                                                     '()
+                                                     `(let ((temp ,(car ops)))
+                                                        (if temp
+                                                            temp
+                                                            (or ,@(cdr ops))))))))))
+        (let-expander (lambda (syn-env exp)
+                        (let ((identifiers (map car (cadr exp))))
+                          (##make-syntactic-closure
+                           scheme-syntactic-env
+                           '()
+                           `((lambda ,identifiers
+                               ,@(##make-syntactic-closure-list syn-env
+                                                                identifiers
+                                                                (cddr exp)))
+                             ,@(##make-syntactic-closure-list
+                                syn-env
+                                '()
+                                (map cadr (cadr exp)))))))))
     `((let . ,let-expander)
       (or  . ,or-expander))))
-
-
-
-
 
 (define (##qq-expand e)
 

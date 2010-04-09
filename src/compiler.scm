@@ -410,11 +410,11 @@
                    user-env
                    mac-env)))
       (cond
-       ((##syntactic-closure? e)
-        (expand (##syntactic-closure-free e)
+       ((syntactic-closure? e)
+        (expand (syntactic-closure-free e)
                 user-env
-                (##syntactic-closure-env e)
-                (##syntactic-closure-exp e)))
+                (syntactic-closure-env e)
+                (syntactic-closure-exp e)))
        ((symbol? e)
         (let ((pair (assv e env)))
           (if pair (cdr pair) e)))
@@ -425,7 +425,7 @@
             (lambda (pair)
               (let ((expander (cdr pair)))
                 (if (procedure? expander)
-                    (expand free user-env mac-env (expander env e))
+                    (expand free user-env mac-env (expander user-env e))
                     (expand-list free user-env mac-env e)))))
            ((eq? op 'quote) e)
            ((eq? op 'lambda)
@@ -433,73 +433,14 @@
                                   (cons n (rename-var n)))
                                 (cadr e))))
               `(lambda ,(map cdr new-env)
-                 ,@(expand-list free (append new-env env) mac-env (cddr e)))))
+                 ,@(expand-list free
+                                (append new-env user-env) mac-env (cddr e)))))
            ((memq op '(begin if set!))
             `(,(car e) ,@(expand-list free user-env mac-env (cdr e))))
            (else (expand-list free user-env mac-env e)))))
        (else `(quote ,e)))))
 
-  (expand '() '() scheme-syntactic-environment e))
-
-;; helper procedure to close a list of expressions
-(define (##make-syntactic-closure-list syn-env free exps)
-  (map (lambda (exp)
-         (##make-syntactic-closure syn-env free exp))
-       exps))
-
-;; creates a new syntactic closure closing 'exp'
-;; with 'env' letting 'free' free
-(define (##make-syntactic-closure env free exp)
-  (vector 'syntactic-closure free env exp))
-
-(define (##syntactic-closure? obj)
-  (and (vector? obj)
-       (= (vector-length obj) 4)
-       (eqv? (vector-ref obj 0) 'syntactic-closure)))
-
-(define (##syntactic-closure-free sc)
-  (vector-ref sc 1))
-
-(define (##syntactic-closure-env sc)
-  (vector-ref sc 2))
-
-(define (##syntactic-closure-exp sc)
-  (vector-ref sc 3))
-
-(define scheme-syntactic-environment
-  (let ((or-expander (lambda (syn-env exp)
-                       (let ((ops (##make-syntactic-closure-list syn-env
-                                                                 '()
-                                                                 (cdr exp))))
-                         (cond
-                          ((null? ops)
-                           (##make-syntactic-closure
-                            scheme-syntactic-environment '() #f))
-                          ((null? (cdr ops))
-                           (car ops))
-                          (else
-                           (##make-syntactic-closure
-                            scheme-syntactic-environment
-                            '()
-                            `(let ((temp ,(car ops)))
-                               (if temp
-                                   temp
-                                   (or ,@(cdr ops))))))))))
-        (let-expander (lambda (syn-env exp)
-                        (let ((identifiers (map car (cadr exp))))
-                          (##make-syntactic-closure
-                           scheme-syntactic-environment
-                           '()
-                           `((lambda ,identifiers
-                               ,@(##make-syntactic-closure-list syn-env
-                                                                identifiers
-                                                                (cddr exp)))
-                             ,@(##make-syntactic-closure-list
-                                syn-env
-                                '()
-                                (map cadr (cadr exp)))))))))
-    `((let . ,let-expander)
-      (or  . ,or-expander))))
+  (expand '() scheme-syntactic-environment scheme-syntactic-environment e))
 
 (define (##qq-expand e)
 

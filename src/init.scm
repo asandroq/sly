@@ -280,15 +280,6 @@
                     (car args))))
       (##read port (##read-token port)))))
 
-;; Temporary bizarre solution
-(define gensym
-  (let ((counter 0))
-    (lambda ()
-      (set! counter (add1 counter))
-      (string->symbol
-       (string-append "sly-gensym-"
-                      (number->string counter))))))
-
 ;; SRFI-39
 
 (define (make-parameter init . conv)

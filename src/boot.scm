@@ -56,7 +56,25 @@
        exps))
 
 (define scheme-syntactic-environment
-  (let ((or-expander (lambda (syn-env exp)
+  (let ((and-expander (lambda (syn-env exp)
+                        (let ((ops (make-syntactic-closure-list syn-env
+                                                                '()
+                                                                (cdr exp))))
+                          (cond
+                           ((null? ops)
+                            (make-syntactic-closure
+                             scheme-syntactic-environment '() #t))
+                           ((null? (cdr ops))
+                            (car ops))
+                           (else
+                            (make-syntactic-closure
+                             scheme-syntactic-environment
+                             '()
+                             `(let ((temp ,(car ops)))
+                                (if temp
+                                    (and ,@(cdr ops))
+                                    temp))))))))
+        (or-expander (lambda (syn-env exp)
                        (let ((ops (make-syntactic-closure-list syn-env
                                                                '()
                                                                (cdr exp))))
@@ -86,6 +104,33 @@
                              ,@(make-syntactic-closure-list
                                 syn-env
                                 '()
-                                (map cadr (cadr exp)))))))))
-    `((let . ,let-expander)
-      (or  . ,or-expander))))
+                                (map cadr (cadr exp))))))))
+        (let*-expander (lambda (syn-env exp)
+                         (if (null? (cadr exp))
+                             (make-syntactic-closure
+                              scheme-syntactic-environment
+                              '()
+                              `(begin ,@(make-syntactic-closure-list
+                                         syn-env
+                                         '()
+                                         (cddr exp))))
+                             (let* ((first (car (cadr exp)))
+                                    (rest (cdr (cadr exp)))
+                                    (identifier (car first))
+                                    (argument (cadr first)))
+                               (make-syntactic-closure
+                                scheme-syntactic-environment
+                                '()
+                                `((lambda (,identifier)
+                                    (let ,rest
+                                      ,@(make-syntactic-closure-list
+                                         syn-env
+                                         (list identifier)
+                                         (cddr exp))))
+                                  ,(make-syntactic-closure syn-env
+                                                           '()
+                                                           argument))))))))
+    `((and  . ,and-expander)
+      (let  . ,let-expander)
+      (let* . ,let*-expander)
+      (or   . ,or-expander))))

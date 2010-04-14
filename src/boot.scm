@@ -135,8 +135,30 @@
                                            (cddr exp))))
                                     ,(make-syntactic-closure syn-env
                                                              '()
-                                                             argument)))))))))
+                                                             argument))))))))
+        (when-expander (lambda (syn-env exp)
+                         (let ((test (make-syntactic-closure syn-env
+                                                             '()
+                                                             (cadr exp)))
+                               (body (make-syntactic-closure-list syn-env
+                                                                  '()
+                                                                  (cddr exp))))
+                           (make-syntactic-closure
+                            scheme-syntactic-environment '()
+                            `(if ,test (begin ,@body))))))
+        (unless-expander (lambda (syn-env exp)
+                           (let ((test (make-syntactic-closure syn-env
+                                                               '()
+                                                               (cadr exp)))
+                                 (body (make-syntactic-closure-list syn-env
+                                                                    '()
+                                                                    (cddr exp))))
+                             (make-syntactic-closure
+                              scheme-syntactic-environment '()
+                              `(if (not ,test) (begin ,@body)))))))
     `((and  . ,and-expander)
       (let  . ,let-expander)
       (let* . ,let*-expander)
-      (or   . ,or-expander))))
+      (or   . ,or-expander)
+      (when . ,when-expander)
+      (unless . ,unless-expander))))

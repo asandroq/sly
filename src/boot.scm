@@ -106,30 +106,36 @@
                                 '()
                                 (map cadr (cadr exp))))))))
         (let*-expander (lambda (syn-env exp)
-                         (if (null? (cadr exp))
-                             (make-syntactic-closure
-                              scheme-syntactic-environment
-                              '()
-                              `(begin ,@(make-syntactic-closure-list
-                                         syn-env
-                                         '()
-                                         (cddr exp))))
-                             (let* ((first (car (cadr exp)))
-                                    (rest (cdr (cadr exp)))
-                                    (identifier (car first))
-                                    (argument (cadr first)))
-                               (make-syntactic-closure
-                                scheme-syntactic-environment
-                                '()
-                                `((lambda (,identifier)
-                                    (let ,rest
-                                      ,@(make-syntactic-closure-list
-                                         syn-env
-                                         (list identifier)
-                                         (cddr exp))))
-                                  ,(make-syntactic-closure syn-env
-                                                           '()
-                                                           argument))))))))
+                         (let ((bindings (cadr exp)))
+                           (if (or (null? bindings)
+                                   (null? (cdr bindings)))
+                               (let ((identifier (caar bindings))
+                                     (arg (make-syntatic-closure syn-env
+                                                                 '()
+                                                                 (cadar bindings))))
+                                 (make-syntactic-closure
+                                  scheme-syntactic-environment
+                                  '()
+                                  `(let (,(list identifier arg))
+                                     ,@(make-syntactic-closure-list syn-env
+                                                                    '()
+                                                                    (cddr exp)))))
+                               (let* ((first (car (cadr exp)))
+                                      (rest (cdr (cadr exp)))
+                                      (identifier (car first))
+                                      (argument (cadr first)))
+                                 (make-syntactic-closure
+                                  scheme-syntactic-environment
+                                  '()
+                                  `((lambda (,identifier)
+                                      (let ,rest
+                                        ,@(make-syntactic-closure-list
+                                           syn-env
+                                           (list identifier)
+                                           (cddr exp))))
+                                    ,(make-syntactic-closure syn-env
+                                                             '()
+                                                             argument)))))))))
     `((and  . ,and-expander)
       (let  . ,let-expander)
       (let* . ,let*-expander)

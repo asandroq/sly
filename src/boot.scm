@@ -107,35 +107,40 @@
                                 (map cadr (cadr exp))))))))
         (let*-expander (lambda (syn-env exp)
                          (let ((bindings (cadr exp)))
-                           (if (or (null? bindings)
-                                   (null? (cdr bindings)))
-                               (let ((identifier (caar bindings))
-                                     (arg (make-syntatic-closure syn-env
+                           (cond
+                            ((null? bindings)
+                             (make-syntactic-closure
+                              scheme-syntactic-environment
+                              '()
+                              `((lambda ()
+                                  ,@(make-syntactic-closure-list syn-env
                                                                  '()
-                                                                 (cadar bindings))))
-                                 (make-syntactic-closure
-                                  scheme-syntactic-environment
-                                  '()
-                                  `(let (,(list identifier arg))
-                                     ,@(make-syntactic-closure-list syn-env
-                                                                    '()
-                                                                    (cddr exp)))))
-                               (let* ((first (car (cadr exp)))
-                                      (rest (cdr (cadr exp)))
-                                      (identifier (car first))
-                                      (argument (cadr first)))
-                                 (make-syntactic-closure
-                                  scheme-syntactic-environment
-                                  '()
-                                  `((lambda (,identifier)
-                                      (let ,rest
-                                        ,@(make-syntactic-closure-list
-                                           syn-env
-                                           (list identifier)
-                                           (cddr exp))))
-                                    ,(make-syntactic-closure syn-env
-                                                             '()
-                                                             argument))))))))
+                                                                 (cddr exp))))))
+                            ((null? (cdr bindings))
+                             (let ((var (caar bindings)))
+                               (make-syntactic-closure
+                                scheme-syntactic-environment
+                                '()
+                                `((lambda (,var)
+                                    ,@(make-syntactic-closure-list syn-env
+                                                                   `(,var)
+                                                                   (cddr exp)))
+                                  ,(make-syntactic-closure syn-env
+                                                           '()
+                                                           (cadar bindings))))))
+                            (else
+                             (let ((identifiers (map car bindings)))
+                               (make-syntactic-closure
+                                scheme-syntactic-environment
+                                '()
+                                `((lambda (,(caar bindings))
+                                    (let* ,(cdr bindings)
+                                      ,@(make-syntactic-closure-list syn-env
+                                                                     identifiers
+                                                                     (cddr exp))))
+                                  ,(make-syntactic-closure syn-env
+                                                           '()
+                                                           (cadar bindings))))))))))
         (when-expander (lambda (syn-env exp)
                          (let ((test (make-syntactic-closure syn-env
                                                              '()
@@ -156,9 +161,9 @@
                              (make-syntactic-closure
                               scheme-syntactic-environment '()
                               `(if (not ,test) (begin ,@body)))))))
-    `((and  . ,and-expander)
-      (let  . ,let-expander)
-      (let* . ,let*-expander)
-      (or   . ,or-expander)
-      (when . ,when-expander)
+    `((and    . ,and-expander)
+      (let    . ,let-expander)
+      (let*   . ,let*-expander)
+      (or     . ,or-expander)
+      (when   . ,when-expander)
       (unless . ,unless-expander))))

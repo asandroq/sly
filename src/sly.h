@@ -105,7 +105,7 @@ void sly_push_boolean(sly_state_t* S, int bool);
 void sly_push_char(sly_state_t* S, sly_char_t chr);
 void sly_push_integer(sly_state_t* S, sly_fixnum_t num);
 void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, uint32_t nr_vars);
-void sly_push_string(sly_state_t* S, const sly_cp1_t* str);
+void sly_push_string(sly_state_t* S, const char* str);
 void sly_push_vector(sly_state_t* S, uint32_t size);
 
 void sly_push_current_input_port(sly_state_t *S);

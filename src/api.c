@@ -243,7 +243,7 @@ void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, uint32_t nr_vars)
   S->stack[S->sp++].value.gc = cl;
 }
 
-void sly_push_string(sly_state_t* S, const sly_cp1_t* str)
+void sly_push_string(sly_state_t* S, const char* str)
 {
   uint32_t i, len;
   sly_gcobject_t *obj;

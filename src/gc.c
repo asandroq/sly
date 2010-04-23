@@ -34,6 +34,12 @@
  * the store, i.e., memory
  */
 
+#if defined(__LP64__) || defined(__LLP64__)
+#define WSIZE     8
+#else
+#define WSIZE     4
+#endif
+
 #define SLY_INITIAL_SPACE_SIZE     ((uint32_t)(1 << 7))
 #define SLY_IMMEDIATE_P(o)         ((o)->type < SLY_TYPE_CLOSURE)
 #define SLY_FORWARD_TAG            199
@@ -235,9 +241,9 @@ static int expand_store(sly_store_t* S)
 
   old_size = S->capacity;
 
-  /* new size is 30% larger, multiple of 8 */
+  /* new size is 30% larger, word aligned */
   size = old_size * 4 / 3;
-  size -= size % 8;
+  size -= size % WSIZE;
 
   tmp = malloc(size * 2);
   if(tmp == NULL) {
@@ -307,8 +313,8 @@ void* sly_gc_alloc(sly_store_t *S, uint32_t size)
 {
   void *ret;
 
-  /* allocating only aligned blocks */
-  assert(size % 8 == 0);
+  /* allocating only word-multiple sized blocks */
+  assert(size % WSIZE == 0);
 
   if(S->capacity - S->size < size) {
     /* not enough space, try to find some */

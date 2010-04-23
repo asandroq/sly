@@ -307,6 +307,7 @@ sly_char_t* sly_to_string(sly_state_t* S, int idx)
   assert(S->stack[idx].type == SLY_TYPE_STRING);
 #endif
 
+  str = (sly_string_t*)S->stack[idx].value.gc;
   size = str->size;
   ret = (sly_char_t*)malloc((size+1) * sizeof(sly_char_t));
   if(!ret) {
@@ -792,11 +793,10 @@ void sly_vector_set(sly_state_t* S, uint32_t pos, int idx)
 
 void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
 {
+  uint32_t proc;
   sly_object_t p;
-  uint32_t first, proc;
 
   proc = calc_index(S, idx);
-  first = calc_index(S, -nr_args);
 
 #ifdef SLY_DEBUG_API
   assert(nr_args > 0);
@@ -1025,7 +1025,7 @@ void sly_register(sly_state_t* S, sly_reg_t* regs)
 void sly_repl(sly_state_t *S)
 {
   int idx1, idx2;
-  sly_object_t *in, *out;
+  sly_object_t *out;
 
   idx1 = calc_index(S, -2);
   idx2 = calc_index(S, -1);
@@ -1035,7 +1035,6 @@ void sly_repl(sly_state_t *S)
   assert(S->stack[idx2].type == SLY_TYPE_OUTPUT_PORT);
 #endif
 
-  in  = &S->stack[idx1];
   out = &S->stack[idx2];
 
   while(1) {

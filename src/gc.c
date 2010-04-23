@@ -23,7 +23,6 @@
 
 #include "sly.h"
 
-/* #include <stdio.h> */
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -162,13 +161,11 @@ static void collect_garbage(sly_store_t* S)
    */
   void *scan;
   sly_object_t *obj;
-  uint32_t old_size;
 
   if(!S->roots_cb) {
     return;
   }
 
-  old_size = S->size;
   S->size = 0;
 
   /* copying roots */
@@ -229,8 +226,6 @@ static void collect_garbage(sly_store_t* S)
 
   /* process objects that need finalisation */
   collect_fobjs(S);
-
-  /*fprintf(stderr, "GC before: %d after: %d\n\n", old_size, S->size);*/
 }
 
 static int expand_store(sly_store_t* S)
@@ -240,11 +235,9 @@ static int expand_store(sly_store_t* S)
 
   old_size = S->capacity;
 
-  /* new size is 30% larger, multiple of 4 */
+  /* new size is 30% larger, multiple of 8 */
   size = old_size * 4 / 3;
-  size -= size % 4;
-
-  /*fprintf(stderr, "Expanding store from %d to %d\n\n", old_size, size);*/
+  size -= size % 8;
 
   tmp = malloc(size * 2);
   if(tmp == NULL) {
@@ -314,8 +307,8 @@ void* sly_gc_alloc(sly_store_t *S, uint32_t size)
 {
   void *ret;
 
-  /* allocating only 4-byte aligned blocks */
-  assert(size % 4 == 0);
+  /* allocating only aligned blocks */
+  assert(size % 8 == 0);
 
   if(S->capacity - S->size < size) {
     /* not enough space, try to find some */
@@ -354,4 +347,3 @@ void sly_gc_add_port(sly_store_t *S, sly_port_t *port)
 
   S->fobjs = link;
 }
-

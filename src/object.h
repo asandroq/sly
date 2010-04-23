@@ -58,7 +58,7 @@
 #define SLY_SIZE_OF_CONTI(n)                            \
   (sizeof(sly_conti_t) + (n) * sizeof(sly_object_t))
 #define SLY_SIZE_OF_STRING(n)                           \
-  (sizeof(sly_string_t) + (n) * sizeof(sly_char_t))
+  (sizeof(sly_string_t) + (n % 2 ? n+1 : n) * sizeof(sly_char_t))
 #define SLY_SIZE_OF_VECTOR(n)                           \
   (sizeof(sly_vector_t) + (n) * sizeof(sly_object_t))
 #define SLY_SIZE_OF_DYN_BIND                    \

@@ -23,6 +23,7 @@
 
 #include <stdio.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 #include "sly.h"
 #include "object.h"
@@ -54,6 +55,8 @@ static int compare(sly_state_t* S, int c)
       case 1:
         ret = sly_greater_than(S, i, i+1);
         break;
+      default:
+	abort();
       }
       if(!ret) {
 	sly_push_boolean(S, 0);

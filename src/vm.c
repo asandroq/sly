@@ -832,6 +832,10 @@ static int sly_vm_run(sly_state_t* S)
       } else {
 	debug = 1;
       }
+      break;
+
+    default:
+      abort();
     }
   }
 
@@ -861,8 +865,8 @@ void sly_vm_call(sly_state_t* S, sly_object_t proc, uint32_t nargs)
 
   /* number of arguments */
   S->fp = idx;
-  (S->stack[idx  ]).type = SLY_TYPE_FIXNUM;
-  (S->stack[idx++]).value.fixnum = nargs;
+  (S->stack[idx]).type = SLY_TYPE_FIXNUM;
+  (S->stack[idx]).value.fixnum = nargs;
 
   if(SLY_CLOSURE(S->proc.value.gc)->is_c) {
     call_c_closure(S, SLY_CLOSURE(S->proc.value.gc));

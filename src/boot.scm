@@ -74,6 +74,22 @@
                                 (if temp
                                     (and ,@(cdr ops))
                                     temp))))))))
+        #|
+        (cond-expander (lambda (syn-env exp)
+                         (define (process-cond-clauses syn-env clauses)
+                           (let* ((clause (car clauses))
+                                  (test (car clause))
+                                  (body (cdr clause))))
+                           (if (null? (cdr clauses))
+                               (if (eqv? test 'else)
+                                   ,(begin ,@(make-syntactic-closure-list syn-env
+                                                                          '()
+                                                                          body))
+                                   )))
+                         (make-syntactic-closure
+                          scheme-syntactic-environment '()
+                          (process-cond-clauses syn-env (cdr exp)))))
+        |#
         (or-expander (lambda (syn-env exp)
                        (let ((ops (make-syntactic-closure-list syn-env
                                                                '()

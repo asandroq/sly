@@ -399,10 +399,10 @@
 ;; expands syntactic closures away from s-exps
 (define (##expand-code e)
 
-  (define (expand-list free user-env mac-env e+)
-    (map (lambda (e) (expand free user-env mac-env e)) e+))
+  (define (expand-list e+ free user-env mac-env)
+    (map (lambda (e) (expand e free user-env mac-env)) e+))
 
-  (define (expand free user-env mac-env e)
+  (define (expand e free user-env mac-env)
     (let ((env (if (memq (if (pair? e)
                              (car e)
                              e)
@@ -411,10 +411,10 @@
                    mac-env)))
       (cond
        ((syntactic-closure? e)
-        (expand (syntactic-closure-free e)
+        (expand (syntactic-closure-exp e)
+                (syntactic-closure-free e)
                 user-env
-                (syntactic-closure-env e)
-                (syntactic-closure-exp e)))
+                (syntactic-closure-env e)))
        ((symbol? e)
         (let ((pair (assv e env)))
           (if pair (cdr pair) e)))
@@ -425,22 +425,22 @@
             (lambda (pair)
               (let ((expander (cdr pair)))
                 (if (procedure? expander)
-                    (expand free user-env mac-env (expander user-env e))
-                    (expand-list free user-env mac-env e)))))
+                    (expand (expander e user-env) free user-env mac-env)
+                    (expand-list e free user-env mac-env)))))
            ((eq? op 'quote) e)
            ((eq? op 'lambda)
             (let ((new-env (map (lambda (n)
                                   (cons n (rename-var n)))
                                 (cadr e))))
               `(lambda ,(map cdr new-env)
-                 ,@(expand-list free
-                                (append new-env user-env) mac-env (cddr e)))))
+                 ,@(expand-list (cddr e) free
+                                (append new-env user-env) mac-env))))
            ((memq op '(begin if set!))
-            `(,(car e) ,@(expand-list free user-env mac-env (cdr e))))
-           (else (expand-list free user-env mac-env e)))))
+            `(,(car e) ,@(expand-list (cdr e) free user-env mac-env)))
+           (else (expand-list e free user-env mac-env)))))
        (else `(quote ,e)))))
 
-  (expand '() scheme-syntactic-environment scheme-syntactic-environment e))
+  (expand e '() scheme-syntactic-environment scheme-syntactic-environment))
 
 (define (##qq-expand e)
 

@@ -69,7 +69,49 @@
                                    (and ,@(cdr ops))
                                    temp)))))))
         (cond-expander (lambda (exp env)
-                         '()))
+                         (let collect ((code '())
+                                       (clauses (reverse (cdr exp)))
+                                       (last? #t))
+                           (if (null? clauses)
+                               (if (null? code)
+                                   (error "Empty 'cond'" exp)
+                                   code)
+                               (let ((clause (car clauses)))
+                                 (if (pair? clause)
+                                     (let ((test (car clause))
+                                           (body (cdr clause)))
+                                       (if (eqv? test 'else)
+                                           (if last?
+                                               (let ((body (make-syntactic-closure-list env
+                                                                                        '()
+                                                                                        body)))
+                                                 (collect `(begin ,@body) (cdr clauses) #f))
+                                               (error "'else' must be last clause in 'cond'" exp))
+                                           (let ((test (make-syntactic-closure env '() test)))
+                                             (cond
+                                              ((null? body)
+                                               (collect `(or ,test ,code) (cdr clauses) #f))
+                                              ((eq? (car body) '=>)
+                                               (let ((proc (make-syntactic-closure env
+                                                                                   '()
+                                                                                   (cadr body)))
+                                                     (var (gensym)))
+                                                 (collect `(let ((,var ,test))
+                                                             (if ,var
+                                                                 (,proc ,var)
+                                                                 ,code))
+                                                          (cdr clauses)
+                                                          #f)))
+                                              (else
+                                               (let ((body (make-syntactic-closure-list env
+                                                                                        '()
+                                                                                        body)))
+                                                 (collect `(if ,test
+                                                               (begin ,@body)
+                                                               ,code)
+                                                          (cdr clauses)
+                                                          #f)))))))
+                                     (error "Ill-formed 'cond' clause" clause)))))))
         (or-expander (lambda (exp env)
                        (let ((ops (make-syntactic-closure-list env
                                                                '()
@@ -136,6 +178,7 @@
                                                                     (cddr exp))))
                              `(if (not ,test) (begin ,@body))))))
     `((and    . ,and-expander)
+      (cond   . ,cond-expander)
       (let    . ,let-expander)
       (let*   . ,let*-expander)
       (or     . ,or-expander)

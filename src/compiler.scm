@@ -680,7 +680,8 @@
     (lambda (n)
       (set! c (+ c 1))
       (string->symbol
-       (string-append (symbol->string n)
+       (string-append "#:"
+                      (symbol->string n)
                       "v"
                       (number->string c))))))
 

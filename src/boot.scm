@@ -96,9 +96,12 @@
                                                    (collect `(begin ,@body) (cdr clauses) #f)
                                                    (error "'else' must be last clause in 'case'" exp)))
                                               ((pair? data)
-                                               (collect `(if (memv temp ',data)
-                                                             (begin ,@body)
-                                                             ,code)
+                                               (collect (if (null? code)
+                                                            `(if (memv temp ',data)
+                                                                 (begin ,@body))
+                                                            `(if (memv temp ',data)
+                                                                 (begin ,@body)
+                                                                 ,code))
                                                         (cdr clauses)
                                                         #f))
                                               (else
@@ -126,24 +129,35 @@
                                            (let ((test (make-syntactic-closure env '() test)))
                                              (cond
                                               ((null? body)
-                                               (collect `(or ,test ,code) (cdr clauses) #f))
+                                               (collect (if (null? code)
+                                                            ,test
+                                                            `(or ,test ,code))
+                                                        (cdr clauses)
+                                                        #f))
                                               ((eq? (car body) '=>)
                                                (let ((proc (make-syntactic-closure env
                                                                                    '()
                                                                                    (cadr body))))
-                                                 (collect `(let ((temp ,test))
-                                                             (if temp
-                                                                 (,proc temp)
-                                                                 ,code))
+                                                 (collect (if (null? code)
+                                                              `(let ((temp ,test))
+                                                                 (if temp
+                                                                     (,proc temp)))
+                                                              `(let ((temp ,test))
+                                                                 (if temp
+                                                                     (,proc temp)
+                                                                     ,code)))
                                                           (cdr clauses)
                                                           #f)))
                                               (else
                                                (let ((body (make-syntactic-closure-list env
                                                                                         '()
                                                                                         body)))
-                                                 (collect `(if ,test
-                                                               (begin ,@body)
-                                                               ,code)
+                                                 (collect (if (null? code)
+                                                              `(if ,test
+                                                                   (begin ,@body))
+                                                              `(if ,test
+                                                                   (begin ,@body)
+                                                                   ,code))
                                                           (cdr clauses)
                                                           #f)))))))
                                      (error "Ill-formed 'cond' clause" clause)))))))

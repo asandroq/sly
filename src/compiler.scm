@@ -403,10 +403,7 @@
     (map (lambda (e) (expand e free user-env mac-env)) e+))
 
   (define (expand e free user-env mac-env)
-    (let ((env (if (memq (if (pair? e)
-                             (car e)
-                             e)
-                         free)
+    (let ((env (if (memq (if (pair? e) (car e) e) free)
                    user-env
                    mac-env)))
       (cond
@@ -425,7 +422,10 @@
             (lambda (pair)
               (let ((expander (cdr pair)))
                 (if (procedure? expander)
-                    (expand (expander e user-env) free user-env mac-env)
+                    (expand (expander e user-env)
+                            '()
+                            user-env
+                            scheme-syntactic-environment)
                     (expand-list e free user-env mac-env)))))
            ((eq? op 'quote) e)
            ((eq? op 'lambda)

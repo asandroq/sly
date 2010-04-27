@@ -160,15 +160,30 @@
                                   temp
                                   (or ,@(cdr ops)))))))))
         (let-expander (lambda (exp env)
-                        (let ((identifiers (map car (cadr exp))))
-                          `((lambda ,identifiers
-                              ,@(make-syntactic-closure-list env
-                                                             identifiers
-                                                             (cddr exp)))
-                            ,@(make-syntactic-closure-list
-                               env
-                               '()
-                               (map cadr (cadr exp)))))))
+                        (if (symbol? (cadr exp))
+                            ;; named let
+                            (let* ((name (cadr exp))
+                                   (bindings (caddr exp))
+                                   (identifiers (map car bindings))
+                                   (expressions (make-syntactic-closure-list env
+                                                                             '()
+                                                                             (map cadr bindings)))
+                                   (body (make-syntactic-closure-list env
+                                                                      (cons name identifiers)
+                                                                      (cdddr exp))))
+                              `(letrec ((,name (lambda ,identifiers
+                                                 ,@body)))
+                                 (,name ,@expressions)))
+                            ;; ordinary let
+                            (let ((identifiers (map car (cadr exp))))
+                              `((lambda ,identifiers
+                                  ,@(make-syntactic-closure-list env
+                                                                 identifiers
+                                                                 (cddr exp)))
+                                ,@(make-syntactic-closure-list
+                                   env
+                                   '()
+                                   (map cadr (cadr exp))))))))
         (let*-expander (lambda (exp env)
                          (let ((bindings (cadr exp)))
                            (cond

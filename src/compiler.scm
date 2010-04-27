@@ -433,7 +433,7 @@
                                   (cons n (rename-var n)))
                                 (cadr e))))
               `(lambda ,(map cdr new-env)
-                 ,@(expand-list (cddr e) free
+                 ,@(expand-list (cddr e) (append (cadr e) free)
                                 (append new-env user-env) mac-env))))
            ((memq op '(begin if set!))
             `(,(car e) ,@(expand-list (cdr e) free user-env mac-env)))

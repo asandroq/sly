@@ -94,11 +94,10 @@
                                               ((eq? (car body) '=>)
                                                (let ((proc (make-syntactic-closure env
                                                                                    '()
-                                                                                   (cadr body)))
-                                                     (var (gensym)))
-                                                 (collect `(let ((,var ,test))
-                                                             (if ,var
-                                                                 (,proc ,var)
+                                                                                   (cadr body))))
+                                                 (collect `(let ((temp ,test))
+                                                             (if temp
+                                                                 (,proc temp)
                                                                  ,code))
                                                           (cdr clauses)
                                                           #f)))

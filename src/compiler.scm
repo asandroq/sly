@@ -406,19 +406,19 @@
     (if (pair? e)
         (case (car e)
           ((quasiquote)
-           `(quasiquote ,(qq-expand (cadr e)
-                                    (+ level 1)
-                                    free
-                                    user-env
-                                    mac-env)))
+           `(cons 'quasiquote ,(qq-expand (cadr e)
+                                          (+ level 1)
+                                          free
+                                          user-env
+                                          mac-env)))
           ((unquote unquote-splicing)
            (cond
             ((> level 0)
-             `(,(car e) ,(qq-expand (cadr e)
-                                    (- level 1)
-                                    free
-                                    user-env
-                                    mac-env)))
+             `(cons ',(car e) ,(qq-expand (cadr e)
+                                          (- level 1)
+                                          free
+                                          user-env
+                                          mac-env)))
             ((eqv? (car e) 'unquote)
              (expand (cadr e) free user-env mac-env))
             (else
@@ -426,33 +426,33 @@
           (else
            `(append ,(qq-expand-list (car e) level free user-env mac-env)
                     ,(qq-expand (cdr e) level free user-env mac-env))))
-        `(quote ,e)))
+        `',e))
 
   (define (qq-expand-list e level free user-env mac-env)
     (if (pair? e)
         (case (car e)
           ((quasiquote)
-           `((quasiquote ,(qq-expand (cadr e)
-                                     (+ level 1)
-                                     free
-                                     user-env
-                                     mac-env))))
+           `(list (cons 'quasiquote ,(qq-expand (cadr e)
+                                                (+ level 1)
+                                                free
+                                                user-env
+                                                mac-env))))
           ((unquote unquote-splicing)
            (cond
             ((> level 0)
-             `((,(car e) ,(qq-expand (cadr e)
-                                     (- level 1)
-                                     free
-                                     user-env
-                                     mac-env))))
+             `(list (cons ',(car e) ,(qq-expand (cadr e)
+                                                (- level 1)
+                                                free
+                                                user-env
+                                                mac-env))))
             ((eqv? (car e) 'unquote)
-             `(,(expand (cadr e) free user-env mac-env)))
+             `(list ,(expand (cadr e) free user-env mac-env)))
             (else
              (expand (cadr e) free user-env mac-env))))
           (else
-           `((append ,(qq-expand-list (car e) level free user-env mac-env)
-                     ,(qq-expand (cdr e) level free user-env mac-env)))))
-        `(quote (,e))))
+           `(list (append ,(qq-expand-list (car e) level free user-env mac-env)
+                          ,(qq-expand (cdr e) level free user-env mac-env)))))
+        `'(,e)))
 
   (define (expand e free user-env mac-env)
     (let ((env (if (memq (if (pair? e) (car e) e) free)

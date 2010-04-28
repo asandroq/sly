@@ -494,7 +494,32 @@
            (else (expand-list e free user-env mac-env)))))
        (else `(quote ,e)))))
 
-  (expand e '() scheme-syntactic-environment scheme-syntactic-environment))
+  ;; expand top-level defines
+  (if (and (pair? e)
+           (eq? (car e) 'define))
+      (if (> (length e) 2)
+          (let ((definee (cadr e))
+                (body (cddr e)))
+            (cond
+             ((symbol? definee)
+              `(define ,definee ,(expand body
+                                         '()
+                                         scheme-syntactic-environment
+                                         scheme-syntactic-environment)))
+             ((pair? definee)
+              (if (and (not (null? definee))
+                       (symbol-exp? definee))
+                  (let ((name (car definee))
+                        (args (cdr definee)))
+                    `(define ,name ,(expand `(lambda ,args ,@body)
+                                            '()
+                                            scheme-syntactic-environment
+                                            scheme-syntactic-environment)))
+                  (error "ill-formed 'define'" e)))
+             (else
+              (error "ill-formed 'define'" e))))
+          (error "ill-formed 'define'" e))
+      (expand e '() scheme-syntactic-environment scheme-syntactic-environment)))
 
 ;;;
 ;;; core language compilation

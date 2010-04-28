@@ -396,63 +396,12 @@
 ;;; macro expansion
 ;;;
 
-;; expands syntactic closures away from s-exps
+;; expands top-level expressions, doing macro
+;; expansion, internal defines etc.
 (define (##expand-code e)
 
   (define (expand-list e+ free user-env mac-env)
     (map (lambda (e) (expand e free user-env mac-env)) e+))
-
-  (define (qq-expand e level free user-env mac-env)
-    (if (pair? e)
-        (case (car e)
-          ((quasiquote)
-           `(cons 'quasiquote ,(qq-expand (cadr e)
-                                          (+ level 1)
-                                          free
-                                          user-env
-                                          mac-env)))
-          ((unquote unquote-splicing)
-           (cond
-            ((> level 0)
-             `(cons ',(car e) ,(qq-expand (cadr e)
-                                          (- level 1)
-                                          free
-                                          user-env
-                                          mac-env)))
-            ((eqv? (car e) 'unquote)
-             (expand (cadr e) free user-env mac-env))
-            (else
-             (error "Illegal use if unquote-splicing"))))
-          (else
-           `(append ,(qq-expand-list (car e) level free user-env mac-env)
-                    ,(qq-expand (cdr e) level free user-env mac-env))))
-        `',e))
-
-  (define (qq-expand-list e level free user-env mac-env)
-    (if (pair? e)
-        (case (car e)
-          ((quasiquote)
-           `(list (cons 'quasiquote ,(qq-expand (cadr e)
-                                                (+ level 1)
-                                                free
-                                                user-env
-                                                mac-env))))
-          ((unquote unquote-splicing)
-           (cond
-            ((> level 0)
-             `(list (cons ',(car e) ,(qq-expand (cadr e)
-                                                (- level 1)
-                                                free
-                                                user-env
-                                                mac-env))))
-            ((eqv? (car e) 'unquote)
-             `(list ,(expand (cadr e) free user-env mac-env)))
-            (else
-             (expand (cadr e) free user-env mac-env))))
-          (else
-           `(list (append ,(qq-expand-list (car e) level free user-env mac-env)
-                          ,(qq-expand (cdr e) level free user-env mac-env)))))
-        `'(,e)))
 
   (define (expand e free user-env mac-env)
     (let ((env (if (memq (if (pair? e) (car e) e) free)
@@ -480,8 +429,6 @@
                             scheme-syntactic-environment)
                     (expand-list e free user-env mac-env)))))
            ((eq? op 'quote) e)
-           ((eq? op 'quasiquote)
-            (qq-expand (cadr e) 0 free user-env mac-env))
            ((eq? op 'lambda)
             (let ((new-env (map (lambda (n)
                                   (cons n (rename-var n)))

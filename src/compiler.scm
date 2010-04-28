@@ -402,6 +402,58 @@
   (define (expand-list e+ free user-env mac-env)
     (map (lambda (e) (expand e free user-env mac-env)) e+))
 
+  (define (qq-expand e level free user-env mac-env)
+    (if (pair? e)
+        (case (car e)
+          ((quasiquote)
+           `(quasiquote ,(qq-expand (cadr e)
+                                    (+ level 1)
+                                    free
+                                    user-env
+                                    mac-env)))
+          ((unquote unquote-splicing)
+           (cond
+            ((> level 0)
+             `(,(car e) ,(qq-expand (cadr e)
+                                    (- level 1)
+                                    free
+                                    user-env
+                                    mac-env)))
+            ((eqv? (car e) 'unquote)
+             (expand (cadr e) free user-env mac-env))
+            (else
+             (error "Illegal use if unquote-splicing"))))
+          (else
+           `(append ,(qq-expand-list (car e) level free user-env mac-env)
+                    ,(qq-expand (cdr e) level free user-env mac-env))))
+        `(quote ,e)))
+
+  (define (qq-expand-list e level free user-env mac-env)
+    (if (pair? e)
+        (case (car e)
+          ((quasiquote)
+           `((quasiquote ,(qq-expand (cadr e)
+                                     (+ level 1)
+                                     free
+                                     user-env
+                                     mac-env))))
+          ((unquote unquote-splicing)
+           (cond
+            ((> level 0)
+             `((,(car e) ,(qq-expand (cadr e)
+                                     (- level 1)
+                                     free
+                                     user-env
+                                     mac-env))))
+            ((eqv? (car e) 'unquote)
+             `(,(expand (cadr e) free user-env mac-env)))
+            (else
+             (expand (cadr e) free user-env mac-env))))
+          (else
+           `((append ,(qq-expand-list (car e) level free user-env mac-env)
+                     ,(qq-expand (cdr e) level free user-env mac-env)))))
+        `(quote (,e))))
+
   (define (expand e free user-env mac-env)
     (let ((env (if (memq (if (pair? e) (car e) e) free)
                    user-env
@@ -428,6 +480,8 @@
                             scheme-syntactic-environment)
                     (expand-list e free user-env mac-env)))))
            ((eq? op 'quote) e)
+           ((eq? op 'quasiquote)
+            (qq-expand (cadr e) 0 free user-env mac-env))
            ((eq? op 'lambda)
             (let ((new-env (map (lambda (n)
                                   (cons n (rename-var n)))
@@ -441,53 +495,6 @@
        (else `(quote ,e)))))
 
   (expand e '() scheme-syntactic-environment scheme-syntactic-environment))
-
-(define (##qq-expand e)
-
-  (define (qq-expand e level)
-    (if (pair? e)
-        (case (car e)
-          ((quasiquote)
-           (list 'quasiquote
-                 (qq-expand (cadr e) (+ level 1))))
-          ((unquote unquote-splicing)
-           (cond
-            ((> level 0)
-             (list (car e)
-                   (qq-expand (cadr e ) (- level 1))))
-            ((eqv? (car e) 'unquote)
-             (simplify (cadr e)))
-            (else
-             (error "Illegal use if unquote-splicing"))))
-          (else
-           (list 'append
-                 (qq-expand-list (car e) level)
-                 (qq-expand (cdr e) level))))
-        (list 'quote e)))
-
-  (define (qq-expand-list e level)
-    (if (pair? e)
-        (case (car e)
-          ((quasiquote)
-           (list (list 'quasiquote
-                       (qq-expand (cadr e) (+ level 1)))))
-          ((unquote unquote-splicing)
-           (cond
-            ((> level 0)
-             (list 'list (list (car e)
-                               (qq-expand (cadr e ) (- level 1)))))
-            ((eqv? (car e) 'unquote)
-             (list 'list (simplify (cadr e))))
-            (else
-             (simplify (cadr e)))))
-          (else
-           (list 'list
-                 (list 'append
-                       (qq-expand-list (car e) level)
-                       (qq-expand (cdr e) level)))))
-        (list 'quote (list e))))
-
-  (qq-expand e 0))
 
 ;;;
 ;;; core language compilation

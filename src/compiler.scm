@@ -385,13 +385,6 @@
               (loop (cons e defs) (cdr es))
               (rest (map simplify-define (reverse defs)) es))))))
 
-(define (define-exp? e)
-  (and (pair? e)
-       (pair? (cdr e))
-       (pair? (cddr e))
-       (null? (cdddr e))
-       (eq? (car e) 'define)))
-
 ;;;
 ;;; macro expansion
 ;;;
@@ -402,6 +395,31 @@
 
   (define (expand-list e+ free user-env mac-env)
     (map (lambda (e) (expand e free user-env mac-env)) e+))
+
+  (define (expand-body exps free user-env mac-env)
+
+    (define (rest defs body)
+      (cond
+       ((any? define-exp? body)
+        (error "internal defines must come first in body" exps))
+       ((null? defs)
+        (if (null? (cdr body))
+            (expand (car body) free user-env mac-env)
+            `(begin ,@(expand-list body free user-env mac-env))))
+       (else
+        (let ((vars (map cadr defs))
+              (exps (map caddr defs)))
+          (expand `(letrec ,(map list vars exps) ,@body))))))
+
+    ;; gather internal defines
+    (let loop ((defs '())
+               (es exps))
+      (if (null? es)
+          (error "empty body" exps)
+          (let ((e (car es)))
+            (if (define-exp? e)
+                (loop (cons (canonicalise-define e) defs) (cdr es))
+                (rest (reverse defs) es))))))
 
   (define (expand e free user-env mac-env)
     (let ((env (if (memq (if (pair? e) (car e) e) free)
@@ -429,6 +447,8 @@
                             scheme-syntactic-environment)
                     (expand-list e free user-env mac-env)))))
            ((eq? op 'quote) e)
+           ((eq? op 'begin)
+            (expand-body (cdr e) free user-env mac-env))
            ((eq? op 'lambda)
             (let* ((vars (cadr e))
                    (vars-list (symbol-exp->list vars))
@@ -437,39 +457,42 @@
                                  vars-list))
                    (new-vars (symbol-exp->symbol-exp vars new-env)))
               `(lambda ,new-vars
-                 ,@(expand-list (cddr e) (append vars-list free)
-                                (append new-env user-env) mac-env))))
-           ((memq op '(begin if set!))
+                 ,(expand-body (cddr e) (append vars-list free)
+                               (append new-env user-env) mac-env))))
+           ((memq op '(if set!))
             `(,(car e) ,@(expand-list (cdr e) free user-env mac-env)))
-           (else (expand-list e free user-env mac-env)))))
-       (else `(quote ,e)))))
+           (else
+            (expand-list e free user-env mac-env)))))
+       (else `',e))))
 
-  ;; expand top-level defines
-  (if (and (pair? e)
-           (eq? (car e) 'define))
-      (if (> (length e) 2)
-          (let ((definee (cadr e))
-                (body (cddr e)))
-            (cond
-             ((symbol? definee)
-              `(define ,definee ,(expand body
-                                         '()
-                                         scheme-syntactic-environment
-                                         scheme-syntactic-environment)))
-             ((pair? definee)
-              (if (and (not (null? definee))
-                       (symbol-exp? definee))
-                  (let ((name (car definee))
-                        (args (cdr definee)))
-                    `(define ,name ,(expand `(lambda ,args ,@body)
-                                            '()
-                                            scheme-syntactic-environment
-                                            scheme-syntactic-environment)))
-                  (error "ill-formed 'define'" e)))
-             (else
-              (error "ill-formed 'define'" e))))
-          (error "ill-formed 'define'" e))
+  (if (define-exp? e)
+      (let ((e (canonicalise-define e)))
+        `(define ,(cadr e)
+                 ,(expand (caddr e)
+                          '()
+                          scheme-syntactic-environment
+                          scheme-syntactic-environment)))
       (expand e '() scheme-syntactic-environment scheme-syntactic-environment)))
+
+(define (canonicalise-define e)
+  (let ((definee (cadr e))
+        (body (cddr e)))
+    (cond
+     ((symbol? definee) e)
+     ((pair? definee)
+      (if (and (not (null? definee))
+               (symbol-exp? definee))
+          (let ((name (car definee))
+                (args (cdr definee)))
+            `(define ,name (lambda ,args ,@body)))
+          (error "ill-formed 'define'" e)))
+     (else
+      (error "ill-formed 'define'" e)))))
+
+(define (define-exp? e)
+  (and (pair? e)
+       (> (length e) 2)
+       (eq? (car e) 'define)))
 
 ;;;
 ;;; core language compilation

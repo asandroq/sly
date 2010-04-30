@@ -422,7 +422,7 @@
               (loop (cons e defs) (cdr es)))
              ((and (pair? e)
                    (eq? (car e) 'begin))
-              (loop defs (append (cdr e) es)))
+              (loop defs (append (cdr e) (cdr es))))
              (else
               (rest (reverse defs) es)))))))
 

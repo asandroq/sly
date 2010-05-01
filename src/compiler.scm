@@ -409,7 +409,10 @@
        (else
         (let ((vars (map cadr defs))
               (exps (map caddr defs)))
-          `(letrec ,(map list vars exps) ,@body)))))
+          `(letrec ,(map list vars exps)
+             ,(if (null? (cdr body))
+                  (car body)
+                  `(begin ,@body)))))))
 
     ;; gather internal defines
     (let loop ((defs '())

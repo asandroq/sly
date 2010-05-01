@@ -500,6 +500,41 @@
        (eq? (car e) 'define)))
 
 ;;;
+;;; letrec transformation
+;;;
+
+(define (##purify-letrecs e)
+  (if (pair? e)
+      (case (car e)
+        ((begin if)
+         `(,(car e) ,@(map ##purify-letrecs (cdr e))))
+        ((lambda)
+         `(lambda ,(cadr e)
+            ,(##purify-letrecs (caddr e))))
+        ((letrec)
+         (let ((vars (map car (cadr e)))
+               (args (map cadr (cadr e))))
+           (let loop ((vs vars)
+                      (ms '())
+                      (ts '()))
+             (if (null? vs)
+                 `((lambda ,vars
+                     ((lambda ,ts
+                        (begin
+                          ,@(map (lambda (v a)
+                                   `(set! ,v ,a))
+                                 vars ts)
+                          ,(##purify-letrecs (caddr e))))
+                      ,@args))
+                   ,@ms)
+                 (loop (cdr vs) (cons '#f ms) (cons (gensym) ts))))))
+        ((set!)
+         `(set! ,(cadr e) ,(##purify-letrecs (caddr e))))
+        (else
+         (map ##purify-letrecs e)))
+      e))
+
+;;;
 ;;; core language compilation
 ;;;
 

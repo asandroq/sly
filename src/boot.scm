@@ -161,6 +161,43 @@
                                                           (cdr clauses)
                                                           #f)))))))
                                      (error "Ill-formed 'cond' clause" clause)))))))
+        (do-expander (lambda (exp env)
+                       (let loop ((bindings (cadr exp))
+                                  (vars '())
+                                  (inits '())
+                                  (steps '()))
+                         (if (null? bindings)
+                             (let* ((vars (reverse vars))
+                                    (inits (reverse inits))
+                                    (steps (reverse steps))
+                                    (test (make-syntactic-closure env
+                                                                  vars
+                                                                  (caaddr exp)))
+                                    (cmds (make-syntactic-closure-list env
+                                                                       vars
+                                                                       (cdaddr exp))))
+                               `(let loop ,(map list vars inits)
+                                  (if ,test
+                                      (begin ,@cmds)
+                                      (begin
+                                        ,@(make-syntactic-closure-list env
+                                                                       vars
+                                                                       (cdddr exp))
+                                        (loop ,@(map list vars steps))))))
+                             (let* ((binding (car bindings))
+                                    (var (car binding))
+                                    (init (make-syntactic-closure env
+                                                                  '()
+                                                                  (cadr binding)))
+                                    (step (if (null? (cddr binding))
+                                              var
+                                              (make-syntactic-closure env
+                                                                      `(,var)
+                                                                      (caddr binding)))))
+                               (loop (cdr bindings)
+                                     (cons var vars)
+                                     (cons init inits)
+                                     (cons step steps)))))))
         (or-expander (lambda (exp env)
                        (let ((ops (make-syntactic-closure-list env
                                                                '()
@@ -280,6 +317,7 @@
     `((and        . ,and-expander)
       (case       . ,case-expander)
       (cond       . ,cond-expander)
+      (do         . ,do-expander)
       (let        . ,let-expander)
       (let*       . ,let*-expander)
       (or         . ,or-expander)

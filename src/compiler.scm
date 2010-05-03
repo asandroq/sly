@@ -486,6 +486,20 @@
                                           (append new-env user-env) mac-env)))
               `(lambda ,new-vars
                  ,(expand-body new-body))))
+           ((eq? op 'letrec)
+            (let* ((vars (map car (cadr e)))
+                   (new-env (map (lambda (n)
+                                   (cons n (rename-var n)))
+                                 vars))
+                   (new-vars (map cdr new-env))
+                   (new-free (append vars free))
+                   (new-user-env (append new-env user-env))
+                   (new-args (expand-list (map cadr (cadr e)) new-free
+                                          new-user-env mac-env))
+                   (new-body (expand-list (cddr e) new-free
+                                          new-user-env mac-env)))
+              `(letrec ,(map list new-vars new-args)
+                 ,(expand-body new-body))))
            ((memq op '(if set!))
             `(,(car e) ,@(expand-list (cdr e) free user-env mac-env)))
            (else

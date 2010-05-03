@@ -525,9 +525,9 @@
                                    `(set! ,v ,a))
                                  vars ts)
                           ,(##purify-letrecs (caddr e))))
-                      ,@args))
+                      ,@(map ##purify-letrecs args)))
                    ,@ms)
-                 (loop (cdr vs) (cons '#f ms) (cons (gensym) ts))))))
+                 (loop (cdr vs) (cons '#f ms) (cons (rename-var 'ltvar) ts))))))
         ((set!)
          `(set! ,(cadr e) ,(##purify-letrecs (caddr e))))
         (else

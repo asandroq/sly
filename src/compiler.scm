@@ -398,6 +398,26 @@
 
   (define (expand-body exps)
 
+    ;; ugly letrec post renaming
+    (define (rename-letrec e env)
+
+      (define (rename e)
+        (if (pair? e)
+            (case (car e)
+              ((letrec quote)
+               e)
+              ((lambda)
+               `(lambda ,(cadr e)
+                  ,(rename (caddr e))))
+              (else
+               (map rename e)))
+            (if (symbol? e)
+                (let ((p (assv e env)))
+                  (if p (cdr p) e))
+                e)))
+
+      (rename e))
+
     (define (rest defs body)
       (cond
        ((any? define-exp? body)
@@ -407,12 +427,15 @@
             (car body)
             `(begin ,@body)))
        (else
-        (let ((vars (map cadr defs))
-              (exps (map caddr defs)))
-          `(letrec ,(map list vars exps)
-             ,(if (null? (cdr body))
-                  (car body)
-                  `(begin ,@body)))))))
+        (let* ((vars (map cadr defs))
+               (exps (map caddr defs))
+               (env (##make-env vars))
+               (new-vars (map cdr env)))
+          `(letrec ,(map list new-vars exps)
+             ,(rename-letrec (if (null? (cdr body))
+                                 (car body)
+                                 `(begin ,@body))
+                             env))))))
 
     ;; gather internal defines
     (let loop ((defs '())
@@ -478,9 +501,7 @@
            ((eq? op 'lambda)
             (let* ((vars (cadr e))
                    (vars-list (symbol-exp->list vars))
-                   (new-env (map (lambda (n)
-                                   (cons n (rename-var n)))
-                                 vars-list))
+                   (new-env (##make-env vars-list))
                    (new-vars (symbol-exp->symbol-exp vars new-env))
                    (new-body (expand-list (cddr e) (append vars-list free)
                                           (append new-env user-env) mac-env)))
@@ -488,9 +509,7 @@
                  ,(expand-body new-body))))
            ((eq? op 'letrec)
             (let* ((vars (map car (cadr e)))
-                   (new-env (map (lambda (n)
-                                   (cons n (rename-var n)))
-                                 vars))
+                   (new-env (##make-env vars))
                    (new-vars (map cdr new-env))
                    (new-free (append vars free))
                    (new-user-env (append new-env user-env))
@@ -507,6 +526,11 @@
        (else `',e))))
 
   (expand e '() scheme-syntactic-environment scheme-syntactic-environment))
+
+(define (##make-env vars)
+  (map (lambda (n)
+         (cons n (rename-var n)))
+       vars))
 
 (define (define-exp? e)
   (and (pair? e)

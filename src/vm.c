@@ -198,7 +198,7 @@ void sly_vm_dump(sly_state_t* S)
   char buf[64];
   sly_object_t port;
 
-  port.type = SLY_TYPE_INPUT_PORT;
+  port.type = SLY_TYPE_OUTPUT_PORT;
   port.value.gc = sly_io_create_stderr(S);
 
   sly_io_write_c_string(S, "Instruction: ", &port);

@@ -135,8 +135,8 @@ static void collect_fobjs(sly_store_t *S)
   for(prev = NULL, fobj = S->fobjs; fobj;) {
     if(fobj->obj->type == SLY_FORWARD_TAG) {
       fobj->obj = ((sly_forward_t*)fobj->obj)->ref;
-      fobj = fobj->next;
       prev = fobj;
+      fobj = fobj->next;
     } else {
       sly_fobj_t *tmp = fobj->next;
 

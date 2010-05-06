@@ -124,7 +124,7 @@
   (cond
    ((null? lst) #f)
    ((eqv? x (car lst)) lst)
-   (else (memq x (cdr lst)))))
+   (else (memv x (cdr lst)))))
 
 (define (member x lst)
   (cond

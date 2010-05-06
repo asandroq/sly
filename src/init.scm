@@ -65,7 +65,8 @@
 (define (cdddar x) (cdr (cdr (cdr (car x)))))
 (define (cddddr x) (cdr (cdr (cdr (cdr x)))))
 
-(define list (lambda args args))
+(define (list . args)
+  args)
 
 (define (length lst)
   (let loop ((l lst)
@@ -75,28 +76,27 @@
      ((pair? l) (loop (cdr l) (add1 i)))
      (else (error "length applied to non-list" lst l)))))
 
-(define append
-  (lambda args
-    (let loop ((lol args)
-               (res '()))
-      (if (null? lol)
-          '()
-          (let ((h (car lol))
-                (t (cdr lol)))
-            (if (null? t)
-                ;; this is the last argument, may be anything
-                (let join ((in res)
-                           (out h))
-                  (if (null? in)
-                      out
-                      (join (cdr in) (cons (car in) out))))
-                (if (list? h)
-                    (let loop2 ((l h)
-                                (res res))
-                      (if (null? l)
-                          (loop t res)
-                          (loop2 (cdr l) (cons (car l) res))))
-                    (error "non-list must be last in append"))))))))
+(define (append . args)
+  (let loop ((lol args)
+             (res '()))
+    (if (null? lol)
+        '()
+        (let ((h (car lol))
+              (t (cdr lol)))
+          (if (null? t)
+              ;; this is the last argument, may be anything
+              (let join ((in res)
+                         (out h))
+                (if (null? in)
+                    out
+                    (join (cdr in) (cons (car in) out))))
+              (if (list? h)
+                  (let loop2 ((l h)
+                              (res res))
+                    (if (null? l)
+                        (loop t res)
+                        (loop2 (cdr l) (cons (car l) res))))
+                  (error "non-list must be last in append")))))))
 
 (define (reverse lst)
   (let loop ((l lst)
@@ -151,17 +151,16 @@
 ;; R5RS 6.3.6
 ;;
 
-(define vector
-  (lambda args
-    (let* ((len (length args))
-           (vec (make-vector len)))
-      (let loop ((i 0)
-                 (args args))
-        (if (null? args)
-            vec
-            (begin
-              (vector-set! vec i (car args))
-              (loop (add1 i) (cdr args))))))))
+(define (vector . args)
+  (let* ((len (length args))
+         (vec (make-vector len)))
+    (let loop ((i 0)
+               (args args))
+      (if (null? args)
+          vec
+          (begin
+            (vector-set! vec i (car args))
+            (loop (add1 i) (cdr args)))))))
 
 (define (list->vector list)
   (let* ((size (length list))
@@ -273,12 +272,11 @@
                    (cons next res)))))))))
    (else look-ahead)))
 
-(define read
-  (lambda args
-    (let ((port (if (null? args)
-                    (current-input-port)
-                    (car args))))
-      (##read port (##read-token port)))))
+(define (read . args)
+  (let ((port (if (null? args)
+                  (current-input-port)
+                  (car args))))
+    (##read port (##read-token port))))
 
 ;; SRFI-39
 

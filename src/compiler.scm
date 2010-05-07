@@ -168,10 +168,10 @@
             (lambda (pair)
               (let ((expander (cdr pair)))
                 (if (procedure? expander)
-                    (expand (expander e user-env)
-                            '()
+                    (expand (expander e user-env mac-env)
+                            free
                             user-env
-                            scheme-syntactic-environment)
+                            mac-env)
                     (expand-list e free user-env mac-env)))))
            ((eq? op 'quote) e)
            ((eq? op 'begin)

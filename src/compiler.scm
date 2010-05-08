@@ -221,7 +221,25 @@
             (expand-list e free user-env mac-env)))))
        (else `',e))))
 
-  (expand e '() scheme-syntactic-environment scheme-syntactic-environment))
+  (if (and (pair? e)
+           (eqv? (car e) 'define-syntax))
+      ;; toplevel syntax definition
+      (if (and (pair? (cdr e))
+               (pair? (cddr e)))
+          (let ((name (cadr e))
+                (expander (expand (caddr e)
+                                  '()
+                                  ##user-syntactic-environment
+                                  ##user-syntactic-environment)))
+            (if (symbol? name)
+                `(begin
+                   (set! ##user-syntactic-environment
+                         (cons (cons ',name ,expander)
+                               ##user-syntactic-environment))
+                   ',name)
+                (error "Ill-formed define-syntax")))
+          (error "Ill-formed define-syntax" e))
+      (expand e '() ##user-syntactic-environment ##user-syntactic-environment)))
 
 (define (##make-env vars)
   (map (lambda (n)

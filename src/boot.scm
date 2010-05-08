@@ -337,6 +337,8 @@
       (or         . ,or-expander)
       (quasiquote . ,quasi-expander))))
 
+(define ##user-syntactic-environment scheme-syntactic-environment)
+
 (define (sc-macro-transformer f)
   (lambda (exp user-env mac-env)
     (make-syntactic-closure mac-env '() (f exp user-env))))

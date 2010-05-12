@@ -122,7 +122,6 @@ typedef struct sly_oport_t     sly_oport_t;
 
 /* value types */
 struct sly_object_t {
-
   /* the runtime type tag */
   uint8_t type;
 

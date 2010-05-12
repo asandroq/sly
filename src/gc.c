@@ -332,6 +332,9 @@ void* sly_gc_alloc(sly_store_t *S, uint32_t size)
   ret = S->from_space + S->size;
   S->size += size;
 
+  /* returned address must be word aligned */
+  assert((uintptr_t)ret % WSIZE == 0);
+
   return ret;
 }
 

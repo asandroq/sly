@@ -856,6 +856,30 @@ void sly_call(sly_state_t *S, uint32_t n_args)
   S->stack[S->sp++] = S->accum;
 }
 
+void sly_load_file(sly_state_t* S, int idx)
+{
+  int idx2;
+  sly_module_t mod;
+
+  idx = calc_index(S, idx);
+  idx2 = calc_index(S, -1);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type = SLY_TYPE_STRING);
+#endif
+ 
+  sly_get_global(S, "compile-from-port");
+  S->stack[S->sp++] = S->stack[idx];
+  sly_open_input_file(S);
+  sly_call(S, 1);
+
+  sly_vm_vector_to_module(S->stack[S->sp-1], &mod);
+
+  sly_vm_link_run_module(S, &mod);
+  S->sp = ++idx2 + 1;
+  S->stack[idx2] = S->accum;
+}
+
 void sly_push_current_input_port(sly_state_t *S)
 {
   sly_get_global(S, "current-input-port");

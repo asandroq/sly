@@ -555,6 +555,20 @@ static int eval(sly_state_t* S)
   return 1;
 }
 
+static int load(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  sly_load_file(S, 0);
+
+  return 1;
+}
+
 /*
  * R5RS 6.6.1
  */
@@ -886,6 +900,7 @@ static sly_reg_t std_regs[] = {
   {"procedure?", procedurep},
   {"apply", apply},
   {"eval", eval},
+  {"load", load},
   {"eof-object?", eof_objectp},
   {"input-port?", input_portp},
   {"output-port?", output_portp},

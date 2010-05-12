@@ -74,7 +74,6 @@ void sly_register(sly_state_t* S, sly_reg_t* regs);
 /* the input and output ports must be on stack */
 void sly_repl(sly_state_t *S);
 
-int sly_load_file(sly_state_t* S, const char *fname);
 int sly_load_buffer(sly_state_t* S, const uint8_t *buffer);
 
 /*
@@ -166,6 +165,7 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args);
 /* evaluation */
 void sly_eval(sly_state_t* S, int idx);
 void sly_call(sly_state_t* S, uint32_t n_args);
+void sly_load_file(sly_state_t* S, int idx);
 
 /* I/O */
 void sly_open_input_file(sly_state_t* S);

@@ -1,6 +1,7 @@
 
 src/sly
 src/fasl2h
+src/sly_provider.h
 *~
 *.o
 *.fasl

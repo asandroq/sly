@@ -1,6 +1,6 @@
 ##
 ## The Sly Scheme compiler
-## Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
+## Copyright (c) 2009,2010 Alex Queiroz <asandroq@gmail.com>
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to deal
@@ -21,10 +21,20 @@
 ## THE SOFTWARE.
 ##
 
+# Conditionally enables dtrace user probes
+ifneq ($(DTRACE),)
+DT_FLAGS = -DSLY_DTRACE
+DT_HEADER = sly_provider.h
+else
+DT_FLAGS =
+DT_HEADER =
+endif
+
 CC = gcc
-CFLAGS = -g3 -O0 -Wall -W -DSLY_DEBUG_API
+CFLAGS = -g3 -O0 -Wall -W -DSLY_DEBUG_API $(DT_FLAGS)
 LD = gcc
 LDFLAGS =
+DT_CC = dtrace
 
 TARGET = sly
 
@@ -49,10 +59,14 @@ $(TARGET): $(OBJECTS)
 fasl2h: fasl2h.o
 	$(LD) fasl2h.o $(LDFLAGS) -o fasl2h
 
-%.o: %.c
+sly_provider.h: sly_provider.d
+	$(DT_CC) -h -s sly_provider.d -o sly_provider.h
+
+%.o: %.c $(DT_HEADER)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 .PHONY: clean
 
 clean:
-	rm -f $(TARGET) fasl2h fasl2h.o $(OBJECTS) *~ *.fasl
+	rm -f $(TARGET) fasl2h fasl2h.o $(OBJECTS) $(DT_HEADER) *~ *.fasl
+

@@ -30,6 +30,10 @@
 #include "gc.h"
 #include "object.h"
 
+#ifdef SLY_DTRACE
+#include "sly_provider.h"
+#endif
+
 /*
  * the store, i.e., memory
  */
@@ -168,6 +172,11 @@ static void collect_garbage(sly_store_t* S)
   void *scan;
   sly_object_t *obj;
 
+#ifdef SLY_DTRACE
+  int old_size = S->size;
+  SLY_GC_START();
+#endif
+
   if(!S->roots_cb) {
     return;
   }
@@ -232,6 +241,10 @@ static void collect_garbage(sly_store_t* S)
 
   /* process objects that need finalisation */
   collect_fobjs(S);
+
+#ifdef SLY_DTRACE
+  SLY_GC_END(old_size, S->size);
+#endif
 }
 
 static int expand_store(sly_store_t* S)

@@ -44,7 +44,7 @@
 #define WSIZE     4
 #endif
 
-#define SLY_INITIAL_SPACE_SIZE     ((uint32_t)(1 << 7))
+#define SLY_INITIAL_SPACE_SIZE     ((size_t)(1 << 7))
 #define SLY_IMMEDIATE_P(o)         ((o)->type < SLY_TYPE_CLOSURE)
 #define SLY_FORWARD_TAG            199
 
@@ -56,9 +56,9 @@ struct sly_forward_t {
   sly_gcobject_t *ref;
 };
 
-static uint32_t sizeof_gcobj(sly_gcobject_t* obj)
+static size_t sizeof_gcobj(sly_gcobject_t* obj)
 {
-  uint32_t size;
+  size_t size;
 
   switch(obj->type) {
   case SLY_TYPE_CLOSURE:
@@ -107,7 +107,7 @@ static uint32_t sizeof_gcobj(sly_gcobject_t* obj)
 static void copy_object(sly_store_t* S, sly_object_t* obj)
 {
   void *to;
-  uint32_t size;
+  size_t size;
 
   if(SLY_IMMEDIATE_P(obj)) {
     /* if not heap-allocated, bail */
@@ -191,7 +191,8 @@ static void collect_garbage(sly_store_t* S)
   /* now scan to-space */
   scan = S->to_space;
   while(scan < S->to_space + S->size) {
-    uint32_t i, size;
+    uint32_t i;
+    size_t size;
     sly_gcobject_t *gcobj;
 
     gcobj = SLY_GCOBJECT(scan);
@@ -250,7 +251,7 @@ static void collect_garbage(sly_store_t* S)
 static int expand_store(sly_store_t* S)
 {
   void *tmp;
-  uint32_t old_size, size;
+  size_t old_size, size;
 
   old_size = S->capacity;
 
@@ -322,7 +323,7 @@ void sly_gc_finish(sly_store_t *S)
   S->roots_cb = S->roots_cb_data = NULL;
 }
 
-void* sly_gc_alloc(sly_store_t *S, uint32_t size)
+void* sly_gc_alloc(sly_store_t *S, size_t size)
 {
   void *ret;
 

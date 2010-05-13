@@ -173,7 +173,7 @@ static void collect_garbage(sly_store_t* S)
   sly_object_t *obj;
 
 #ifdef SLY_DTRACE
-  int old_size = S->size;
+  size_t old_size = S->size;
   SLY_GC_START();
 #endif
 

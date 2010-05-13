@@ -587,7 +587,7 @@ void sly_number_to_string(sly_state_t* S, int idx)
   assert(S->stack[idx].type == SLY_TYPE_FIXNUM);
 #endif
 
-  snprintf(tmp, 64, "%d", S->stack[idx].value.fixnum);
+  snprintf(tmp, 64, "%ld", S->stack[idx].value.fixnum);
   len = strlen(tmp);
 
   str = sly_create_string(S, NULL, len);

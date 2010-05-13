@@ -1108,6 +1108,10 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj, sly_object_t *port
     sly_io_write_c_string(S, "<#eof>", port);
     break;
 
+  case SLY_TYPE_VOID:
+    sly_io_write_c_string(S, "<#void>", port);
+    break;
+
   case SLY_TYPE_UNDEF:
     sly_io_write_c_string(S, "<#undef>", port);
     break;

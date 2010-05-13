@@ -910,6 +910,7 @@ void sly_newline(sly_state_t* S, int idx)
 #endif
 
   sly_io_newline(S, &S->stack[idx]);
+  S->accum.type = SLY_TYPE_VOID;
 }
 
 void sly_read(sly_state_t *S, int idx)
@@ -957,6 +958,7 @@ void sly_display(sly_state_t* S, int idx1, int idx2)
 #endif
 
   sly_io_display(S, &S->stack[idx1], &S->stack[idx2]);
+  S->accum.type = SLY_TYPE_VOID;
 }
 
 void sly_open_input_file(sly_state_t* S)
@@ -1071,8 +1073,10 @@ void sly_repl(sly_state_t *S)
     }
 
     sly_eval(S, -1);
-    sly_write(S, -1, -3);
-    sly_newline(S, -3);
+    if(S->stack[S->sp-1].type != SLY_TYPE_VOID) {
+      sly_write(S, -1, -3);
+      sly_newline(S, -3);
+    }
     S->sp -= 2;
   }
 

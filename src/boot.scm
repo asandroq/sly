@@ -65,7 +65,7 @@
                            ((null? (cdr ops)) (car ops))
                            (else
                             (make-syntactic-closure
-                             mac-env '()
+                             scheme-syntactic-environment '()
                              `(let ((temp ,(car ops)))
                                 (if temp
                                     (and ,@(cdr ops))
@@ -84,10 +84,10 @@
                                  (if (null? clauses)
                                      (if (null? code)
                                          (error "empty 'case'" exp)
-                                         (make-syntactic-closure mac-env
-                                                                 '()
-                                                                 `(let ((temp ,key))
-                                                                    ,code)))
+                                         (make-syntactic-closure
+                                          scheme-syntactic-environment '()
+                                          `(let ((temp ,key))
+                                             ,code)))
                                      (let ((clause (car clauses)))
                                        (if (pair? clause)
                                            (let ((data (car clause))
@@ -118,9 +118,8 @@
                            (if (null? clauses)
                                (if (null? code)
                                    (error "Empty 'cond'" exp)
-                                   (make-syntactic-closure mac-env
-                                                           '()
-                                                           code))
+                                   (make-syntactic-closure
+                                    scheme-syntactic-environment '() code))
                                (let ((clause (car clauses)))
                                  (if (pair? clause)
                                      (let ((test (car clause))
@@ -183,7 +182,7 @@
                                                                        vars
                                                                        (cdaddr exp))))
                                (make-syntactic-closure
-                                mac-env '()
+                                scheme-syntactic-environment '()
                                 `(let loop ,(map list vars inits)
                                    (if ,test
                                        (begin ,@cmds)
@@ -215,7 +214,7 @@
                           ((null? (cdr ops)) (car ops))
                           (else
                            (make-syntactic-closure
-                            mac-env '()
+                            scheme-syntactic-environment '()
                             `(let ((temp ,(car ops)))
                                (if temp
                                    temp
@@ -233,14 +232,14 @@
                                                                       (cons name identifiers)
                                                                       (cdddr exp))))
                               (make-syntactic-closure
-                               mac-env '()
+                               scheme-syntactic-environment '()
                                `(letrec ((,name (lambda ,identifiers
                                                   ,@body)))
                                   (,name ,@expressions))))
                             ;; ordinary let
                             (let ((identifiers (map car (cadr exp))))
                               (make-syntactic-closure
-                               mac-env '()
+                               scheme-syntactic-environment '()
                                `((lambda ,identifiers
                                    ,@(make-syntactic-closure-list use-env
                                                                   identifiers
@@ -260,7 +259,7 @@
                             ((null? (cdr bindings))
                              (let ((var (caar bindings)))
                                (make-syntactic-closure
-                                mac-env '()
+                                scheme-syntactic-environment '()
                                 `((lambda (,var)
                                     ,@(make-syntactic-closure-list use-env
                                                                    `(,var)
@@ -271,7 +270,7 @@
                             (else
                              (let ((identifiers (map car bindings)))
                                (make-syntactic-closure
-                                mac-env '()
+                                scheme-syntactic-environment '()
                                 `((lambda (,(caar bindings))
                                     (let* ,(cdr bindings)
                                       ,@(make-syntactic-closure-list use-env
@@ -327,7 +326,8 @@
                                    `(list (append ,(qq-expand-list (car e) level)
                                                   ,(qq-expand (cdr e) level)))))
                                 `'(,e)))
-                          (make-syntactic-closure mac-env '() (qq-expand (cadr exp) 0)))))
+                          (make-syntactic-closure
+                           scheme-syntactic-environment '() (qq-expand (cadr exp) 0)))))
     `((and        . ,and-expander)
       (case       . ,case-expander)
       (cond       . ,cond-expander)
@@ -340,9 +340,9 @@
 (define ##user-syntactic-environment scheme-syntactic-environment)
 
 (define (sc-macro-transformer f)
-  (lambda (exp user-env mac-env)
-    (make-syntactic-closure mac-env '() (f exp user-env))))
+  (lambda (exp use-env mac-env)
+    (make-syntactic-closure mac-env '() (f exp use-env))))
 
 (define (rsc-macro-transformer f)
-  (lambda (exp user-env mac-env)
-    (make-syntactic-closure user-env '() (f exp mac-env))))
+  (lambda (exp use-env mac-env)
+    (make-syntactic-closure use-env '() (f exp mac-env))))

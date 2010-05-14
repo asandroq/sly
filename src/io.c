@@ -1130,7 +1130,7 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj, sly_object_t *port
     break;
 
   case SLY_TYPE_FIXNUM:
-    snprintf(buf, 64, "%d", obj->value.fixnum);
+    snprintf(buf, 64, "%ld", obj->value.fixnum);
     sly_io_write_c_string(S, buf, port);
     break;
 

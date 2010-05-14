@@ -24,11 +24,7 @@
 #ifndef __SLY_SCHEME_H__
 #define __SLY_SCHEME_H__
 
-#if __GNUC__ > 2
 #include <stdint.h>
-#else
-#include <inttypes.h>
-#endif
 
 /* character encodings */
 #define SLY_CHAR_ENC_UTF8         1
@@ -42,7 +38,7 @@ typedef uint32_t sly_cp4_t;
 typedef sly_cp4_t sly_char_t;
 
 /* type of small integers */
-typedef int32_t sly_fixnum_t;
+typedef intptr_t sly_fixnum_t;
 
 /* the state of the Sly virtual machine */
 typedef struct sly_state_t sly_state_t;

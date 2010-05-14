@@ -173,7 +173,7 @@ static void collect_garbage(sly_store_t* S)
   sly_object_t *obj;
 
 #ifdef SLY_DTRACE
-  int old_size = S->size;
+  size_t old_size = S->size;
   SLY_GC_START();
 #endif
 
@@ -244,7 +244,9 @@ static void collect_garbage(sly_store_t* S)
   collect_fobjs(S);
 
 #ifdef SLY_DTRACE
-  SLY_GC_END(old_size, S->size);
+  if(SLY_GC_END_ENABLED()) {
+    SLY_GC_END(old_size, S->size);
+  }
 #endif
 }
 
@@ -258,6 +260,12 @@ static int expand_store(sly_store_t* S)
   /* new size is 30% larger, word aligned */
   size = old_size * 4 / 3;
   size -= size % WSIZE;
+
+#ifdef SLY_DTRACE
+  if(SLY_GC_RESIZE_ENABLED()) {
+    SLY_GC_RESIZE(old_size, size);
+  }
+#endif
 
   tmp = malloc(size * 2);
   if(tmp == NULL) {
@@ -329,6 +337,12 @@ void* sly_gc_alloc(sly_store_t *S, size_t size)
 
   /* allocating only word-multiple sized blocks */
   assert(size % WSIZE == 0);
+
+#ifdef SLY_DTRACE
+  if(SLY_GC_ALLOC_ENABLED()) {
+    SLY_GC_ALLOC(size);
+  }
+#endif
 
   if(S->capacity - S->size < size) {
     /* not enough space, try to find some */

@@ -126,6 +126,8 @@ static void copy_object(sly_store_t* S, sly_object_t* obj)
   memcpy(to, obj->value.gc, size);
   S->size += size;
 
+  assert(size >= sizeof(sly_forward_t));
+
   /* leave a forwarding pointer and update */
   obj->value.gc->type = SLY_FORWARD_TAG;
   ((sly_forward_t*)obj->value.gc)->ref = to;

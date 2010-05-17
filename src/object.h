@@ -167,19 +167,19 @@ struct sly_pair_t {
 
 struct sly_conti_t {
   sly_gcobject_t base;
-  uint32_t size;
+  size_t size;
   sly_object_t stack[0];
 };
 
 struct sly_string_t {
   sly_gcobject_t base;
-  uint32_t size;
+  size_t size;
   sly_char_t chars[0];
 };
 
 struct sly_vector_t {
   sly_gcobject_t base;
-  uint32_t size;
+  size_t size;
   sly_object_t data[0];
 };
 

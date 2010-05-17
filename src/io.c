@@ -1177,7 +1177,7 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj, sly_object_t *port
     break;
 
   case SLY_TYPE_CONTI:
-    snprintf(buf, 64, "<#continuation %u>", SLY_CONTI(obj->value.gc)->size);
+    snprintf(buf, 64, "<#continuation %lu>", SLY_CONTI(obj->value.gc)->size);
     sly_io_write_c_string(S, buf, port);
     break;
 

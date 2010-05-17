@@ -106,6 +106,21 @@
 /* address of HALT instruction */
 #define SLY_HALT_ADDRESS               0
 
+typedef struct sly_module_t sly_module_t;
+
+struct sly_module_t {
+
+  /* uninterned globals */
+  uint32_t nr_globals;
+  sly_string_t **globals;
+
+  /* constants */
+  uint32_t nr_consts;
+
+  /* code */
+  uint32_t *code, code_size;
+};
+
 /* initialises the virtual machine */
 void sly_vm_init(sly_state_t* S);
 
@@ -117,5 +132,11 @@ void sly_vm_call(sly_state_t* S, sly_object_t proc, uint32_t nargs);
 
 /* loads compiled code into the vm */
 int sly_vm_load(sly_state_t* S, sly_object_t mod);
+
+/* deserialises a module */
+void sly_vm_vector_to_module(sly_object_t vec, sly_module_t *mod);
+
+/* links a module to the running image and executes it */
+int sly_vm_link_run_module(sly_state_t* S, sly_module_t *mod);
 
 #endif

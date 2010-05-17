@@ -60,335 +60,233 @@
 ;; generates code for module,
 ;; a list of toplevel expressions
 (define (compile-toplevel e+)
-  (let* ((t+ (map simplify e+))
+  (let* ((t+ (map (lambda (e)
+                    (##purify-letrecs (##expand-code e)))
+                  e+))
          (def-exps (filter define-exp? t+))
          (defs (map cadr def-exps))
          (cs (make-compiler-state)))
     (set! *defined-globals*
           (append defs *defined-globals*))
     (let  ((m (meaning-toplevel t+)))
-      (##generate-toplevel-code cs m)
+      (generate-toplevel-code cs m)
       (instr cs 'RETURN)
       cs)))
 
 ;; already seen globals
 (define *defined-globals* '())
 
-;;
-;; Preprocessing
-;;
+;;;
+;;; macro expansion
+;;;
 
-;; Transforms derived syntax into primitive syntax
-(define (simplify exp)
-  (if (pair? exp)
-      (let ((op (car exp)))
-	(case op
-	  ((and)
-	   (simplify-and exp))
-	  ((or)
-	   (simplify-or exp))
-          ((begin)
-           (simplify-begin exp))
-          ((case)
-           (simplify-case exp))
-	  ((cond)
-	   (simplify-cond exp))
-          ((define)
-           (simplify-define exp))
-          ((lambda)
-           (simplify-lambda exp))
-	  ((let)
-	   (if (symbol? (cadr exp))
-	       (simplify-named-let exp)
-	       (simplify-let exp)))
-	  ((let*)
-	   (simplify-let* exp))
-	  ((letrec)
-	   (simplify-letrec exp))
-          ((quote)
-           exp)
-	  (else
-	   (map simplify exp))))
-      exp))
+;; expands top-level expressions, doing macro
+;; expansion, internal defines etc.
+(define (##expand-code e)
 
-;; Transform 'and' into series of 'ifs'
-(define (simplify-and exp)
-  (let ((exps (cdr exp)))
-    (if (null? exps)
-        #t
-	(let ((test (simplify (car exps)))
-	      (rest (cdr exps)))
-	  (if (null? rest)
-	      (let ((var (gensym)))
-		(simplify
-		 (list 'let (list (list var test))
-		       (list 'if var var #f))))
-	      (list 'if test (simplify (cons 'and rest)) #f))))))
+  (define (expand-list e+ free user-env mac-env)
+    (map (lambda (e) (expand e free user-env mac-env)) e+))
 
-(define (simplify-or exp)
-  (let ((exps (cdr exp)))
-    (if (null? exps)
-	#f
-	(let ((test (simplify (car exps)))
-	      (rest (cdr exps)))
-	  (if (null? rest)
-	      test
-	      (let ((var (gensym)))
-                (simplify
-                 (list 'let (list (list var test))
-                       (list 'if var var (simplify (cons 'or rest)))))))))))
+  (define (expand-body exps)
 
-(define (simplify-begin exp)
-  (if (not (null? (cdr exp)))
-      (simplify-sequence (cdr exp))
-      (error "empty 'begin'" exp)))
+    ;; ugly letrec post renaming
+    (define (rename-letrec e env)
 
-(define (simplify-case exp)
-  (if (or (null? (cdr exp))
-          (null? (cddr exp)))
-      (error "invalid 'case' expression" exp)
-      (let ((key (simplify (cadr exp)))
-            (clauses (reverse (cddr exp)))
-            (key-var (gensym)))
-        (let collect ((code '())
-                      (clauses clauses)
-                      (last? #t))
-          (if (null? clauses)
-              (if (null? code)
-                  (error "empty 'case'" exp)
-                  (simplify (list 'let
-                                  (list (list key-var key))
-                                  code)))
-              (let ((clause (car clauses)))
-                (if (pair? clause)
-                    (let ((test (car clause))
-                          (rest (cdr clause)))
-                      (cond
-                      ((eq? test 'else)
-                       (if last?
-                           (collect (simplify-sequence rest)
-                                    (cdr clauses)
-                                    #f)
-                           (error "'else' must be last clause in 'case'" exp)))
-                      ((pair? test)
-                       (if (and (pair? rest)
-                                (eq? (car rest) '=>))
-                           (let ((proc (cadr rest))
-                                 (var (gensym)))
-                             (collect (simplify (list 'let
-                                                      (list (list var
-                                                                  (list 'memq
-                                                                        key-var
-                                                                        (list 'quote
-                                                                              test))))
-                                                      (list 'if
-                                                            var
-                                                            (list proc var)
-                                                            code)))
-                                      (cdr clauses)
-                                      #f))
-                           (let ((body (simplify-sequence rest)))
-                             (collect (list 'if
-                                            (list 'memq key-var
-                                                  (list 'quote test))
-                                            body
-                                            code)
-                                      (cdr clauses)
-                                      #f))))
-                      (else
-                       (error "ill-formed 'case' clause" clause))))
-                    (error "ill-formed 'case' clause" clause))))))))
+      (define (rename e)
+        (if (pair? e)
+            (case (car e)
+              ((quote)
+               e)
+              ((lambda)
+               `(lambda ,(cadr e)
+                  ,(rename (caddr e))))
+              ((letrec)
+               (let ((vars (map car (cadr e)))
+                     (exps (map rename (map cadr (cadr e)))))
+                 `(letrec ,(map list vars exps)
+                    ,(rename (caddr e)))))
+              (else
+               (map rename e)))
+            (if (symbol? e)
+                (let ((p (assv e env)))
+                  (if p (cdr p) e))
+                e)))
 
-;; Transform 'cond' into nested 'ifs'
-;; a cond clause may use the symbol =>
-;; which indicates that the body is actually
-;; a lambda
-(define (simplify-cond exp)
-  (let collect ((code '())
-		(clauses (reverse (cdr exp)))
-		(last? #t))
-    (if (null? clauses)
-	(if (null? code)
-	    (error "Empty 'cond'" exp)
-	    code)
-	(let ((clause (car clauses)))
-	  (if (pair? clause)
-	      (let ((test (simplify (car clause)))
-                    (rest (cdr clause)))
-                (if (eqv? test 'else)
-		    (if last?
-			(collect (simplify-sequence rest)
-				 (cdr clauses)
-				 #f)
-			(error "'else' must be last clause in 'cond'" exp))
-                    (if (and (pair? rest)
-                             (eq? (car rest) '=>))
-                        (let ((proc (simplify (cadr rest)))
-                              (var (gensym)))
-                          (collect (simplify (list 'let
-                                                   (list (list var test))
-                                                   (list 'if
-                                                         var
-                                                         (list proc var)
-                                                         code)))
-                                   (cdr clauses)
-                                   #f))
-                        (let ((body (simplify-sequence rest)))
-                          (collect (list 'if
-                                         test
-                                         body
-                                         code)
-                                   (cdr clauses)
-                                   #f)))))
-              (error "Ill-formed 'cond' clause" clause))))))
+      (rename e))
 
-(define (simplify-define exp)
-  (if (> (length exp) 2)
-      (let ((definee (cadr exp))
-            (body (cddr exp)))
-        (cond
-         ((symbol? definee)
-          (cons 'define
-                (cons definee
-                      (simplify body))))
-         ((pair? definee)
-          (if (and (not (null? definee))
-                   (symbol-exp? definee))
-              (let ((name (car definee))
-                    (args (cdr definee)))
-                (list 'define
-                      name
-                      (simplify
-                       (cons 'lambda
-                             (cons args
-                                   body)))))
-              (error "ill-formed 'define'" exp)))
-         (else
-          (error "ill-formed 'define'" exp))))
-      (error "ill-formed 'define'" exp)))
+    (define (rest defs body)
+      (cond
+       ((any? define-exp? body)
+        (error "internal defines must come first in body" exps))
+       ((null? defs)
+        (if (null? (cdr body))
+            (car body)
+            `(begin ,@body)))
+       (else
+        (let* ((vars (map cadr defs))
+               (exps (map caddr defs))
+               (env (##make-env vars))
+               (new-vars (map cdr env)))
+          (rename-letrec `(letrec ,(map list new-vars exps)
+                            ,(if (null? (cdr body))
+                                 (car body)
+                                 `(begin ,@body)))
+                         env)))))
 
-(define (simplify-lambda exp)
-  (if (or (null? (cdr exp))
-          (null? (cddr exp)))
-      (error "ill-formed 'lambda'" exp)
-      (let ((args (cadr exp))
-            (body (cddr exp)))
-        (if (symbol-exp? args)
-            (cons 'lambda
-                  (list args
-                        (simplify-sequence body)))
-            (error "ill-formed 'lambda'" exp)))))
+    ;; gather internal defines
+    (let loop ((defs '())
+               (es exps))
+      (if (null? es)
+          (error "empty body" exps)
+          (let ((e (car es)))
+            (cond
+             ((define-exp? e)
+              (loop (cons e defs) (cdr es)))
+             ((and (pair? e)
+                   (eq? (car e) 'begin))
+              (loop defs (append (cdr e) (cdr es))))
+             (else
+              (rest (reverse defs) es)))))))
 
-;; Transform 'let' into immediate lambda application
-(define (simplify-let exp)
-  (let ((bindings (cadr exp))
-	(body (cddr exp)))
-    (let loop ((vars '())
-	       (args '())
-	       (bindings bindings))
-      (if (null? bindings)
-	  (cons (simplify-lambda (cons 'lambda (cons vars body))) args)
-	  (let ((binding (car bindings)))
-	    (let ((var (car binding))
-		  (arg (simplify (cadr binding))))
-	      (if (symbol? var)
-		  (loop (cons var vars)
-			(cons arg args)
-			(cdr bindings))
-		  (error "Ill-formed 'let'" exp))))))))
+  (define (expand e free user-env mac-env)
+    (let ((env (if (memq (if (pair? e) (car e) e) free)
+                   user-env
+                   mac-env)))
+      (cond
+       ((syntactic-closure? e)
+        (expand (syntactic-closure-exp e)
+                (syntactic-closure-free e)
+                user-env
+                (syntactic-closure-env e)))
+       ((symbol? e)
+        (let ((pair (assv e env)))
+          (if pair (cdr pair) e)))
+       ((pair? e)
+        (let ((op (car e)))
+          (cond
+           ((assv op env) =>
+            (lambda (pair)
+              (let ((expander (cdr pair)))
+                (if (procedure? expander)
+                    (expand (expander e user-env mac-env)
+                            free
+                            user-env
+                            mac-env)
+                    (expand-list e free user-env mac-env)))))
+           ((eq? op 'quote) e)
+           ((eq? op 'begin)
+            (if (null? (cddr e))
+                (expand (cadr e) free user-env mac-env)
+                `(begin ,@(expand-list (cdr e) free user-env mac-env))))
+           ((eq? op 'define)
+            (let ((definee (cadr e))
+                  (body (cddr e)))
+              (cond
+               ((symbol? definee)
+                `(define ,definee
+                   ,(expand (car body) free user-env mac-env)))
+               ((pair? definee)
+                (if (symbol-exp? definee)
+                    (let ((name (car definee))
+                          (args (cdr definee)))
+                      `(define ,name
+                         ,(expand `(lambda ,args ,@body) free user-env mac-env)))
+                    (error "ill-formed 'define'" e)))
+               (else
+                (error "ill-formed 'define'" e)))))
+           ((eq? op 'lambda)
+            (let* ((vars (cadr e))
+                   (vars-list (symbol-exp->list vars))
+                   (new-env (##make-env vars-list))
+                   (new-vars (symbol-exp->symbol-exp vars new-env))
+                   (new-body (expand-list (cddr e) (append vars-list free)
+                                          (append new-env user-env) mac-env)))
+              `(lambda ,new-vars
+                 ,(expand-body new-body))))
+           ((eq? op 'letrec)
+            (let* ((vars (map car (cadr e)))
+                   (new-env (##make-env vars))
+                   (new-vars (map cdr new-env))
+                   (new-free (append vars free))
+                   (new-user-env (append new-env user-env))
+                   (new-args (expand-list (map cadr (cadr e)) new-free
+                                          new-user-env mac-env))
+                   (new-body (expand-list (cddr e) new-free
+                                          new-user-env mac-env)))
+              `(letrec ,(map list new-vars new-args)
+                 ,(expand-body new-body))))
+           ((memq op '(if set!))
+            `(,(car e) ,@(expand-list (cdr e) free user-env mac-env)))
+           (else
+            (expand-list e free user-env mac-env)))))
+       (else `',e))))
 
-;; Transform let* into cascade of 'lets'
-(define (simplify-let* exp)
-  (let ((bindings (cadr exp))
-	(body (cddr exp)))
-    (if (null? bindings)
-	(simplify (cons 'begin body))
-	(let ((first (car bindings))
-	      (rest (cdr bindings)))
-	  (if (null? rest)
-	      (simplify (cons 'let
-                              (cons bindings body)))
-	      (simplify (list 'let
-                              (list first)
-                              (cons 'let* (cons rest body)))))))))
+  (if (and (pair? e)
+           (eqv? (car e) 'define-syntax))
+      ;; toplevel syntax definition
+      (if (and (pair? (cdr e))
+               (pair? (cddr e)))
+          (let ((name (cadr e))
+                (expander (expand (caddr e)
+                                  '()
+                                  ##user-syntactic-environment
+                                  ##user-syntactic-environment)))
+            (if (symbol? name)
+                `(begin
+                   (set! ##user-syntactic-environment
+                         (cons (cons ',name ,expander)
+                               ##user-syntactic-environment))
+                   ',name)
+                (error "Ill-formed define-syntax")))
+          (error "Ill-formed define-syntax" e))
+      (expand e '() ##user-syntactic-environment ##user-syntactic-environment)))
 
-;; Transform 'letrec' into 'lambda' plus assignments
-(define (simplify-letrec exp)
-  (let ((bindings (cadr exp))
-	(body (cddr exp)))
-    (if (null? bindings)
-	(cons 'begin body)
-	(let loop ((vars '())
-		   (mocks '())
-                   (body body)
-		   (bindings bindings))
-	  (if (null? bindings)
-	      (cons (simplify (cons 'lambda (cons vars body))) mocks)
-	      (let ((binding (car bindings)))
-		(let ((var (car binding))
-		      (exp (simplify (cadr binding))))
-		  (loop (cons var vars)
-			(cons '#f mocks)
-			(cons (list 'set! var exp) body)
-			(cdr bindings)))))))))
-
-;; Transform named 'let' into 'letrec'
-(define (simplify-named-let exp)
-  (let ((name (cadr exp))
-	(bindings (caddr exp))
-	(body (cdddr exp)))
-    (let loop ((vars '())
-	       (exps '())
-	       (bindings bindings))
-      (if (null? bindings)
-	  (simplify
-	   (list 'letrec (list (list name
-				     (cons 'lambda
-                                           (cons (reverse vars)
-                                                 body))))
-		 (cons name (reverse exps))))
-	  (let ((binding (car bindings)))
-	    (let ((var (car binding))
-		  (exp (cadr binding)))
-	      (if (symbol? var)
-		  (loop (cons var vars)
-			(cons exp exps)
-			(cdr bindings))
-		  (error "Ill-formed 'named let'" exp))))))))
-
-(define (simplify-sequence exps)
-
-  (define (rest defs body)
-    (cond
-     ((any? define-exp? body)
-      (error "internal defines must come first" exps))
-     ((null? defs)
-      (if (null? (cdr body))
-          (simplify (car body))
-          (cons 'begin (simplify body))))
-     (else
-      (let ((vars (map cadr defs))
-            (exps (map caddr defs)))
-        (simplify (cons 'letrec
-                        (cons (map list vars exps)
-                              body)))))))
-
-  ;; gather internal defines
-  (let loop ((defs '())
-             (es exps))
-    (if (null? es)
-        (error "empty sequence" exps)
-        (let ((e (car es)))
-          (if (define-exp? e)
-              (loop (cons e defs) (cdr es))
-              (rest (map simplify-define (reverse defs)) es))))))
+(define (##make-env vars)
+  (map (lambda (n)
+         (cons n (rename-var n)))
+       vars))
 
 (define (define-exp? e)
   (and (pair? e)
-       (pair? (cdr e))
-       (pair? (cddr e))
-       (null? (cdddr e))
+       (> (length e) 2)
        (eq? (car e) 'define)))
+
+;;;
+;;; letrec transformation
+;;;
+
+(define (##purify-letrecs e)
+  (if (pair? e)
+      (case (car e)
+        ((quote)
+         e)
+        ((begin if)
+         `(,(car e) ,@(map ##purify-letrecs (cdr e))))
+        ((lambda)
+         `(lambda ,(cadr e)
+            ,(##purify-letrecs (caddr e))))
+        ((letrec)
+         (let ((vars (map car (cadr e)))
+               (args (map cadr (cadr e))))
+           (let loop ((vs vars)
+                      (ms '())
+                      (ts '()))
+             (if (null? vs)
+                 `((lambda ,vars
+                     ((lambda ,ts
+                        (begin
+                          ,@(map (lambda (v a)
+                                   `(set! ,v ,a))
+                                 vars ts)
+                          ,(##purify-letrecs (caddr e))))
+                      ,@(map ##purify-letrecs args)))
+                   ,@ms)
+                 (loop (cdr vs) (cons '#f ms) (cons (rename-var 'ltvar) ts))))))
+        ((set!)
+         `(set! ,(cadr e) ,(##purify-letrecs (caddr e))))
+        (else
+         (map ##purify-letrecs e)))
+      e))
 
 ;;
 ;; this pass transforms expressions into continuation-passing
@@ -471,14 +369,17 @@
                 (loop (cdr args) (cdr vals) (cps arg kk)))))
         (loop (cdr aa) (cons (gensym) vals)))))
 
+;;;
+;;; core language compilation
+;;;
+
 ;; compiles toplevel
 (define (meaning-toplevel e+)
-  (let* ((m+ (meaning-sequence e+ '() #t))
-         (locals (##collect-locals m+))
-         (sets (##collect-sets m+ locals))
-         (env (##build-environment '() locals '() sets)))
-    (##flag-boxes! m+ sets)
-    (##make-toplevel-node env m+)))
+  (if (null? (cdr e+))
+      (meaning (car e+) '() #t)
+      (let ((m (meaning (car e+) '() #f))
+            (m+ (meaning-toplevel (cdr e+))))
+        (vector 'sequence m m+))))
 
 ;;
 ;; transforms expressions into a syntax tree,
@@ -516,30 +417,36 @@
              (meaning-assignment (cadr e) (caddr e) r)
              (error "ill-formed 'set!'" e)))
         (else
-         (let ((op (car e)))
-           (if (lambda-exp? op)
-               (meaning-closed-application (cadr op) (cdr e) (caddr op) r tail?)
-               (meaning-application op (cdr e) r tail?)))))
+         (meaning-application (car e) (cdr e) r tail?)))
       (if (symbol? e)
           (meaning-reference e r)
           (meaning-quote e))))
 
 (define (meaning-reference n r)
-  (##make-reference-node n (lookup n r)))
+  (vector 'refer
+          n
+          (lookup n r)
+          #f
+          '()))
 
 (define (meaning-quote e)
-  (##make-const-node e #f))
+  (vector 'const e))
 
 (define (meaning-sequence e+ r tail?)
   (if (null? (cdr e+))
       (meaning (car e+) r tail?)
-      (##make-sequence-node (meaning (car e+) r #f)
-                            (meaning-sequence (cdr e+) r tail?))))
+      (vector 'sequence
+              (meaning (car e+) r #f)
+              (meaning-sequence (cdr e+) r tail?))))
 
 (define (meaning-call/cc e r tail?)
   (if (lambda-exp? e)
       (if (one-symbol-list? (cadr e))
-          (##make-call/cc-node (meaning e r tail?) tail?)
+          (vector 'call/cc
+                  (meaning e r tail?)
+                  (if tail?
+                      (list 'tail)
+                      '()))
           (error "procedure must take one argument" e))
       (error "expression is not a procedure" e)))
 
@@ -547,89 +454,90 @@
   (meaning-assignment n e '()))
 
 (define (meaning-alternative test then else r tail?)
-  (##make-alternative-node (meaning test r #f)
-                           (meaning then r tail?)
-                           (if (eq? else *undef*)
-                               (##make-undef-node)
-                               (meaning else r tail?))))
+  (vector 'alternative
+          (meaning test r #f)
+          (meaning then r tail?)
+          (if (eq? else *undef*)
+              (vector 'undef)
+              (meaning else r tail?))))
 
 (define (meaning-lambda n* e r)
 
   (define (parse n* regular)
     (cond
      ((null? n*)
-      (meaning-internal (reverse regular) #f))
+      (meaning-internal (reverse regular) #f e r))
      ((symbol? n*)
-      (meaning-internal (reverse regular) n*))
+      (meaning-internal (reverse regular) n* e r))
      ((pair? n*)
       (parse (cdr n*) (cons (car n*) regular)))
      (else
       (error "ill-formed 'lambda' arguments" n*))))
 
-  (define (meaning-internal n* n)
+  (define (meaning-internal n* n e r)
     (let* ((an* (map (lambda (n)
                        (cons n (rename-var n)))
-                     (if n (append n* (list n)) n*)))
+                     (if n
+                         (append n* (list n))
+                         n*)))
            (r2 (cons an* r))
            (m (meaning e r2 #t))
            (bound (map cdr an*))
-           (free (##collect-free m bound))
-           (sets (##collect-sets m bound))
-           (locals (##collect-locals m))
-           (env (##build-environment bound locals free sets)))
-      (##flag-boxes! m sets)
-      (##make-lambda-node (length n*) (not n) env m)))
+           (free (collect-free m bound))
+           (sets (collect-sets m bound))
+           (m2 (flag-boxes m sets))
+           (m3 (calculate-addresses m2 bound free)))
+      (vector 'lambda
+              (cons (if n '>= '=)
+                    (length n*))
+              bound
+              sets
+              (map (lambda (n)
+                     (meaning-reference n r))
+                   free)
+              m3)))
 
   (parse n* '()))
 
 (define (meaning-assignment n e r)
   (let ((n2 (lookup n r))
         (prim? (assq n *primitives*)))
-    (if (and prim? (not n2))
+    (if (and prim?
+             (eq? n n2))
         (error "assignment to primitive not allowed" n)
-        (##make-assign-node n n2 (meaning e r #f)))))
+        (vector 'assign
+                n
+                n2
+                #f
+                (meaning e r #f)))))
 
 (define (meaning-application e e* r tail?)
   (let ((m  (meaning e r #f))
         (m* (meaning-args e* r)))
-    (let ((prim? (and (##reference-node? m)
-                      (assq (##reference-node-name m) *primitives*) #t)))
-      (##make-apply-node m m* tail? prim?))))
-
-(define (meaning-closed-application n* e* e r tail?)
-
-  (define (parse n* regular)
-    (cond
-     ((null? n*)
-      (meaning-internal (reverse regular) #f))
-     ((symbol? n*)
-      (meaning-internal (reverse regular) n*))
-     ((pair? n*)
-      (parse (cdr n*) (cons (car n*) regular)))
-     (else
-      (error "ill-formed 'lambda' arguments" n*))))
-
-  (define (meaning-internal n* n)
-    (let* ((an* (map (lambda (n)
-                       (cons n (rename-var n)))
-                     (if n (append n* (list n)) n*)))
-           (r2 (cons an* r))
-           (m (meaning e r2 tail?))
-           (m* (meaning-args e* r))
-           (locals (map cdr an*)))
-      (##make-capply-node (length n*) (not n) locals m* m tail?)))
-
-  (parse n* '()))
+    (let* ((prim (if (and (eq? (vector-ref m 0)
+                               'refer)
+                          (assq (vector-ref m 1)
+                                *primitives*))
+                     (list 'prim)
+                     '()))
+           (flags (if tail?
+                      (cons 'tail prim)
+                      prim)))
+      (vector 'apply
+              flags
+              m
+              m*))))
 
 (define (meaning-args e* r)
   (if (null? e*)
-      (##make-narg-node)
-      (##make-args-node (meaning (car e*) r #f)
-                        (meaning-args (cdr e*) r))))
+      (vector 'arg-null)
+      (vector 'arg-list
+              (meaning (car e*) r #f)
+              (meaning-args (cdr e*) r))))
 
 (define *undef* (list 'undef))
 
-(define (##immediate? x)
+(define (immediate? x)
   (or (char? x)
       (boolean? x)
       (integer? x)
@@ -637,12 +545,12 @@
 
 (define (lookup n r)
   (if (null? r)
-      #f
+      n
       (let loop ((s (car r))
                  (r (cdr r)))
         (if (null? s)
             (if (null? r)
-                #f
+                n
                 (loop (car r) (cdr r)))
             (let ((v (car s)))
               (if (eq? n (car v))
@@ -654,7 +562,8 @@
     (lambda (n)
       (set! c (+ c 1))
       (string->symbol
-       (string-append (symbol->string n)
+       (string-append "#:"
+                      (symbol->string n)
                       "v"
                       (number->string c))))))
 
@@ -672,158 +581,189 @@
            (symbol? (car e))
            (symbol-exp? (cdr e)))))
 
+(define (symbol-exp->list e)
+  (let loop ((syms e)
+             (ans '()))
+    (cond
+     ((null? syms)
+      e)
+     ((symbol? syms)
+      (reverse (cons syms ans)))
+     (else
+      (loop (cdr syms)
+            (cons (car syms) ans))))))
+
+(define (symbol-exp->symbol-exp e env)
+  (let loop ((syms e)
+             (ans '()))
+    (cond
+     ((null? syms)
+      (reverse ans))
+     ((symbol? syms)
+      (append (reverse ans)
+              (let ((p (assv syms env)))
+                (if p (cdr p) syms))))
+     (else
+      (let* ((sym (car syms))
+             (new-sym (let ((p (assv sym env)))
+                        (if p (cdr p) sym))))
+        (loop (cdr syms)
+              (cons new-sym ans)))))))
+
 (define (one-symbol-list? e)
   (and (pair? e)
        (symbol? (car e))
        (null? (cdr e))))
 
-(define (##collect-free m bound)
-  (cond
-   ((##reference-node? m)
-    (let ((aname (##reference-node-alpha m)))
-      (if (and aname (not (memq aname bound))) (list aname) '())))
-   ((##sequence-node? m)
-    (set-union (##collect-free (##sequence-node-first m) bound)
-               (##collect-free (##sequence-node-rest  m) bound)))
-   ((##call/cc-node? m)
-    (##collect-free (##call/cc-node-lambda m) bound))
-   ((##alternative-node? m)
-    (set-union (##collect-free (##alternative-node-test m) bound)
-               (set-union (##collect-free (##alternative-node-then m) bound)
-                          (##collect-free (##alternative-node-else m) bound))))
-   ((##lambda-node? m)
-    (##collect-free (##lambda-node-body m)
-                    (append (##collect-env-node-by-kind (##lambda-node-env m) 'bound) bound)))
-   ((##assign-node? m)
-    (set-union (let ((aname (##assign-node-alpha m)))
-                 (if (and aname (not (memq aname bound))) (list aname) '()))
-               (##collect-free (##assign-node-body m) bound)))
-   ((##apply-node? m)
-    (set-union (##collect-free (##apply-node-operator m) bound)
-               (##collect-free (##apply-node-args m) bound)))
-   ((##capply-node? m)
-    (let ((new-bound (append (##capply-node-vars m) bound)))
-      (set-union (##collect-free (##capply-node-args m) bound)
-                 (##collect-free (##capply-node-body m) new-bound))))
-   ((##args-node? m)
-    (set-union (##collect-free (##args-node-first m) bound)
-               (##collect-free (##args-node-rest  m) bound)))
-   (else
-    '())))
-
-(define (##collect-sets m bound)
-  (cond
-   ((##sequence-node? m)
-    (set-union (##collect-sets (##sequence-node-first m) bound)
-               (##collect-sets (##sequence-node-rest  m) bound)))
-   ((##call/cc-node? m)
-    (##collect-sets (##call/cc-node-lambda m) bound))
-   ((##alternative-node? m)
-    (set-union (##collect-sets (##alternative-node-test m) bound)
-               (set-union (##collect-sets (##alternative-node-then m) bound)
-                          (##collect-sets (##alternative-node-else m) bound))))
-   ((##lambda-node? m)
-    (##collect-sets (##lambda-node-body m) bound))
-   ((##assign-node? m)
-    (set-union (let ((aname (##assign-node-alpha m)))
-                 (if (and aname (memq aname bound)) (list aname) '()))
-               (##collect-sets (##assign-node-body m) bound)))
-   ((##apply-node? m)
-    (set-union (##collect-sets (##apply-node-operator m) bound)
-               (##collect-sets (##apply-node-args m) bound)))
-   ((##capply-node? m)
-    (set-union (##collect-sets (##capply-node-args m) bound)
-               (##collect-sets (##capply-node-body m) bound)))
-   ((##args-node? m)
-    (set-union (##collect-sets (##args-node-first m) bound)
-               (##collect-sets (##args-node-rest  m) bound)))
-   (else
-    '())))
-
-(define (##collect-locals m)
-  (cond
-    ((##sequence-node? m)
-     (append (##collect-locals (##sequence-node-first m))
-             (##collect-locals (##sequence-node-rest  m))))
-    ((##alternative-node? m)
-     (append (##collect-locals (##alternative-node-test m))
-             (##collect-locals (##alternative-node-then m))
-             (##collect-locals (##alternative-node-else m))))
-    ((##assign-node? m)
-     (##collect-locals (##assign-node-body m)))
-    ((##apply-node? m)
-     (append (##collect-locals (##apply-node-operator m))
-             (##collect-locals (##apply-node-args m))))
-    ((##capply-node? m)
-     (append (##capply-node-vars m)
-             (##collect-locals (##capply-node-body m))
-             (##collect-locals (##capply-node-args m))))
-    ((##args-node? m)
-     (append (##collect-locals (##args-node-first m))
-             (##collect-locals (##args-node-rest  m))))
+(define (collect-free m bound)
+  (case (vector-ref m 0)
+    ((refer)
+     (let ((n (vector-ref m 1))
+           (an (vector-ref m 2)))
+       (if (or (eq? n an)
+               (memq an bound))
+           '()
+           (list an))))
+    ((sequence)
+     (set-union (collect-free (vector-ref m 1) bound)
+                (collect-free (vector-ref m 2) bound)))
+    ((call/cc)
+     (collect-free (vector-ref m 1) bound))
+    ((alternative)
+     (set-union (collect-free (vector-ref m 1) bound)
+                (set-union (collect-free (vector-ref m 2) bound)
+                           (collect-free (vector-ref m 3) bound))))
+    ((lambda)
+     (collect-free (vector-ref m 5)
+                   (append (vector-ref m 2) bound)))
+    ((assign)
+     (set-union (let ((n (vector-ref m 1))
+                      (an (vector-ref m 2)))
+                  (if (or (eq? n an)
+                          (memq an bound))
+                      '()
+                      (list an)))
+                (collect-free (vector-ref m 4) bound)))
+    ((apply)
+     (set-union (collect-free (vector-ref m 2) bound)
+                (collect-free (vector-ref m 3) bound)))
+    ((arg-list)
+     (set-union (collect-free (vector-ref m 1) bound)
+                (collect-free (vector-ref m 2) bound)))
     (else
      '())))
 
-;; flags assigned variables as boxes
-(define (##flag-boxes! m sets)
+(define (collect-sets m bound)
+  (case (vector-ref m 0)
+    ((sequence)
+     (set-union (collect-sets (vector-ref m 1) bound)
+                (collect-sets (vector-ref m 2) bound)))
+    ((call/cc)
+     (collect-sets (vector-ref m 1) bound))
+    ((alternative)
+     (set-union (collect-sets (vector-ref m 1) bound)
+                (set-union (collect-sets (vector-ref m 2) bound)
+                           (collect-sets (vector-ref m 3) bound))))
+    ((lambda)
+     (collect-sets (vector-ref m 5) bound))
+    ((assign)
+     (let ((n (vector-ref m 1))
+           (an (vector-ref m 2)))
+       (if (and (not (eq? n an))
+                (memq an bound))
+           (list an)
+           '())))
+    ((apply)
+     (set-union (collect-sets (vector-ref m 2) bound)
+                (collect-sets (vector-ref m 3) bound)))
+    ((arg-list)
+     (set-union (collect-sets (vector-ref m 1) bound)
+                (collect-sets (vector-ref m 2) bound)))
+    (else
+     '())))
 
-  ;; flag free variables of lambda as boxes if assigned
+;; flags references to assigned variables as boxes
+(define (flag-boxes m sets)
+
+  (define (refer-handler visitor m sets)
+    (let ((an (vector-ref m 2))
+          (flags (vector-ref m 4)))
+      (vector 'refer
+              (vector-ref m 1)
+              an
+              (vector-ref m 3)
+              (if (memq an sets)
+                  (cons 'box flags)
+                  flags))))
+
   (define (lambda-handler visitor m sets)
-    (let loop ((env (##lambda-node-env m)))
-      (if (not (null? env))
-          (let ((entry (car env)))
-            (if (memq (car entry) sets)
-                (##env-node-boxed?-set! (cdr entry) #t))
-            (loop (cdr env))))))
+    (vector 'lambda
+            (vector-ref m 1)
+            (vector-ref m 2)
+            (vector-ref m 3)
+            (map visitor (vector-ref m 4))
+            (visitor (vector-ref m 5))))
 
-  (##visit (list (cons '##lambda lambda-handler)) m sets))
+  (visit (list (cons 'refer
+                     refer-handler)
+               (cons 'lambda
+                     lambda-handler))
+         m
+         sets))
 
-(define (##build-environment bound locals free sets)
-  (let ((bound-env (let lp ((i 0)
-                            (bound bound)
-                            (res '()))
-                     (if (null? bound)
-                         res
-                         (let* ((b (car bound))
-                                (boxed? (and (memq b sets) #t)))
-                           (lp (+ i 1)
-                               (cdr bound)
-                               (cons (cons b
-                                      (##make-env-node b 'bound i boxed?))
-                                     res))))))
-        (free-env (let lp ((i 0)
-                           (free free)
-                           (res '()))
-                    (if (null? free)
-                        res
-                        (let ((f (car free)))
-                          (lp (+ i 1)
-                              (cdr free)
-                              (cons (cons f
-                                          (##make-env-node f 'free i #f))
-                                    res))))))
-        (local-env (map (lambda (l)
-                          (cons l (##make-env-node l 'local 0 (and (memq l sets) #t))))
-                        locals)))
-    (append bound-env free-env local-env)))
+(define (calculate-addresses m bound free)
 
-(define (##collect-env-node-by-kind env kind)
-  (let loop ((env env)
-             (res '()))
-    (if (null? env)
-        (reverse res)
-        (let ((entry (car env)))
-          (if (eqv? (##env-node-kind (cdr entry)) kind)
-              (loop (cdr env) (cons (car entry) res))
-              (loop (cdr env) res))))))
+  (define (refer-handler visitor m bound free)
+    (let ((an (vector-ref m 2)))
+      (vector 'refer
+              (vector-ref m 1)
+              an
+              (cond
+               ((index-of an bound) =>
+                (lambda (i)
+                  (cons 'bound i)))
+               ((index-of an free) =>
+                (lambda (i)
+                  (cons 'free i)))
+               (else #f))
+              (vector-ref m 4))))
+
+  (define (assign-handler visitor m bound free)
+    (let ((an (vector-ref m 2)))
+      (vector 'assign
+              (vector-ref m 1)
+              an
+              (cond
+               ((index-of an bound) =>
+                (lambda (i)
+                  (cons 'bound i)))
+               ((index-of an free) =>
+                (lambda (i)
+                  (cons 'free i)))
+               (else #f))
+              (visitor (vector-ref m 4)))))
+
+  (define (lambda-handler visitor m bound free)
+    (vector 'lambda
+            (vector-ref m 1)
+            (vector-ref m 2)
+            (vector-ref m 3)
+            (map visitor (vector-ref m 4))
+            (vector-ref m 5)))
+
+  (visit (list (cons 'refer
+                     refer-handler)
+               (cons 'assign
+                     assign-handler)
+               (cons 'lambda
+                     lambda-handler))
+         m
+         bound
+         free))
 
 ;; this pass generates the code for the virtual machine
-(define (##generate-toplevel-code cs m)
-  (let ((env (##toplevel-node-env m))
-        (body (##toplevel-node-body m)))
-
-    ;; install constants into compiler state
-    (##collect-constants! cs body)
+(define (generate-toplevel-code cs m)
+  (let ((c (collect-constants! cs m)))
 
     ;; emit code to initialise constants before
     ;; entering real code
@@ -831,91 +771,98 @@
                (consts (vector-ref cs 1)))
       (if (not (null? consts))
           (let ((const (car consts)))
-            (##emit-constant cs const)
+            (emit-constant cs const)
             (instr1 cs 'CONST-INIT i)
             (loop (+ i 1) (cdr consts)))))
 
     ;; generate rest of code
-    (##generate-code cs body env 0)))
+    (generate-code cs c)))
 
-(define (##collect-constants! cs m)
+(define (collect-constants! cs m)
 
   (define (const-handler visitor m)
-    (let ((value (##const-node-value m)))
-      (if (not (##immediate? value))
-          (let ((index (##install-constant! cs value)))
-            (##const-node-index-set! m index)))))
+    (let ((c (vector-ref m 1)))
+      (if (immediate? c)
+          (vector 'immed c)
+          (let ((index (install-constant! cs c)))
+            (vector 'const index)))))
 
-  (##visit (list (cons '##const const-handler)) m))
+  (visit (list (cons 'const
+                     const-handler))
+         m))
 
-(define (##generate-code cs m env si)
-  (cond
-    ((##const-node? m)
-     (##generate-constant cs m))
-    ((##reference-node? m)
-     (##generate-reference cs m env si #t))
-    ((##sequence-node? m)
-     (##generate-sequence cs m env si))
-    ((##call/cc-node? m)
-     (##generate-call/cc cs m env si))
-    ((##alternative-node? m)
-     (##generate-alternative cs m env si))
-    ((##lambda-node? m)
-     (##generate-lambda cs m env si))
-    ((##assign-node? m)
-     (##generate-assignment cs m env si))
-    ((##apply-node? m)
-     (generate-apply cs m env si))
-    ((##capply-node? m)
-     (##generate-capply cs m env si))
+(define (generate-code cs m)
+  (case (vector-ref m 0)
+    ((undef)
+     (generate-undef cs))
+    ((const)
+     (generate-constant cs m))
+    ((immed)
+     (generate-immediate cs m))
+    ((refer)
+     (generate-reference cs m #t))
+    ((sequence)
+     (generate-sequence cs m))
+    ((call/cc)
+     (generate-call/cc cs m))
+    ((define)
+     (generate-define cs m))
+    ((alternative)
+     (generate-alternative cs m))
+    ((lambda)
+     (generate-lambda cs m))
+    ((assign)
+     (generate-assignment cs m))
+    ((apply)
+     (generate-apply cs m))
     (else
      (error "unknown AST node" m))))
 
-(define (##generate-constant cs m)
-  (let ((value (##const-node-value m)))
-    (if (##immediate? value)
-        (##emit-constant cs value)
-        (instr1 cs 'CONST (##const-node-index m)))))
+(define (generate-undef cs)
+  (instr cs 'LOAD-UNDEF))
 
-(define (##generate-reference cs m env si unbox?)
-  (let ((alpha (##reference-node-alpha m)))
-    (if alpha
-        (let ((rec (assv alpha env)))
-          (if rec
-              (let* ((env (cdr rec))
-                     (kind (##env-node-kind env))
-                     (pos (##env-node-position env))
-                     (boxed? (##env-node-boxed? env)))
-                (case kind
-                  ((bound local)
-                   (case pos
-                     ((0)
-                      (instr cs 'LOAD0))
-                     ((1)
-                      (instr cs 'LOAD1))
-                     ((2)
-                      (instr cs 'LOAD2))
-                     ((3)
-                      (instr cs 'LOAD3))
-                     (else
-                      (instr1 cs 'LOAD pos))))
-                  ((free)
-                   (instr1 cs 'LOAD-FREE pos))
-                  (else
-                   (error "unknown binding type" m)))
-                (and unbox? boxed? (instr cs 'OPEN-BOX)))
-              (error "reference not found")))
-        (let* ((var (##reference-node-name m))
+(define (generate-constant cs m)
+  (instr1 cs 'CONST (vector-ref m 1)))
+
+(define (generate-immediate cs m)
+  (emit-constant cs (vector-ref m 1)))
+
+(define (generate-reference cs m unbox?)
+  (let ((address (vector-ref m 3)))
+    (if address
+        (let ((kind (car address))
+              (pos  (cdr address)))
+          (case kind
+            ((bound)
+             (case pos
+               ((0)
+                (instr cs 'LOAD0))
+               ((1)
+                (instr cs 'LOAD1))
+               ((2)
+                (instr cs 'LOAD2))
+               ((3)
+                (instr cs 'LOAD3))
+               (else
+                (instr1 cs 'LOAD pos))))
+            ((free)
+             (instr1 cs 'LOAD-FREE pos))
+            (else
+             (error "unknown binding type" m)))
+          (and unbox?
+               (memq 'box (vector-ref m 4))
+               (instr cs 'OPEN-BOX)))
+        (let* ((var (vector-ref m 1))
                (index (install-global! cs var)))
           (if (memq var *defined-globals*)
               (instr1 cs 'GLOBAL-REF index)
               (instr1 cs 'CHECKED-GLOBAL-REF index))))))
 
-(define (generate-sequence cs m env si)
-  (##generate-code cs (##sequence-node-first m) env si)
-  (##generate-code cs (##sequence-node-rest  m) env si))
+(define (generate-sequence cs m)
+  (generate-code cs (vector-ref m 1))
+  (generate-code cs (vector-ref m 2)))
 
-(define (##generate-call/cc cs m env si)
+(define (generate-call/cc cs m)
   
   ;; creates a closure that will restore a saved
   ;; continuation if called - the continuation
@@ -932,7 +879,7 @@
     (instr cs 'RETURN))
 
   (let ((i (code-size cs))
-        (tail? (##call/cc-node-tail? m)))
+        (tail? (memq 'tail (vector-ref m 2))))
     ;; this is the return address, will be back-patched later
     (or tail? (instr1 cs 'FRAME 0))
     (instr cs 'SAVE-CONT)
@@ -941,21 +888,21 @@
     (instr cs 'PUSH)
     ;; calling closure given to call/cc with
     ;; continuation-restoring closure as sole argument
-    (##generate-lambda cs (##call/cc-node-lambda m) env (+ si 1))
+    (generate-lambda cs (vector-ref m 1))
     (instr1 cs (if tail? 'TAIL-CALL 'CALL) 1)
     ;; back-patching return address
     (or tail? (patch-instr! cs i (code-size cs)))))
 
-(define (##generate-alternative cs m env si)
-  (let ((testc (##alternative-node-test m))
-        (thenc (##alternative-node-then m))
-        (elsec (##alternative-node-else m)))
-    (##generate-code cs testc env si)
+(define (generate-alternative cs m)
+  (let ((testc (vector-ref m 1))
+        (thenc (vector-ref m 2))
+        (elsec (vector-ref m 3)))
+    (generate-code cs testc)
     (let ((i (code-size cs)))
       ;; this will be back-patched later
       (instr1 cs 'JMP-IF-NOT 0)
-      (##generate-code cs thenc env si)
-      (if (##undef-node? elsec)
+      (generate-code cs thenc)
+      (if (eqv? (vector-ref elsec 0) 'undef)
           (let ((j (code-size cs)))
             (patch-instr! cs i (- j i 1)))
           (let ((j (code-size cs)))
@@ -963,13 +910,12 @@
             (instr1 cs 'JMP 0)
             (let ((k (code-size cs)))
               (patch-instr! cs i (- k i 1))
-              (##generate-code cs elsec env si)
+              (generate-code cs elsec)
               (let ((m (code-size cs)))
                 (patch-instr! cs j (- m j 1)))))))))
 
-(define (##generate-lambda cs m env si)
-  (let ((arity (##lambda-node-arity m))
-        (regular? (##lambda-node-regular? m))
+(define (generate-lambda cs m)
+  (let ((arity (vector-ref m 1))
         (bound (vector-ref m 2))
         (sets  (vector-ref m 3))
         (free  (vector-ref m 4)))
@@ -987,45 +933,41 @@
                  (instr1 cs 'ARITY>= (cdr arity))
                  (instr1 cs 'LISTIFY (cdr arity))))
               (make-boxes cs bound sets)
-              (generate-code cs (vector-ref m 5) (length bound))
+              (generate-code cs (vector-ref m 5))
               (instr cs 'RETURN)
               (let ((j (code-size cs)))
                 ;; back-patching jump over closure code
                 (patch-instr! cs i (- j i 1)))))
           (let ((ref (car f)))
-            (##generate-reference cs ref si #f)
+            (generate-reference cs ref #f)
             (instr cs 'PUSH)
             (loop (cdr f)))))))
 
-(define (##generate-assignment cs m env si)
-  (##generate-code cs (##assign-node-body m) env si)
-  (let ((alpha (##reference-node-alpha m)))
-    (if alpha
-        (let ((rec (assv alpha env)))
-          (if rec
-              (let* ((env (cdr rec))
-                     (kind (##env-node-kind env))
-                     (pos (##env-node-position env)))
-                (case kind
-                  ((bound local)
-                   (instr1 cs 'ASSIGN pos))
-                  ((free)
-                   (instr1 cs 'ASSIGN-FREE pos))
-                  (else
-                   (error "unknown binding type" m))))
-              (error "reference not found")))
-        (let* ((var (##reference-node-name m))
+(define (generate-assignment cs m)
+  (generate-code cs (vector-ref m 4))
+  (let ((address (vector-ref m 3)))
+    (if address
+        (let ((kind (car address))
+              (pos  (cdr address)))
+          (case kind
+            ((bound)
+             (instr1 cs 'ASSIGN pos))
+            ((free)
+             (instr1 cs 'ASSIGN-FREE pos))
+            (else
+             (error "unknown binding type" m))))
+        (let* ((var (vector-ref m 1))
                (index (install-global! cs var)))
           (if (memq var *defined-globals*)
               (instr1 cs 'GLOBAL-SET index)
               (instr1 cs 'CHECKED-GLOBAL-SET index))))))
 
-(define (generate-apply cs m si)
+(define (generate-apply cs m)
   (if (memq 'prim (vector-ref m 1))
-      (generate-primitive-apply cs m si)
-      (generate-common-apply cs m si)))
+      (generate-primitive-apply cs m)
+      (generate-common-apply cs m)))
 
-(define (generate-primitive-apply cs m si)
+(define (generate-primitive-apply cs m)
   (let* ((ref (vector-ref m 2))
          (args (vector-ref m 3))
          (nargs (number-of-arguments args))
@@ -1039,46 +981,38 @@
                 ((0)
                  (instr cs code))
                 ((1)
-                 (generate-code cs (vector-ref args 1) si)
+                 (generate-code cs (vector-ref args 1))
                  (instr cs code))
                 ((2)
-                 (generate-code cs (vector-ref args 1) si)
+                 (generate-code cs (vector-ref args 1))
                  (instr cs 'PUSH)
-                 (generate-code cs (vector-ref (vector-ref args 2) 1) si)
+                 (generate-code cs (vector-ref (vector-ref args 2) 1))
                  (instr cs code))
                 (else
                  (error "Primitive with unknown arity")))
               (error "Primitive called with wrong arity!" prim)))
         (error "Unknown primitive"))))
 
-(define (generate-common-apply cs m si)
+(define (generate-common-apply cs m)
   (let ((i (code-size cs))
         (tail? (memq 'tail (vector-ref m 1))))
     ;; this is the return address, will be back-patched later
     (or tail? (instr1 cs 'FRAME 0))
-    (let ((len (generate-push-arguments cs (vector-ref m 3) si)))
-      (generate-code cs (vector-ref m 2) si)
+    (let ((len (generate-push-arguments cs (vector-ref m 3))))
+      (generate-code cs (vector-ref m 2))
       (instr1 cs (if tail? 'TAIL-CALL 'CALL) len)
       ;; back-patching return address
       ;; this not a position-independent value
       (or tail? (patch-instr! cs i (code-size cs))))))
 
-(define (generate-closed-apply cs m si)
-  (let ((tail? (memq 'tail (vector-ref m 1)))
-        (sets (vector-ref m 3))
-        (len (generate-push-arguments cs (vector-ref m 5) si)))
-    (make-local-boxes cs (vector-ref m 4) sets si)
-    (generate-code cs (vector-ref m 6) si)
-    (or tail? (instr1 cs 'POP len))))
-
-(define (generate-push-arguments cs m si)
+(define (generate-push-arguments cs m)
   (let loop ((len 0)
              (m m))
     (let ((kind (vector-ref m 0)))
       (if (eq? kind 'arg-null)
           len
           (let ((arg (vector-ref m 1)))
-            (generate-code cs arg si)
+            (generate-code cs arg)
             (instr cs 'PUSH)
             (loop (+ len 1) (vector-ref m 2)))))))
 
@@ -1089,14 +1023,6 @@
 	      (and (memq v sets)
 		   (instr1 cs 'INSERT-BOX (index-of v vars))))
 	    vars))
-
-(define (make-local-boxes cs locals sets si)
-  (for-each (lambda (l)
-              (and (memq (vector-ref l 2) sets)
-                   (instr1 cs
-                           'INSERT-BOX
-                           (+ si (cdr (vector-ref l 3))))))
-            locals))
 
 (define (number-of-arguments m)
   (let loop ((len 0)
@@ -1109,7 +1035,7 @@
 ;; procs is an alist of (tag . proc)
 ;; the procedure gets the node and the visitor
 ;; to apply it again
-(define (##visit procs m . args)
+(define (visit procs m . args)
 
   (define (visitor m)
     (let* ((tag (vector-ref m 0))
@@ -1117,482 +1043,45 @@
       (if tag-proc
           (apply (cdr tag-proc) visitor m args)
           (case tag
-            ((##sequence)
-             (visitor (##sequence-node-first m))
-             (visitor (##sequence-node-rest  m)))
-            ((##call/cc)
-             (visitor (##call/cc-node-lambda m)))
-            ((##alternative)
-             (visitor (##alternative-node-test m))
-             (visitor (##alternative-node-then m))
-             (visitor (##alternative-node-else m)))
-            ((##lambda)
-             (visitor (##lambda-node-body m)))
-            ((##assign)
-             (visitor (##assign-node-body m)))
-            ((##apply)
-             (visitor (##apply-node-operator m))
-             (visitor (##apply-node-args m)))
-            ((##capply)
-             (visitor (##capply-node-args m))
-             (visitor (##capply-node-body m)))
-            ((##args)
-             (visitor (##args-node-first m))
-             (visitor (##args-node-rest  m)))))))
+            ((sequence)
+             (vector 'sequence
+                     (visitor (vector-ref m 1))
+                     (visitor (vector-ref m 2))))
+            ((call/cc)
+             (vector 'call/cc
+                     (visitor (vector-ref m 1))
+                     (vector-ref m 2)))
+            ((alternative)
+             (vector 'alternative
+                     (visitor (vector-ref m 1))
+                     (visitor (vector-ref m 2))
+                     (visitor (vector-ref m 3))))
+            ((lambda)
+             (vector 'lambda
+                     (vector-ref m 1)
+                     (vector-ref m 2)
+                     (vector-ref m 3)
+                     (map visitor (vector-ref m 4))
+                     (visitor (vector-ref m 5))))
+            ((assign)
+             (vector 'assign
+                     (vector-ref m 1)
+                     (vector-ref m 2)
+                     (vector-ref m 3)
+                     (visitor (vector-ref m 4))))
+            ((apply)
+             (vector 'apply
+                     (vector-ref m 1)
+                     (visitor (vector-ref m 2))
+                     (visitor (vector-ref m 3))))
+            ((arg-list)
+             (vector 'arg-list
+                     (visitor (vector-ref m 1))
+                     (visitor (vector-ref m 2))))
+            (else
+             m)))))
 
   (visitor m))
-
-;;
-;; AST nodes
-;;
-
-(define (##make-undef-node)
-  (vector '##undef))
-
-(define (##undef-node? n)
-  (##node-type? n '##undef))
-
-(define (##make-const-node v i)
-  (vector '##const v i))
-
-(define (##const-node? n)
-  (##node-type? n '##const))
-
-(define (##const-node-value n)
-  (if (##const-node? n)
-      (vector-ref n 1)
-      (error "not a const node")))
-
-(define (##const-node-value-set! n a)
-  (if (##const-node? n)
-      (vector-set! n 1 a)
-      (error "not a const node")))
-
-(define (##const-node-index n)
-  (if (##const-node? n)
-      (vector-ref n 2)
-      (error "not a const node")))
-
-(define (##const-node-index-set! n a)
-  (if (##const-node? n)
-      (vector-set! n 2 a)
-      (error "not a const node")))
-
-(define (##make-reference-node n an)
-  (vector '##reference n an))
-
-(define (##reference-node? n)
-  (##node-type? n '##reference))
-
-(define (##reference-node-name n)
-  (if (##reference-node? n)
-      (vector-ref n 1)
-      (error "not a reference node")))
-
-(define (##reference-node-name-set! n a)
-  (if (##reference-node? n)
-      (vector-set! n 1 a)
-      (error "not a reference node")))
-
-(define (##reference-node-alpha n)
-  (if (##reference-node? n)
-      (vector-ref n 2)
-      (error "not a reference node")))
-
-(define (##reference-node-alpha-set! n a)
-  (if (##reference-node? n)
-      (vector-set! n 2 a)
-      (error "not a reference node")))
-
-(define (##make-sequence-node f r)
-  (vector '##sequence f r))
-
-(define (##sequence-node? n)
-  (##node-type? n '##sequence))
-
-(define (##sequence-node-first n)
-  (if (##sequence-node? n)
-      (vector-ref n 1)
-      (error "not a sequence node")))
-
-(define (##sequence-node-first-set! n a)
-  (if (##sequence-node? n)
-      (vector-set! n 1 a)
-      (error "not a sequence node")))
-
-(define (##sequence-node-rest n)
-  (if (##sequence-node? n)
-      (vector-ref n 2)
-      (error "not a sequence node")))
-
-(define (##sequence-node-rest-set! n a)
-  (if (##sequence-node? n)
-      (vector-set! n 2 a)
-      (error "not a sequence node")))
-
-(define (##make-call/cc-node l t)
-  (vector '##call/cc l t))
-
-(define (##call/cc-node? n)
-  (##node-type? n '##call/cc))
-
-(define (##call/cc-node-lambda n)
-  (if (##call/cc-node? n)
-      (vector-ref n 1)
-      (error "not a call/cc node")))
-
-(define (##call/cc-node-lambda-set! n a)
-  (if (##call/cc-node? n)
-      (vector-set! n 1 a)
-      (error "not a call/cc node")))
-
-(define (##call/cc-node-tail? n)
-  (if (##call/cc-node? n)
-      (vector-ref n 2)
-      (error "not a call/cc node")))
-
-(define (##call/cc-node-tail?-set! n a)
-  (if (##call/cc-node? n)
-      (vector-set! n 2 a)
-      (error "not a call/cc node")))
-
-(define (##make-alternative-node t y n)
-  (vector '##alternative t y n))
-
-(define (##alternative-node? n)
-  (##node-type? n '##alternative))
-
-(define (##alternative-node-test n)
-  (if (##alternative-node? n)
-      (vector-ref n 1)
-      (error "not an alternative node")))
-
-(define (##alternative-node-test-set! n a)
-  (if (##alternative-node? n)
-      (vector-set! n 1 a)
-      (error "not an alternative node")))
-
-(define (##alternative-node-then n)
-  (if (##alternative-node? n)
-      (vector-ref n 2)
-      (error "not an alternative node")))
-
-(define (##alternative-node-then-set! n a)
-  (if (##alternative-node? n)
-      (vector-set! n 2 a)
-      (error "not an alternative node")))
-
-(define (##alternative-node-else n)
-  (if (##alternative-node? n)
-      (vector-ref n 3)
-      (error "not an alternative node")))
-
-(define (##alternative-node-else-set! n a)
-  (if (##alternative-node? n)
-      (vector-set! n 3 a)
-      (error "not an alternative node")))
-
-(define (##make-env-node n k p b)
-  (vector '##env n k p b))
-
-(define (##env-node? n)
-  (##node-type? n '##env))
-
-(define (##env-node-name n)
-  (if (##env-node? n)
-      (vector-ref n 1)
-      (error "not an environment node")))
-
-(define (##env-node-name-set! n a)
-  (if (##env-node? n)
-      (vector-set! n 1 a)
-      (error "not an environment node")))
-
-(define (##env-node-kind n)
-  (if (##env-node? n)
-      (vector-ref n 2)
-      (error "not an environment node")))
-
-(define (##env-node-kind-set! n a)
-  (if (##env-node? n)
-      (vector-set! n 2 a)
-      (error "not an environment node")))
-
-(define (##env-node-position n)
-  (if (##env-node? n)
-      (vector-ref n 3)
-      (error "not an environment node")))
-
-(define (##env-node-position-set! n a)
-  (if (##env-node? n)
-      (vector-set! n 3 a)
-      (error "not an environment node")))
-
-(define (##env-node-boxed? n)
-  (if (##env-node? n)
-      (vector-ref n 4)
-      (error "not an environment node")))
-
-(define (##env-node-boxed?-set! n a)
-  (if (##env-node? n)
-      (vector-set! n 4 a)
-      (error "not an environment node")))
-
-(define (##make-lambda-node a r e bd)
-  (vector '##lambda a r e bd))
-
-(define (##lambda-node? n)
-  (##node-type? n '##lambda))
-
-(define (##lambda-node-arity n)
-  (if (##lambda-node? n)
-      (vector-ref n 1)
-      (error "not a lambda node")))
-
-(define (##lambda-node-arity-set! n a)
-  (if (##lambda-node? n)
-      (vector-set! n 1 a)
-      (error "not a lambda node")))
-
-(define (##lambda-node-regular? n)
-  (if (##lambda-node? n)
-      (vector-ref n 2)
-      (error "not a lambda node")))
-
-(define (##lambda-node-regular?-set! n a)
-  (if (##lambda-node? n)
-      (vector-set! n 2 a)
-      (error "not a lambda node")))
-
-(define (##lambda-node-env n)
-  (if (##lambda-node? n)
-      (vector-ref n 3)
-      (error "not a lambda node")))
-
-(define (##lambda-node-env-set! n a)
-  (if (##lambda-node? n)
-      (vector-set! n 3 a)
-      (error "not a lambda node")))
-
-(define (##lambda-node-body n)
-  (if (##lambda-node? n)
-      (vector-ref n 4)
-      (error "not a lambda node")))
-
-(define (##lambda-node-body-set! n a)
-  (if (##lambda-node? n)
-      (vector-set! n 4 a)
-      (error "not a lambda node")))
-
-(define (##make-toplevel-node e b)
-  (vector '##toplevel e b))
-
-(define (##toplevel-node? n)
-  (##node-type? n '##toplevel))
-
-(define (##toplevel-node-env n)
-  (if (##toplevel-node? n)
-      (vector-ref n 1)
-      (error "not a toplevel node")))
-
-(define (##toplevel-node-env-set! n a)
-  (if (##toplevel-node? n)
-      (vector-set! n 1 a)
-      (error "not a toplevel node")))
-
-(define (##toplevel-node-body n)
-  (if (##toplevel-node? n)
-      (vector-ref n 2)
-      (error "not a toplevel node")))
-
-(define (##toplevel-node-body-set! n a)
-  (if (##toplevel-node? n)
-      (vector-set! n 2 a)
-      (error "not a toplevel node")))
-
-(define (##make-assign-node n a b)
-  (vector '##assign n a b))
-
-(define (##assign-node? n)
-  (##node-type? n '##assign))
-
-(define (##assign-node-name n)
-  (if (##assign-node? n)
-      (vector-ref n 1)
-      (error "not an assign node")))
-
-(define (##assign-node-name-set! n a)
-  (if (##assign-node? n)
-      (vector-set! n 1 a)
-      (error "not an assign node")))
-
-(define (##assign-node-alpha n)
-  (if (##assign-node? n)
-      (vector-ref n 2)
-      (error "not an assign node")))
-
-(define (##assign-node-alpha-set! n a)
-  (if (##assign-node? n)
-      (vector-set! n 2 a)
-      (error "not an assign node")))
-
-(define (##assign-node-body n)
-  (if (##assign-node? n)
-      (vector-ref n 3)
-      (error "not an assign node")))
-
-(define (##assign-node-body-set! n a)
-  (if (##assign-node? n)
-      (vector-set! n 3 a)
-      (error "not an assign node")))
-
-(define (##make-apply-node o a t p)
-  (vector '##apply o a t p))
-
-(define (##apply-node? n)
-  (##node-type? n '##apply))
-
-(define (##apply-node-operator n)
-  (if (##apply-node? n)
-      (vector-ref n 1)
-      (error "not an apply node")))
-
-(define (##apply-node-operator-set! n a)
-  (if (##apply-node? n)
-      (vector-set! n 1 a)
-      (error "not an apply node")))
-
-(define (##apply-node-args n)
-  (if (##apply-node? n)
-      (vector-ref n 2)
-      (error "not an apply node")))
-
-(define (##apply-node-args-set! n a)
-  (if (##apply-node? n)
-      (vector-set! n 2 a)
-      (error "not an apply node")))
-
-(define (##apply-node-tail? n)
-  (if (##apply-node? n)
-      (vector-ref n 3)
-      (error "not an apply node")))
-
-(define (##apply-node-tail?-set! n a)
-  (if (##apply-node? n)
-      (vector-set! n 3 a)
-      (error "not an apply node")))
-
-(define (##apply-node-prim? n)
-  (if (##apply-node? n)
-      (vector-ref n 4)
-      (error "not an apply node")))
-
-(define (##apply-node-prim?-set! n a)
-  (if (##apply-node? n)
-      (vector-set! n 4 a)
-      (error "not an apply node")))
-
-(define (##make-capply-node a r v ag b t)
-  (vector '##capply a r v ag b t))
-
-(define (##capply-node? n)
-  (##node-type? n '##capply))
-
-(define (##capply-node-arity n)
-  (if (##capply-node? n)
-      (vector-ref n 1)
-      (error "not a capply node")))
-
-(define (##capply-node-arity-set! n a)
-  (if (##capply-node? n)
-      (vector-set! n 1 a)
-      (error "not a capply node")))
-
-(define (##capply-node-regular? n)
-  (if (##capply-node? n)
-      (vector-ref n 2)
-      (error "not a capply node")))
-
-(define (##capply-node-regular?-set! n a)
-  (if (##capply-node? n)
-      (vector-set! n 2 a)
-      (error "not a capply node")))
-
-(define (##capply-node-vars n)
-  (if (##capply-node? n)
-      (vector-ref n 3)
-      (error "not a capply node")))
-
-(define (##capply-node-vars-set! n a)
-  (if (##capply-node? n)
-      (vector-set! n 3 a)
-      (error "not a capply node")))
-
-(define (##capply-node-args n)
-  (if (##capply-node? n)
-      (vector-ref n 4)
-      (error "not a capply node")))
-
-(define (##capply-node-args-set! n a)
-  (if (##capply-node? n)
-      (vector-set! n 4 a)
-      (error "not a capply node")))
-
-(define (##capply-node-body n)
-  (if (##capply-node? n)
-      (vector-ref n 5)
-      (error "not a capply node")))
-
-(define (##capply-node-body-set! n a)
-  (if (##capply-node? n)
-      (vector-set! n 5 a)
-      (error "not a capply node")))
-
-(define (##capply-node-tail? n)
-  (if (##capply-node? n)
-      (vector-ref n 6)
-      (error "not a capply node")))
-
-(define (##capply-node-tail?-set! n a)
-  (if (##capply-node? n)
-      (vector-set! n 6 a)
-      (error "not a capply node")))
-
-(define (##make-args-node f r)
-  (vector '##args f r))
-
-(define (##args-node? n)
-  (##node-type? n '##args))
-
-(define (##args-node-first n)
-  (if (##args-node? n)
-      (vector-ref n 1)
-      (error "not an args node")))
-
-(define (##args-node-first-set! n a)
-  (if (##args-node? n)
-      (vector-set! n 1 a)
-      (error "not an args node")))
-
-(define (##args-node-rest n)
-  (if (##args-node? n)
-      (vector-ref n 2)
-      (error "not an args node")))
-
-(define (##args-node-rest-set! n a)
-  (if (##args-node? n)
-      (vector-set! n 2 a)
-      (error "not an args node")))
-
-(define (##make-narg-node)
-  (vector '##null-arg))
-
-(define (##narg-node? n)
-  (##node-type? n '##null-arg))
-
-(define (##node-type? n t)
-  (and (vector? n)
-       (eqv? t (vector-ref n 0))))
 
 ;;
 ;; low-level code generation
@@ -1702,7 +1191,7 @@
 (define (patch-instr! cs i arg)
   (vector-set! (vector-ref (vector-ref cs 3) i) 1 arg))
 
-(define (##install-constant! cs val)
+(define (install-constant! cs val)
   (let* ((consts (vector-ref cs 1))
          (index (index-of val consts)))
     (or index
@@ -1718,9 +1207,9 @@
           (vector-set! cs 0 (append globals (list var)))
           new-index))))
 
-(define (##emit-constant cs c)
+(define (emit-constant cs c)
   (cond
-   ((##immediate? c)
+   ((immediate? c)
     (emit-immediate cs c))
    ((pair? c)
     (emit-pair cs c))
@@ -1735,9 +1224,9 @@
     (error "unimplemented complex constant" c))))
 
 (define (emit-pair cs p)
-  (##emit-constant cs (car p))
+  (emit-constant cs (car p))
   (instr cs 'PUSH)
-  (##emit-constant cs (cdr p))
+  (emit-constant cs (cdr p))
   (instr cs 'CONS))
 
 (define (emit-string cs str)
@@ -1764,7 +1253,7 @@
             (instr cs 'PUSH)
             (emit-immediate cs i)
             (instr cs 'PUSH)
-            (##emit-constant cs (vector-ref vec i))
+            (emit-constant cs (vector-ref vec i))
             (instr cs 'VECTOR-SET)
             (loop (+ i 1)))))))
 

@@ -45,8 +45,10 @@ int main(int argc, char *argv[])
     sly_push_current_input_port(S);
     sly_push_current_output_port(S);
     sly_repl(S);
-  } else if(!sly_load_file(S, argv[1])) {
-    printf("Error!\n");
+  } else {
+    sly_push_string(S, argv[1]);
+    sly_load_file(S, -1);
+    sly_pop(S, 2);
   }
 
   sly_close(S);

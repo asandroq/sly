@@ -243,7 +243,7 @@ void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, uint32_t nr_vars)
   S->stack[S->sp++].value.gc = cl;
 }
 
-void sly_push_string(sly_state_t* S, const sly_cp1_t* str)
+void sly_push_string(sly_state_t* S, const char* str)
 {
   uint32_t i, len;
   sly_gcobject_t *obj;
@@ -307,6 +307,7 @@ sly_char_t* sly_to_string(sly_state_t* S, int idx)
   assert(S->stack[idx].type == SLY_TYPE_STRING);
 #endif
 
+  str = (sly_string_t*)S->stack[idx].value.gc;
   size = str->size;
   ret = (sly_char_t*)malloc((size+1) * sizeof(sly_char_t));
   if(!ret) {
@@ -586,7 +587,7 @@ void sly_number_to_string(sly_state_t* S, int idx)
   assert(S->stack[idx].type == SLY_TYPE_FIXNUM);
 #endif
 
-  snprintf(tmp, 64, "%d", S->stack[idx].value.fixnum);
+  snprintf(tmp, 64, "%ld", S->stack[idx].value.fixnum);
   len = strlen(tmp);
 
   str = sly_create_string(S, NULL, len);
@@ -792,11 +793,10 @@ void sly_vector_set(sly_state_t* S, uint32_t pos, int idx)
 
 void sly_apply(sly_state_t* S, int idx, uint32_t nr_args)
 {
+  uint32_t proc;
   sly_object_t p;
-  uint32_t first, proc;
 
   proc = calc_index(S, idx);
-  first = calc_index(S, -nr_args);
 
 #ifdef SLY_DEBUG_API
   assert(nr_args > 0);
@@ -856,6 +856,30 @@ void sly_call(sly_state_t *S, uint32_t n_args)
   S->stack[S->sp++] = S->accum;
 }
 
+void sly_load_file(sly_state_t* S, int idx)
+{
+  int idx2;
+  sly_module_t mod;
+
+  idx = calc_index(S, idx);
+  idx2 = calc_index(S, -1);
+
+#ifdef SLY_DEBUG_API
+  assert(S->stack[idx].type = SLY_TYPE_STRING);
+#endif
+ 
+  sly_get_global(S, "compile-from-port");
+  S->stack[S->sp++] = S->stack[idx];
+  sly_open_input_file(S);
+  sly_call(S, 1);
+
+  sly_vm_vector_to_module(S->stack[S->sp-1], &mod);
+
+  sly_vm_link_run_module(S, &mod);
+  S->sp = ++idx2 + 1;
+  S->stack[idx2] = S->accum;
+}
+
 void sly_push_current_input_port(sly_state_t *S)
 {
   sly_get_global(S, "current-input-port");
@@ -886,6 +910,7 @@ void sly_newline(sly_state_t* S, int idx)
 #endif
 
   sly_io_newline(S, &S->stack[idx]);
+  S->accum.type = SLY_TYPE_VOID;
 }
 
 void sly_read(sly_state_t *S, int idx)
@@ -933,6 +958,7 @@ void sly_display(sly_state_t* S, int idx1, int idx2)
 #endif
 
   sly_io_display(S, &S->stack[idx1], &S->stack[idx2]);
+  S->accum.type = SLY_TYPE_VOID;
 }
 
 void sly_open_input_file(sly_state_t* S)
@@ -1025,7 +1051,7 @@ void sly_register(sly_state_t* S, sly_reg_t* regs)
 void sly_repl(sly_state_t *S)
 {
   int idx1, idx2;
-  sly_object_t *in, *out;
+  sly_object_t *out;
 
   idx1 = calc_index(S, -2);
   idx2 = calc_index(S, -1);
@@ -1035,7 +1061,6 @@ void sly_repl(sly_state_t *S)
   assert(S->stack[idx2].type == SLY_TYPE_OUTPUT_PORT);
 #endif
 
-  in  = &S->stack[idx1];
   out = &S->stack[idx2];
 
   while(1) {
@@ -1048,8 +1073,10 @@ void sly_repl(sly_state_t *S)
     }
 
     sly_eval(S, -1);
-    sly_write(S, -1, -3);
-    sly_newline(S, -3);
+    if(S->stack[S->sp-1].type != SLY_TYPE_VOID) {
+      sly_write(S, -1, -3);
+      sly_newline(S, -3);
+    }
     S->sp -= 2;
   }
 

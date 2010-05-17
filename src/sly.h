@@ -24,11 +24,7 @@
 #ifndef __SLY_SCHEME_H__
 #define __SLY_SCHEME_H__
 
-#if __GNUC__ > 2
 #include <stdint.h>
-#else
-#include <inttypes.h>
-#endif
 
 /* character encodings */
 #define SLY_CHAR_ENC_UTF8         1
@@ -42,7 +38,7 @@ typedef uint32_t sly_cp4_t;
 typedef sly_cp4_t sly_char_t;
 
 /* type of small integers */
-typedef int32_t sly_fixnum_t;
+typedef intptr_t sly_fixnum_t;
 
 /* the state of the Sly virtual machine */
 typedef struct sly_state_t sly_state_t;
@@ -74,7 +70,6 @@ void sly_register(sly_state_t* S, sly_reg_t* regs);
 /* the input and output ports must be on stack */
 void sly_repl(sly_state_t *S);
 
-int sly_load_file(sly_state_t* S, const char *fname);
 int sly_load_buffer(sly_state_t* S, const uint8_t *buffer);
 
 /*
@@ -105,7 +100,7 @@ void sly_push_boolean(sly_state_t* S, int bool);
 void sly_push_char(sly_state_t* S, sly_char_t chr);
 void sly_push_integer(sly_state_t* S, sly_fixnum_t num);
 void sly_push_cclosure(sly_state_t* S, sly_cfunction_t func, uint32_t nr_vars);
-void sly_push_string(sly_state_t* S, const sly_cp1_t* str);
+void sly_push_string(sly_state_t* S, const char* str);
 void sly_push_vector(sly_state_t* S, uint32_t size);
 
 void sly_push_current_input_port(sly_state_t *S);
@@ -166,6 +161,7 @@ void sly_apply(sly_state_t* S, int idx, uint32_t nr_args);
 /* evaluation */
 void sly_eval(sly_state_t* S, int idx);
 void sly_call(sly_state_t* S, uint32_t n_args);
+void sly_load_file(sly_state_t* S, int idx);
 
 /* I/O */
 void sly_open_input_file(sly_state_t* S);

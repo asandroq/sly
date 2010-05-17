@@ -28,6 +28,7 @@
 #include "vm.h"
 #include "state.h"
 
+#include "boot.h"
 #include "init.h"
 #include "compiler.h"
 
@@ -191,6 +192,7 @@ sly_state_t* sly_open(void)
   sly_open_std(S);
 
   sly_load_buffer(S, init_buf);
+  sly_load_buffer(S, boot_buf);
   sly_load_buffer(S, compiler_buf);
 
   return S;

@@ -23,7 +23,6 @@
 
 #include "sly.h"
 
-/* #include <stdio.h> */
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -31,11 +30,21 @@
 #include "gc.h"
 #include "object.h"
 
+#ifdef SLY_DTRACE
+#include "sly_provider.h"
+#endif
+
 /*
  * the store, i.e., memory
  */
 
-#define SLY_INITIAL_SPACE_SIZE     ((uint32_t)(1 << 7))
+#if defined(__LP64__) || defined(__LLP64__)
+#define WSIZE     8
+#else
+#define WSIZE     4
+#endif
+
+#define SLY_INITIAL_SPACE_SIZE     ((size_t)(1 << 7))
 #define SLY_IMMEDIATE_P(o)         ((o)->type < SLY_TYPE_CLOSURE)
 #define SLY_FORWARD_TAG            199
 
@@ -47,9 +56,9 @@ struct sly_forward_t {
   sly_gcobject_t *ref;
 };
 
-static uint32_t sizeof_gcobj(sly_gcobject_t* obj)
+static size_t sizeof_gcobj(sly_gcobject_t* obj)
 {
-  uint32_t size;
+  size_t size;
 
   switch(obj->type) {
   case SLY_TYPE_CLOSURE:
@@ -98,7 +107,7 @@ static uint32_t sizeof_gcobj(sly_gcobject_t* obj)
 static void copy_object(sly_store_t* S, sly_object_t* obj)
 {
   void *to;
-  uint32_t size;
+  size_t size;
 
   if(SLY_IMMEDIATE_P(obj)) {
     /* if not heap-allocated, bail */
@@ -117,6 +126,8 @@ static void copy_object(sly_store_t* S, sly_object_t* obj)
   memcpy(to, obj->value.gc, size);
   S->size += size;
 
+  assert(size >= sizeof(sly_forward_t));
+
   /* leave a forwarding pointer and update */
   obj->value.gc->type = SLY_FORWARD_TAG;
   ((sly_forward_t*)obj->value.gc)->ref = to;
@@ -130,8 +141,8 @@ static void collect_fobjs(sly_store_t *S)
   for(prev = NULL, fobj = S->fobjs; fobj;) {
     if(fobj->obj->type == SLY_FORWARD_TAG) {
       fobj->obj = ((sly_forward_t*)fobj->obj)->ref;
-      fobj = fobj->next;
       prev = fobj;
+      fobj = fobj->next;
     } else {
       sly_fobj_t *tmp = fobj->next;
 
@@ -162,13 +173,16 @@ static void collect_garbage(sly_store_t* S)
    */
   void *scan;
   sly_object_t *obj;
-  uint32_t old_size;
+
+#ifdef SLY_DTRACE
+  size_t old_size = S->size;
+  SLY_GC_START();
+#endif
 
   if(!S->roots_cb) {
     return;
   }
 
-  old_size = S->size;
   S->size = 0;
 
   /* copying roots */
@@ -179,7 +193,8 @@ static void collect_garbage(sly_store_t* S)
   /* now scan to-space */
   scan = S->to_space;
   while(scan < S->to_space + S->size) {
-    uint32_t i, size;
+    uint32_t i;
+    size_t size;
     sly_gcobject_t *gcobj;
 
     gcobj = SLY_GCOBJECT(scan);
@@ -230,21 +245,29 @@ static void collect_garbage(sly_store_t* S)
   /* process objects that need finalisation */
   collect_fobjs(S);
 
-  /*fprintf(stderr, "GC before: %d after: %d\n\n", old_size, S->size);*/
+#ifdef SLY_DTRACE
+  if(SLY_GC_END_ENABLED()) {
+    SLY_GC_END(old_size, S->size);
+  }
+#endif
 }
 
 static int expand_store(sly_store_t* S)
 {
   void *tmp;
-  uint32_t old_size, size;
+  size_t old_size, size;
 
   old_size = S->capacity;
 
-  /* new size is 30% larger, multiple of 4 */
+  /* new size is 30% larger, word aligned */
   size = old_size * 4 / 3;
-  size -= size % 4;
+  size -= size % WSIZE;
 
-  /*fprintf(stderr, "Expanding store from %d to %d\n\n", old_size, size);*/
+#ifdef SLY_DTRACE
+  if(SLY_GC_RESIZE_ENABLED()) {
+    SLY_GC_RESIZE(old_size, size);
+  }
+#endif
 
   tmp = malloc(size * 2);
   if(tmp == NULL) {
@@ -310,12 +333,18 @@ void sly_gc_finish(sly_store_t *S)
   S->roots_cb = S->roots_cb_data = NULL;
 }
 
-void* sly_gc_alloc(sly_store_t *S, uint32_t size)
+void* sly_gc_alloc(sly_store_t *S, size_t size)
 {
   void *ret;
 
-  /* allocating only 4-byte aligned blocks */
-  assert(size % 4 == 0);
+  /* allocating only word-multiple sized blocks */
+  assert(size % WSIZE == 0);
+
+#ifdef SLY_DTRACE
+  if(SLY_GC_ALLOC_ENABLED()) {
+    SLY_GC_ALLOC(size);
+  }
+#endif
 
   if(S->capacity - S->size < size) {
     /* not enough space, try to find some */
@@ -332,6 +361,9 @@ void* sly_gc_alloc(sly_store_t *S, uint32_t size)
   /* allocs from the from space */
   ret = S->from_space + S->size;
   S->size += size;
+
+  /* returned address must be word aligned */
+  assert((uintptr_t)ret % WSIZE == 0);
 
   return ret;
 }
@@ -354,4 +386,3 @@ void sly_gc_add_port(sly_store_t *S, sly_port_t *port)
 
   S->fobjs = link;
 }
-

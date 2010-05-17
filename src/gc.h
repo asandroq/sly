@@ -53,10 +53,10 @@ struct sly_fobj_t {
 struct sly_store_t {
   
   /* the total size of a semispace */
-  uint32_t capacity;
+  size_t capacity;
 
   /* the used size of the semispace */
-  uint32_t size;
+  size_t size;
 
   /* address of memory received from OS */
   void *os_address;
@@ -80,7 +80,7 @@ struct sly_store_t {
 int  sly_gc_init(sly_store_t *S, sly_roots_cb_t cb, void* ud);
 void sly_gc_finish(sly_store_t *S);
 
-void*         sly_gc_alloc(sly_store_t *S, uint32_t size);
+void*         sly_gc_alloc(sly_store_t *S, size_t size);
 void          sly_gc_add_port(sly_store_t *S, sly_port_t *port);
 
 #endif

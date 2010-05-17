@@ -31,22 +31,23 @@
 /*
  * data types tags
  */
-#define SLY_TYPE_UNDEF            1
-#define SLY_TYPE_NIL              2
-#define SLY_TYPE_EOF              3
-#define SLY_TYPE_BOOL             4
-#define SLY_TYPE_FIXNUM           5
-#define SLY_TYPE_CHAR             6
-#define SLY_TYPE_SYMBOL           7
-#define SLY_TYPE_CLOSURE          8
-#define SLY_TYPE_PAIR             9
-#define SLY_TYPE_CONTI           10
-#define SLY_TYPE_BOX             11
-#define SLY_TYPE_STRING          12
-#define SLY_TYPE_VECTOR          13
-#define SLY_TYPE_DYN_BIND        14
-#define SLY_TYPE_INPUT_PORT      15
-#define SLY_TYPE_OUTPUT_PORT     16
+#define SLY_TYPE_VOID             1
+#define SLY_TYPE_UNDEF            2
+#define SLY_TYPE_NIL              3
+#define SLY_TYPE_EOF              4
+#define SLY_TYPE_BOOL             5
+#define SLY_TYPE_FIXNUM           6
+#define SLY_TYPE_CHAR             7
+#define SLY_TYPE_SYMBOL           8
+#define SLY_TYPE_CLOSURE          9
+#define SLY_TYPE_PAIR            10
+#define SLY_TYPE_CONTI           11
+#define SLY_TYPE_BOX             12
+#define SLY_TYPE_STRING          13
+#define SLY_TYPE_VECTOR          14
+#define SLY_TYPE_DYN_BIND        15
+#define SLY_TYPE_INPUT_PORT      16
+#define SLY_TYPE_OUTPUT_PORT     17
 
 /* sizes for GC */
 #define SLY_SIZE_OF_BOX                         \
@@ -57,8 +58,13 @@
   (sizeof(sly_closure_t) + (n) * sizeof(sly_object_t))
 #define SLY_SIZE_OF_CONTI(n)                            \
   (sizeof(sly_conti_t) + (n) * sizeof(sly_object_t))
+#if defined(__LP64__) || defined(__LLP64__)
+#define SLY_SIZE_OF_STRING(n)                           \
+  (sizeof(sly_string_t) + (n % 2 ? n+1 : n) * sizeof(sly_char_t))
+#else
 #define SLY_SIZE_OF_STRING(n)                           \
   (sizeof(sly_string_t) + (n) * sizeof(sly_char_t))
+#endif
 #define SLY_SIZE_OF_VECTOR(n)                           \
   (sizeof(sly_vector_t) + (n) * sizeof(sly_object_t))
 #define SLY_SIZE_OF_DYN_BIND                    \
@@ -117,7 +123,6 @@ typedef struct sly_oport_t     sly_oport_t;
 
 /* value types */
 struct sly_object_t {
-
   /* the runtime type tag */
   uint8_t type;
 
@@ -162,19 +167,19 @@ struct sly_pair_t {
 
 struct sly_conti_t {
   sly_gcobject_t base;
-  uint32_t size;
+  size_t size;
   sly_object_t stack[0];
 };
 
 struct sly_string_t {
   sly_gcobject_t base;
-  uint32_t size;
+  size_t size;
   sly_char_t chars[0];
 };
 
 struct sly_vector_t {
   sly_gcobject_t base;
-  uint32_t size;
+  size_t size;
   sly_object_t data[0];
 };
 

@@ -1108,6 +1108,10 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj, sly_object_t *port
     sly_io_write_c_string(S, "<#eof>", port);
     break;
 
+  case SLY_TYPE_VOID:
+    sly_io_write_c_string(S, "<#void>", port);
+    break;
+
   case SLY_TYPE_UNDEF:
     sly_io_write_c_string(S, "<#undef>", port);
     break;
@@ -1126,7 +1130,7 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj, sly_object_t *port
     break;
 
   case SLY_TYPE_FIXNUM:
-    snprintf(buf, 64, "%d", obj->value.fixnum);
+    snprintf(buf, 64, "%ld", obj->value.fixnum);
     sly_io_write_c_string(S, buf, port);
     break;
 
@@ -1173,7 +1177,7 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj, sly_object_t *port
     break;
 
   case SLY_TYPE_CONTI:
-    snprintf(buf, 64, "<#continuation %u>", SLY_CONTI(obj->value.gc)->size);
+    snprintf(buf, 64, "<#continuation %lu>", SLY_CONTI(obj->value.gc)->size);
     sly_io_write_c_string(S, buf, port);
     break;
 

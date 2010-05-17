@@ -198,7 +198,7 @@ void sly_vm_dump(sly_state_t* S)
   char buf[64];
   sly_object_t port;
 
-  port.type = SLY_TYPE_INPUT_PORT;
+  port.type = SLY_TYPE_OUTPUT_PORT;
   port.value.gc = sly_io_create_stderr(S);
 
   sly_io_write_c_string(S, "Instruction: ", &port);
@@ -832,6 +832,10 @@ static int sly_vm_run(sly_state_t* S)
       } else {
 	debug = 1;
       }
+      break;
+
+    default:
+      abort();
     }
   }
 
@@ -861,8 +865,8 @@ void sly_vm_call(sly_state_t* S, sly_object_t proc, uint32_t nargs)
 
   /* number of arguments */
   S->fp = idx;
-  (S->stack[idx  ]).type = SLY_TYPE_FIXNUM;
-  (S->stack[idx++]).value.fixnum = nargs;
+  (S->stack[idx]).type = SLY_TYPE_FIXNUM;
+  (S->stack[idx]).value.fixnum = nargs;
 
   if(SLY_CLOSURE(S->proc.value.gc)->is_c) {
     call_c_closure(S, SLY_CLOSURE(S->proc.value.gc));
@@ -876,21 +880,6 @@ void sly_vm_call(sly_state_t* S, sly_object_t proc, uint32_t nargs)
 /*
  * loading
  */
-
-typedef struct sly_module_t sly_module_t;
-
-struct sly_module_t {
-
-  /* uninterned globals */
-  uint32_t nr_globals;
-  sly_string_t **globals;
-
-  /* constants */
-  uint32_t nr_consts;
-
-  /* code */
-  uint32_t *code, code_size;
-};
 
 static void sly_destroy_module(sly_module_t *M)
 {
@@ -1010,7 +999,7 @@ static uint32_t sly_link_module(sly_state_t* S, sly_module_t *mod)
   return code_base;
 }
 
-static int sly_link_run_module(sly_state_t* S, sly_module_t *mod)
+int sly_vm_link_run_module(sly_state_t* S, sly_module_t *mod)
 {
   S->pc = sly_link_module(S, mod);
   sly_destroy_module(mod);
@@ -1068,7 +1057,7 @@ static uint32_t list_length(sly_object_t lis)
   }
 }
 
-static void vector_to_module(sly_object_t vec, sly_module_t *mod)
+void sly_vm_vector_to_module(sly_object_t vec, sly_module_t *mod)
 {
   uint32_t sz;
   sly_object_t p;
@@ -1129,8 +1118,8 @@ int sly_vm_load(sly_state_t* S, sly_object_t vec)
 
   assert(vec.type == SLY_TYPE_VECTOR);
 
-  vector_to_module(vec, &mod);
-  return sly_link_run_module(S, &mod);
+  sly_vm_vector_to_module(vec, &mod);
+  return sly_vm_link_run_module(S, &mod);
 }
 
 #define FIXNUM(o, n) do {(o).type = SLY_TYPE_FIXNUM; (o).value.fixnum = (n);} while(0)
@@ -1172,7 +1161,7 @@ void sly_vm_write_code(sly_state_t *S, sly_object_t vec, sly_object_t *port)
   sly_module_t mod;
   sly_object_t o;
 
-  vector_to_module(vec, &mod);
+  sly_vm_vector_to_module(vec, &mod);
 
   sly_io_write_c_string(S, "#( ", port);
   FIXNUM(o, mod.nr_globals);
@@ -1379,28 +1368,6 @@ static int load_code_from_file(sly_module_t *mod, const char* fname)
   return 1;
 }
 
-int sly_load_file(sly_state_t* S, const char *fname)
-{
-  sly_module_t mod;
-
-#if 0
-  /* tries to load code into module */
-  if(!load_code_from_file(&mod, fname)) {
-    return 0;
-  }
-#endif
-
-  sly_get_global(S, "compile-from-port");
-  sly_push_string(S, fname);
-  sly_open_input_file(S);
-  sly_call(S, 1);
-
-  vector_to_module(S->stack[S->sp-1], &mod);
-  S->sp -= 3;
-
-  return sly_link_run_module(S, &mod);
-}
-
 static void get_fixnum_b(uint8_t **buf, uint32_t *num)
 {
   uint32_t b1, b2, b3, b4;
@@ -1495,5 +1462,5 @@ int sly_load_buffer(sly_state_t* S, const uint8_t *buffer)
     return 0;
   }
 
-  return sly_link_run_module(S, &mod);
+  return sly_vm_link_run_module(S, &mod);
 }

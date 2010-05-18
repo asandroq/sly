@@ -198,6 +198,18 @@ sly_gcobject_t *sly_create_dyn_bind(sly_state_t *S)
   return SLY_GCOBJECT(ret);
 }
 
+sly_gcobject_t *sly_create_syn_closure(sly_state_t *S)
+{
+  sly_syn_closure_t *ret;
+
+  ret = (sly_syn_closure_t*)sly_gc_alloc(&S->store, SLY_SIZE_OF_SYNCLO);
+  if(ret) {
+    SLY_GCOBJECT(ret)->type = SLY_TYPE_SYNCLO;
+  }
+
+  return SLY_GCOBJECT(ret);
+}
+
 sly_gcobject_t *sly_create_iport(sly_state_t *S)
 {
   sly_iport_t* ret;

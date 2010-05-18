@@ -30,25 +30,6 @@
        (string-append "sly-gensym-"
                       (number->string counter))))))
 
-;; creates a new syntactic closure closing 'exp'
-;; with 'env' letting 'free' free
-(define (make-syntactic-closure env free exp)
-  (vector 'syntactic-closure free env exp))
-
-(define (syntactic-closure? obj)
-  (and (vector? obj)
-       (= (vector-length obj) 4)
-       (eqv? (vector-ref obj 0) 'syntactic-closure)))
-
-(define (syntactic-closure-free sc)
-  (vector-ref sc 1))
-
-(define (syntactic-closure-env sc)
-  (vector-ref sc 2))
-
-(define (syntactic-closure-exp sc)
-  (vector-ref sc 3))
-
 ;; helper procedure to close a list of expressions
 (define (make-syntactic-closure-list env free exps)
   (map (lambda (exp)

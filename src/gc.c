@@ -89,6 +89,10 @@ static size_t sizeof_gcobj(sly_gcobject_t* obj)
     size = SLY_SIZE_OF_DYN_BIND;
     break;
 
+  case SLY_TYPE_SYNCLO:
+    size = SLY_SIZE_OF_SYNCLO;
+    break;
+
   case SLY_TYPE_INPUT_PORT:
     size = SLY_SIZE_OF_IPORT;
     break;
@@ -231,6 +235,12 @@ static void collect_garbage(sly_store_t* S)
     case SLY_TYPE_DYN_BIND:
       copy_object(S, &(SLY_DYN_BIND(gcobj)->tag));
       copy_object(S, &(SLY_DYN_BIND(gcobj)->value));
+      break;
+
+    case SLY_TYPE_SYNCLO:
+      copy_object(S, &(SLY_SYNCLO(gcobj)->env));
+      copy_object(S, &(SLY_SYNCLO(gcobj)->free));
+      copy_object(S, &(SLY_SYNCLO(gcobj)->exp));
       break;
     }
 

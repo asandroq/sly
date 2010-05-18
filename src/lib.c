@@ -132,6 +132,102 @@ static int read_token(sly_state_t* S)
   return 1;
 }
 
+/* creates syntactic closures */
+static int make_syn_clo(sly_state_t* S)
+{
+  sly_object_t synclo;
+  int nargs = sly_get_top(S);
+
+  if(nargs != 3) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  synclo.type = SLY_TYPE_SYNCLO;
+  synclo.value.gc = sly_create_syn_closure(S);
+
+  SLY_SYNCLO(synclo.value.gc)->env  = STK(S->sp-3);
+  SLY_SYNCLO(synclo.value.gc)->free = STK(S->sp-2);
+  SLY_SYNCLO(synclo.value.gc)->exp  = STK(S->sp-1);
+
+  STK(S->sp++) = synclo;
+  return 1;
+}
+
+
+static int syn_clo_p(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  STK(S->sp).type = SLY_TYPE_BOOL;
+  if(STK(S->sp-1).type == SLY_TYPE_SYNCLO) {
+    STK(S->sp++).value.bool = 1;
+  } else {
+    STK(S->sp++).value.bool = 0;
+  }
+
+  return 1;
+}
+
+static int syn_clo_env(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(STK(S->sp-1).type != SLY_TYPE_SYNCLO) {
+    sly_push_string(S, "argument must be a syntactic closure");
+    sly_error(S, 1);
+  }
+
+  STK(S->sp++) = SLY_SYNCLO(STK(S->sp-1).value.gc)->env;
+  return 1;
+}
+
+static int syn_clo_free(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(STK(S->sp-1).type != SLY_TYPE_SYNCLO) {
+    sly_push_string(S, "argument must be a syntactic closure");
+    sly_error(S, 1);
+  }
+
+  STK(S->sp++) = SLY_SYNCLO(STK(S->sp-1).value.gc)->free;
+  return 1;
+}
+
+static int syn_clo_exp(sly_state_t* S)
+{
+  int nargs = sly_get_top(S);
+
+  if(nargs != 1) {
+    sly_push_string(S, "wrong number of arguments");
+    sly_error(S, 1);
+  }
+
+  if(STK(S->sp-1).type != SLY_TYPE_SYNCLO) {
+    sly_push_string(S, "argument must be a syntactic closure");
+    sly_error(S, 1);
+  }
+
+  STK(S->sp++) = SLY_SYNCLO(STK(S->sp-1).value.gc)->exp;
+  return 1;
+}
+
 static sly_reg_t lib_regs[] = {
   {"##dynamic-lookup", dynamic_lookup},
   {"##dynamic-store", dynamic_store},
@@ -139,6 +235,11 @@ static sly_reg_t lib_regs[] = {
   {"##open-standard-output", open_stdout_port},
   {"##open-standard-error", open_stderr_port},
   {"##read-token", read_token},
+  {"make-syntactic-closure", make_syn_clo},
+  {"syntactic-closure?", syn_clo_p},
+  {"syntactic-closure-env", syn_clo_env},
+  {"syntactic-closure-free", syn_clo_free},
+  {"syntactic-closure-exp", syn_clo_exp},
   {NULL, NULL}
 };
 

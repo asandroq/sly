@@ -1,6 +1,6 @@
 /*
  * The Sly Scheme system
- * Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
+ * Copyright (c) 2009, 2010 Alex Queiroz <asandroq@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -46,8 +46,9 @@
 #define SLY_TYPE_STRING          13
 #define SLY_TYPE_VECTOR          14
 #define SLY_TYPE_DYN_BIND        15
-#define SLY_TYPE_INPUT_PORT      16
-#define SLY_TYPE_OUTPUT_PORT     17
+#define SLY_TYPE_SYNCLO          16
+#define SLY_TYPE_INPUT_PORT      17
+#define SLY_TYPE_OUTPUT_PORT     18
 
 /* sizes for GC */
 #define SLY_SIZE_OF_BOX                         \
@@ -69,6 +70,8 @@
   (sizeof(sly_vector_t) + (n) * sizeof(sly_object_t))
 #define SLY_SIZE_OF_DYN_BIND                    \
   (sizeof(sly_dyn_bind_t))
+#define SLY_SIZE_OF_SYNCLO                      \
+  (sizeof(sly_syn_closure_t))
 #define SLY_SIZE_OF_IPORT                       \
   (sizeof(sly_iport_t))
 #define SLY_SIZE_OF_OPORT                       \
@@ -98,6 +101,7 @@ typedef struct sly_conti_t sly_conti_t;
 typedef struct sly_string_t sly_string_t;
 typedef struct sly_vector_t sly_vector_t;
 typedef struct sly_dyn_bind_t sly_dyn_bind_t;
+typedef struct sly_syn_closure_t sly_syn_closure_t;
 
 typedef struct sly_symbol_t sly_symbol_t;
 
@@ -114,6 +118,7 @@ typedef struct sly_oport_t     sly_oport_t;
 #define SLY_STRING(obj)        ((sly_string_t*)(obj))
 #define SLY_VECTOR(obj)        ((sly_vector_t*)(obj))
 #define SLY_DYN_BIND(obj)      ((sly_dyn_bind_t*)(obj))
+#define SLY_SYNCLO(obj)        ((sly_syn_closure_t*)(obj))
 #define SLY_PORT(obj)          ((sly_port_t*)(obj))
 #define SLY_IPORT(obj)         ((sly_iport_t*)(obj))
 #define SLY_OPORT(obj)         ((sly_oport_t*)(obj))
@@ -189,6 +194,13 @@ struct sly_dyn_bind_t {
   sly_object_t value;
 };
 
+struct sly_syn_closure_t {
+  sly_gcobject_t base;
+  sly_object_t env;
+  sly_object_t free;
+  sly_object_t exp;
+};
+
 /* I/O port "classes" */
 struct sly_port_t {
   sly_gcobject_t base;
@@ -220,6 +232,8 @@ struct sly_oport_t {
   int (*write_char)(sly_oport_t* self, sly_char_t c);
 };
 
+
+
 /*
  * entry in the symbol table
  * symbols are not collected
@@ -248,6 +262,7 @@ sly_gcobject_t *sly_create_string(sly_state_t *S, const sly_char_t* str, uint32_
 sly_gcobject_t *sly_create_string_from_ascii(sly_state_t *S, const char* str);
 sly_gcobject_t *sly_create_vector(sly_state_t *S, uint32_t size);
 sly_gcobject_t *sly_create_dyn_bind(sly_state_t *S);
+sly_gcobject_t *sly_create_syn_closure(sly_state_t *S);
 sly_gcobject_t *sly_create_iport(sly_state_t *S);
 sly_gcobject_t *sly_create_oport(sly_state_t *S);
 

@@ -1201,6 +1201,10 @@ static void sly_io_write_i(sly_state_t *S, sly_object_t* obj, sly_object_t *port
     sly_io_write_c_string(S, ")", port);
     break;
 
+  case SLY_TYPE_SYNCLO:
+    sly_io_write_c_string(S, "<#syntactic closure>", port);
+    break;
+
   case SLY_TYPE_INPUT_PORT:
     sly_io_write_c_string(S, "<#input port>", port);
     break;

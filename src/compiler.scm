@@ -80,6 +80,29 @@
 ;;; macro expansion
 ;;;
 
+;; an identifier is the meaning of a variable
+(define (##make-identifier name)
+  (vector 'ident name #f #f))
+
+(define (##identifier? id)
+  (and (vector? id)
+       (eqv? (vector-ref id 0) 'ident)))
+
+(define (##identifier-name id)
+  (vector-ref id 1))
+
+(define (##identifier-referenced? id)
+  (vector-ref id 2))
+
+(define (##identifier-referenced-set! id bool)
+  (vector-set! id 2 bool))
+
+(define (##identifier-assigned? id)
+  (vector-ref id 3))
+
+(define (##identifier-assigned-set! id bool)
+  (vector-set! id 3 bool))
+
 ;; expands top-level expressions, doing macro
 ;; expansion, internal defines etc.
 (define (##expand-code e)
@@ -153,6 +176,7 @@
                    user-env
                    mac-env)))
       (cond
+       ((##identifier? e) e)
        ((syntactic-closure? e)
         (expand (syntactic-closure-exp e)
                 (syntactic-closure-free e)
@@ -160,7 +184,11 @@
                 (syntactic-closure-env e)))
        ((symbol? e)
         (let ((pair (assv e env)))
-          (if pair (cdr pair) e)))
+          (if pair
+              (let ((id (cdr pair)))
+                (##identifier-referenced-set! id #t)
+                id)
+              e)))
        ((pair? e)
         (let ((op (car e)))
           (cond
@@ -194,6 +222,8 @@
                     (error "ill-formed 'define'" e)))
                (else
                 (error "ill-formed 'define'" e)))))
+           ((eq? op 'if)
+            `(if ,@(expand-list (cdr e) free user-env mac-env)))
            ((eq? op 'lambda)
             (let* ((vars (cadr e))
                    (vars-list (symbol-exp->list vars))
@@ -215,8 +245,21 @@
                                           new-user-env mac-env)))
               `(letrec ,(map list new-vars new-args)
                  ,(expand-body new-body))))
-           ((memq op '(if set!))
-            `(,(car e) ,@(expand-list (cdr e) free user-env mac-env)))
+           ((eq? op 'set!)
+            (if (and (not (null? (cdr e)))
+                     (not (null? (cddr e)))
+                     (null? (cdddr e))
+                     (symbol? (cadr e)))
+                (let* ((assignee (cadr e))
+                       (assigned (expand (caddr e) free user-env mac-env))
+                       (env (if (memv assignee free) user-env mac-env))
+                       (pair (assv assignee env)))
+                  (if pair
+                      (let ((id (cdr pair)))
+                        (##identifier-assigned-set! id #t)
+                        `(set! ,id ,assigned))
+                      `(set! ,assignee ,assigned)))
+                (error "Ill-formed set!" e)))
            (else
             (expand-list e free user-env mac-env)))))
        (else `',e))))
@@ -243,7 +286,7 @@
 
 (define (##make-env vars)
   (map (lambda (n)
-         (cons n (rename-var n)))
+         (cons n (##make-identifier n)))
        vars))
 
 (define (define-exp? e)

@@ -128,11 +128,26 @@
                      (exps (map rename (map cadr (cadr e)))))
                  `(letrec ,(map list vars exps)
                     ,(rename (caddr e)))))
+              ((set!)
+               (let ((assignee (cadr e))
+                     (assigned (rename (caddr e))))
+                 (if (symbol? assignee)
+                     (let ((p (assv assignee env)))
+                       (if p
+                           (let ((id (cdr p)))
+                             (##identifier-assigned-set! id #t)
+                             `(set! ,id ,assigned))
+                           `(set! ,assignee ,assigned)))
+                     `(set! ,assignee ,assigned))))
               (else
                (map rename e)))
             (if (symbol? e)
                 (let ((p (assv e env)))
-                  (if p (cdr p) e))
+                  (if p
+                      (let ((id (cdr p)))
+                        (##identifier-referenced-set! id #t)
+                        id)
+                      e))
                 e)))
 
       (rename e))

@@ -346,6 +346,34 @@
          (map ##purify-letrecs e)))
       e))
 
+(define (##simple-exp? e bound-vars)
+  (cond
+   ((pair? e)
+    (case (car e)
+      ((begin if)
+       (all? (lambda (e)
+               (##simple-exp? e bound-vars))
+             (cdr e)))
+      ((lambda letrec)
+       #f)
+      ((set!)
+       (and (not (memq (cadr e) bound-vars))
+            (##simple-exp? (caddr e) bound-vars)))
+      (else
+       (and (all? (lambda (e)
+                    (##simple-exp? e bound-vars))
+                  (cdr e))
+            (memq (car e) ##primitives)))))
+   ((##identifier? e)
+    (not (memq e bound-vars)))
+   ((symbol? e)
+    #f)
+   (else
+    #t)))
+
+(define ##primitives
+  '(car cdr cons))
+
 ;;
 ;; this pass transforms expressions into continuation-passing
 ;; style

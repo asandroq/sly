@@ -358,30 +358,60 @@
                      (complex '())
                      (bindings bindings))
         (if (null? bindings)
-            (begin
-              (display unref)
-              (newline)
-              (display lambdas)
-              (newline)
-              (display simple)
-              (newline)
-              (display complex)
-              (newline))
+
+            ;; generating transformed code
+            (let* ((b-code (let ((unref-exps (if (null? unref)
+                                                 '()
+                                                 (map cdr unref)))
+                                 (old-body (if (and (pair? body)
+                                                    (eqv? (car body) 'begin))
+                                               (cdr body)
+                                               (list body))))
+                             (append unref-exps old-body))))
+              `((lambda ,(map car simple)
+                  (letrec ,lambdas
+                    ,(if (null? (cdr b-code))
+                         (car b-code)
+                         (cons 'begin b-code))))
+                ,@(map cdr simple)))
+
+            ;; classifying letrec bindings
             (let* ((binding (car bindings))
                    (var (car binding))
                    (exp (walk-exp (cadr binding))))
               (cond
                ((not (##identifier-referenced? var))
-                (classify (cons (cons var exp) unref) lambdas simple complex (cdr bindings)))
+                (classify (cons (cons var exp) unref)
+                          lambdas
+                          simple
+                          complex
+                          (cdr bindings)))
                ((and (not (##identifier-assigned? var))
                      (##lambda-exp? exp))
-                (classify unref (cons (cons var exp) lambdas) simple complex (cdr bindings)))
+                (classify unref
+                          (cons (list var exp) lambdas)
+                          simple
+                          complex
+                          (cdr bindings)))
                ((and (not (##identifier-assigned? var))
                      (##simple-exp? exp vars))
-                (classify unref lambdas (cons (cons var exp) simple) complex (cdr bindings)))
+                (classify unref
+                          lambdas
+                          (cons (cons var exp) simple)
+                          complex
+                          (cdr bindings)))
                (else
-                (classify unref lambdas simple (cons (cons var exp) complex) (cdr bindings)))))))))
+                (classify unref
+                          lambdas
+                          simple
+                          (cons (list var
+                                      (##make-identifier 'cvar)
+                                      exp)
+                                complex)
+                          (cdr bindings)))))))))
 
+  ;; walks code calling fix-letrec on letrecs
+  ;; and removing assignments to unreferenced variables
   (define (walk-exp e)
     (if (pair? e)
         (case (car e)

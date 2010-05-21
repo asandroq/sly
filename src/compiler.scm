@@ -388,6 +388,16 @@
                           (cons (cons var exp) simple)
                           complex
                           (cdr bindings)))
+               ((and (not (##identifier-assigned? var))
+                     (pair? exp)
+                     (eqv? (car exp) 'letrec))
+                ;; assimilating nested letrecs
+                (classify unref
+                          (append lambdas (cadr exp))
+                          simple
+                          complex
+                          (append (cdr bindings)
+                                  `((,var ,(caddr exp))))))
                (else
                 (classify unref
                           lambdas

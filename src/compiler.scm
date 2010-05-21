@@ -81,8 +81,8 @@
 ;;;
 
 ;; an identifier is the meaning of a variable
-(define (##make-identifier name)
-  (vector 'ident name #f #f))
+(define (##make-identifier name ref assign)
+  (vector 'ident name ref assign))
 
 (define (##identifier? id)
   (and (vector? id)
@@ -301,7 +301,7 @@
 
 (define (##make-env vars)
   (map (lambda (n)
-         (cons n (##make-identifier n)))
+         (cons n (##make-identifier n #f #f)))
        vars))
 
 (define (define-exp? e)
@@ -314,39 +314,6 @@
 ;;;
 
 (define (##purify-letrecs e)
-  (if (pair? e)
-      (case (car e)
-        ((quote)
-         e)
-        ((begin if)
-         `(,(car e) ,@(map ##purify-letrecs (cdr e))))
-        ((lambda)
-         `(lambda ,(cadr e)
-            ,(##purify-letrecs (caddr e))))
-        ((letrec)
-         (let ((vars (map car (cadr e)))
-               (args (map cadr (cadr e))))
-           (let loop ((vs vars)
-                      (ms '())
-                      (ts '()))
-             (if (null? vs)
-                 `((lambda ,vars
-                     ((lambda ,ts
-                        (begin
-                          ,@(map (lambda (v a)
-                                   `(set! ,v ,a))
-                                 vars ts)
-                          ,(##purify-letrecs (caddr e))))
-                      ,@(map ##purify-letrecs args)))
-                   ,@ms)
-                 (loop (cdr vs) (cons '#f ms) (cons (rename-var 'ltvar) ts))))))
-        ((set!)
-         `(set! ,(cadr e) ,(##purify-letrecs (caddr e))))
-        (else
-         (map ##purify-letrecs e)))
-      e))
-
-(define (##fix-letrecs e)
 
   (define (fix-letrec lt)
     (let* ((bindings (cadr lt))
@@ -360,20 +327,37 @@
         (if (null? bindings)
 
             ;; generating transformed code
-            (let* ((b-code (let ((unref-exps (if (null? unref)
+            (let* ((c-code (if (null? complex)
+                               '()
+                               (list `((lambda ,(map cadr complex)
+                                         ,@(map (lambda (c t)
+                                                  `(set! ,c ,t))
+                                                (map car complex)
+                                                (map cadr complex)))
+                                       ,@(map cadddr complex)))))
+                   (b-code (let ((unref-exps (if (null? unref)
                                                  '()
                                                  (map cdr unref)))
                                  (old-body (if (and (pair? body)
                                                     (eqv? (car body) 'begin))
                                                (cdr body)
                                                (list body))))
-                             (append unref-exps old-body))))
-              `((lambda ,(map car simple)
-                  (letrec ,lambdas
-                    ,(if (null? (cdr b-code))
-                         (car b-code)
-                         (cons 'begin b-code))))
-                ,@(map cdr simple)))
+                             (append unref-exps c-code old-body)))
+                   (l-code (let ((b*-code (if (null? (cdr b-code))
+                                              (car b-code)
+                                              (cons 'begin b-code))))
+                             (if (null? lambdas)
+                                 b*-code
+                                 `(letrec ,lambdas
+                                    ,b*-code)))))
+              (if (and (null? simple)
+                       (null? complex))
+                  l-code
+                  `((lambda ,(append (map car simple)
+                                     (map car complex))
+                      ,l-code)
+                    ,@(append (map cdr simple)
+                              (map caddr complex)))))
 
             ;; classifying letrec bindings
             (let* ((binding (car bindings))
@@ -405,7 +389,8 @@
                           lambdas
                           simple
                           (cons (list var
-                                      (##make-identifier 'cvar)
+                                      (##make-identifier 'cvar #t #f)
+                                      #f
                                       exp)
                                 complex)
                           (cdr bindings)))))))))
@@ -438,6 +423,8 @@
 
   (walk-exp e))
 
+;; a simple expression is free from effects and cannot capture its
+;; continuation
 (define (##simple-exp? e bound-vars)
   (cond
    ((pair? e)
@@ -451,13 +438,14 @@
       (else (and (all? (lambda (e)
                          (##simple-exp? e bound-vars))
                        (cdr e))
-                 (memq (car e) ##primitives)))))
+                 (memq (car e) ##effectless-primitives)))))
    ((##identifier? e) (not (memq e bound-vars)))
    ((symbol? e) #f)
    (else #t)))
 
-(define ##primitives
-  '(car cdr cons))
+(define ##effectless-primitives
+  '(+ - * / < > append assoc assv assq car cdr cons integer? list
+      member memv memq number? pair? quotient remainder symbol?))
 
 ;;
 ;; this pass transforms expressions into continuation-passing

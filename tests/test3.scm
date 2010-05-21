@@ -1,8 +1,13 @@
 
 (define (fact n)
       (define blah 1)
+      (define bleh (+ 123 (car '(3 . 4))))
+      (define blih (- 456 (cdr '(6 . 7))))
+      (define bloh (call/cc (lambda (k) (cons k 45))))
       (define (fact-iter n a)
-        (if (= n blah)
+        (set! blih a)
+        (if (and (= n blah)
+                 (not bloh))
             a
             (fact-iter (- n 1) (* a n))))
       (fact-iter n 1))

@@ -81,8 +81,8 @@
 ;;;
 
 ;; an identifier is the meaning of a variable
-(define (##make-identifier name ref assign)
-  (vector 'ident name ref assign))
+(define (##make-identifier name)
+  (vector 'ident name #f #f))
 
 (define (##identifier? id)
   (and (vector? id)
@@ -301,7 +301,7 @@
 
 (define (##make-env vars)
   (map (lambda (n)
-         (cons n (##make-identifier n #f #f)))
+         (cons n (##make-identifier n)))
        vars))
 
 (define (define-exp? e)
@@ -330,7 +330,6 @@
             (let* ((c-code (if (null? complex)
                                '()
                                (let ((sets (map (lambda (c t)
-                                                  (##identifier-assigned-set! c #t)
                                                   `(set! ,c ,t))
                                                 (map car complex)
                                                 (map cadr complex))))
@@ -399,15 +398,15 @@
                           (append (cdr bindings)
                                   `((,var ,(caddr exp))))))
                (else
-                (classify unref
-                          lambdas
-                          simple
-                          (cons (list var
-                                      (##make-identifier 'cvar #t #f)
-                                      #f
-                                      exp)
-                                complex)
-                          (cdr bindings)))))))))
+                (let ((tvar (##make-identifier 'tvar)))
+                  (##identifier-assigned-set! var #t)
+                  (##identifier-referenced-set! tvar #t)
+                  (classify unref
+                            lambdas
+                            simple
+                            (cons (list var tvar #f exp)
+                                  complex)
+                            (cdr bindings))))))))))
 
   ;; walks code calling fix-letrec on letrecs
   ;; and removing assignments to unreferenced variables

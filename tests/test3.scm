@@ -21,8 +21,9 @@
                                      (if (zero? n)
                                          #f
                                          (even? (- n 1)))))
+                             (tested 15678)
                              (lame (begin (set! blih 0) (+ (cdr bloh) 10))))
-                      (even? 15678)))
+                      (even? tested)))
 
       (define (fact-iter n a)
         (set! blih (bluh bluah a))

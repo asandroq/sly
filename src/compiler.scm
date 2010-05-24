@@ -315,6 +315,47 @@
 
 (define (##purify-letrecs e)
 
+  (define (partition-bindings le vars)
+    (let* ((lambda-exp (car le))
+           (le-vars (cadr lambda-exp))
+           (exps (cdr le))
+           (all-vars (append le-vars vars)))
+      (let classify ((simple '())
+                     (lambdas '())
+                     (vars le-vars)
+                     (exps exps))
+        (if (null? vars)
+            (if (null? exps)
+                (cons simple lambdas)
+                #f)
+            (let ((var (car vars))
+                  (exp (car exps)))
+              (cond
+               ((not (##identifier-referenced? var))
+                #f)
+               ((and (not (##identifier-assigned? var))
+                     (##lambda-exp? exp))
+                (classify simple
+                          (cons (list var exp) lambdas)
+                          (cdr vars)
+                          (cdr exps)))
+               ((and (not (##identifier-assigned? var))
+                     (##simple-exp? exp all-vars))
+                (classify (cons (cons var exp) simple)
+                          lambdas
+                          (cdr vars)
+                          (cdr exps)))
+               ((and (not (##identifier-assigned? var))
+                     (pair? exp)
+                     (eqv? (car exp) 'letrec))
+                ;; assimilating nested letrecs
+                (classify simple
+                          (append (cadr exp) lambdas)
+                          vars
+                          (cons (caddr exp) (cdr exps))))
+               (else
+                #f)))))))
+
   (define (fix-letrec lt)
     (let* ((bindings (cadr lt))
            (vars (map car bindings))
@@ -392,11 +433,23 @@
                      (eqv? (car exp) 'letrec))
                 ;; assimilating nested letrecs
                 (classify unref
-                          (append lambdas (cadr exp))
+                          (append (cadr exp) lambdas)
                           simple
                           complex
-                          (append (cdr bindings)
-                                  `((,var ,(caddr exp))))))
+                          (cons (list var (caddr exp))
+                                (cdr bindings))))
+               ((and (not (##identifier-assigned? var))
+                     (pair? exp)
+                     (##lambda-exp? (car exp))
+                     (partition-bindings exp vars)) =>
+                ;; assimilating nested lets (closed applications)
+                (lambda (lambdas-simple)
+                  (classify unref
+                            (append (cdr lambdas-simple) lambdas)
+                            (append (car lambdas-simple) simple)
+                            complex
+                            (cons (list var (caddar exp))
+                                  (cdr bindings)))))
                (else
                 (let ((tvar (##make-identifier 'tvar)))
                   (##identifier-assigned-set! var #t)

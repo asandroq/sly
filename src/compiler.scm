@@ -81,7 +81,11 @@
 ;;;
 
 ;; expands top-level expressions, doing macro
-;; expansion, internal defines etc.
+;; expansion, internal defines etc. as per:
+;;
+;; Alan Bawden and Jonathan Rees. Syntactic closures. 1988 ACM Conference
+;; On Lisp and Functional Programming, pages 86-95
+;;
 (define (##expand-code e)
 
   (define (expand-list e+ free user-env mac-env)

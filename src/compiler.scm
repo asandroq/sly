@@ -310,7 +310,11 @@
        (eq? (car e) 'define)))
 
 ;;;
-;;; letrec transformation
+;;; letrec transformation, as per:
+;;;
+;;; Oscar Waddell, Dipanwita Sarkar, and R. Kent Dybvig.
+;;; Fixing letrec: A faithful yet efficient implementation of Scheme’s
+;;; recursive binding construct. Higher Order Symbol. Comput., 18(3-4):299–326, 2005. 
 ;;;
 
 (define (##purify-letrecs e)

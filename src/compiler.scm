@@ -361,6 +361,16 @@
                           (append (cadr exp) lambdas)
                           vars
                           (cons (caddr exp) (cdr exps))))
+               ((and (not (##identifier-assigned? var))
+                     (pair? exp)
+                     (##lambda-exp? (car exp))
+                     (partition-bindings exp all-vars)) =>
+                ;; assimilating nested lets (closed applications)
+                (lambda (simple-lambdas)
+                  (classify (append (car simple-lambdas) simple)
+                            (append (cdr simple-lambdas) lambdas)
+                            vars
+                            (cons (caddar exp) (cdr exps)))))
                (else
                 #f)))))))
 
@@ -451,10 +461,10 @@
                      (##lambda-exp? (car exp))
                      (partition-bindings exp vars)) =>
                 ;; assimilating nested lets (closed applications)
-                (lambda (lambdas-simple)
+                (lambda (simple-lambdas)
                   (classify unref
-                            (append (cdr lambdas-simple) lambdas)
-                            (append (car lambdas-simple) simple)
+                            (append (cdr simple-lambdas) lambdas)
+                            (append (car simple-lambdas) simple)
                             complex
                             (cons (list var (caddar exp))
                                   (cdr bindings)))))

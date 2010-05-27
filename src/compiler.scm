@@ -325,6 +325,7 @@
 
   (define (partition-bindings le vars)
     (let* ((lambda-exp (car le))
+           (lambda-body? (##lambda-exp? (caddr lambda-exp)))
            (le-vars (cadr lambda-exp))
            (exps (cdr le))
            (all-vars (append le-vars vars)))
@@ -347,7 +348,8 @@
                           (cons (list var exp) lambdas)
                           (cdr vars)
                           (cdr exps)))
-               ((and (not (##identifier-assigned? var))
+               ((and (or lambda-body?
+                         (not (##identifier-assigned? var)))
                      (##simple-exp? exp all-vars))
                 (classify (cons (cons var exp) simple)
                           lambdas

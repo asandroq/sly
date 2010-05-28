@@ -25,7 +25,13 @@
                              (lame (begin (set! blih 0) (+ (cdr bloh) 10))))
                       (even? tested)))
 
+      (define blubluh (let ((n 0))
+                        (lambda ()
+                          (set! n (+ n 1))
+                          n)))
+
       (define (fact-iter n a)
+        (blubluh)
         (set! blih (bluh bluah a))
         (if (and (= n blah)
                  (or bloh blooh))

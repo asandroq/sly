@@ -319,112 +319,35 @@
 ;;;
 ;;; Oscar Waddell, Dipanwita Sarkar, and R. Kent Dybvig.
 ;;; Fixing letrec: A faithful yet efficient implementation of Scheme’s
-;;; recursive binding construct. Higher Order Symbol. Comput., 18(3-4):299–326, 2005. 
+;;; recursive binding construct. Higher Order Symbol. Comput.,
+;;; 18(3-4):299–326, 2005.
 ;;;
 
-(define (##purify-letrecs e)
+(define (##fix-letrecs e)
 
-  (define (partition-bindings le vars)
-    (let* ((lambda-exp (car le))
-           (lambda-body? (##lambda-exp? (caddr lambda-exp)))
-           (le-vars (cadr lambda-exp))
-           (exps (cdr le))
-           (all-vars (append le-vars vars)))
-      (let classify ((simple '())
-                     (lambdas '())
-                     (vars le-vars)
-                     (exps exps))
-        (if (null? vars)
-            (if (null? exps)
-                (cons simple lambdas)
-                #f)
-            (let ((var (car vars))
-                  (exp (car exps)))
-              (cond
-               ((not (##identifier-referenced? var))
-                #f)
-               ((and (not (##identifier-assigned? var))
-                     (##lambda-exp? exp))
-                (classify simple
-                          (cons (list var exp) lambdas)
-                          (cdr vars)
-                          (cdr exps)))
-               ((and (or lambda-body?
-                         (not (##identifier-assigned? var)))
-                     (##simple-exp? exp all-vars))
-                (classify (cons (cons var exp) simple)
-                          lambdas
-                          (cdr vars)
-                          (cdr exps)))
-               ((and (not (##identifier-assigned? var))
-                     (pair? exp)
-                     (eqv? (car exp) 'letrec))
-                ;; assimilating nested letrecs
-                (classify simple
-                          (append (cadr exp) lambdas)
-                          vars
-                          (cons (caddr exp) (cdr exps))))
-               ((and (not (##identifier-assigned? var))
-                     (pair? exp)
-                     (##lambda-exp? (car exp))
-                     (partition-bindings exp all-vars)) =>
-                ;; assimilating nested lets (closed applications)
-                (lambda (simple-lambdas)
-                  (classify (append (car simple-lambdas) simple)
-                            (append (cdr simple-lambdas) lambdas)
-                            vars
-                            (cons (caddar exp) (cdr exps)))))
-               (else
-                #f)))))))
+  (define (partition-bindings bindings body old-vars cont)
 
-  (define (fix-letrec lt)
-    (let* ((bindings (cadr lt))
-           (vars (map car bindings))
-           (body (walk-exp (caddr lt))))
+    (define (assimilate-let b v unref lambdas simple complex)
+      (if (and (null? unref)
+               (null? complex))
+          (cons simple lambdas)
+          #f))
+
+    (let* ((new-body (walk-exp body))
+           (new-vars (map car bindings))
+           (all-vars (append old-vars new-vars)))
       (let classify ((unref '())
                      (lambdas '())
                      (simple '())
                      (complex '())
                      (bindings bindings))
         (if (null? bindings)
-
-            ;; generating transformed code
-            (let* ((c-code (if (null? complex)
-                               '()
-                               (let ((sets (map (lambda (c t)
-                                                  `(set! ,c ,t))
-                                                (map car complex)
-                                                (map cadr complex))))
-                                 (list `((lambda ,(map cadr complex)
-                                           ,(if (null? (cdr sets))
-                                                (car sets)
-                                                `(begin ,@sets)))
-                                         ,@(map cadddr complex))))))
-                   (b-code (let ((unref-exps (if (null? unref)
-                                                 '()
-                                                 (map cdr unref)))
-                                 (old-body (if (and (pair? body)
-                                                    (eqv? (car body) 'begin))
-                                               (cdr body)
-                                               (list body))))
-                             (append unref-exps c-code old-body)))
-                   (l-code (let ((b*-code (if (null? (cdr b-code))
-                                              (car b-code)
-                                              (cons 'begin b-code))))
-                             (if (null? lambdas)
-                                 b*-code
-                                 `(letrec ,lambdas
-                                    ,b*-code)))))
-              (if (and (null? simple)
-                       (null? complex))
-                  l-code
-                  `((lambda ,(append (map car simple)
-                                     (map car complex))
-                      ,l-code)
-                    ,@(append (map cdr simple)
-                              (map caddr complex)))))
-
-            ;; classifying letrec bindings
+            (cont new-body
+                  new-vars
+                  (reverse unref)
+                  (reverse lambdas)
+                  (reverse simple)
+                  (reverse complex))
             (let* ((binding (car bindings))
                    (var (car binding))
                    (exp (walk-exp (cadr binding))))
@@ -443,7 +366,7 @@
                           complex
                           (cdr bindings)))
                ((and (not (##identifier-assigned? var))
-                     (##simple-exp? exp vars))
+                     (##simple-exp? exp all-vars))
                 (classify unref
                           lambdas
                           (cons (cons var exp) simple)
@@ -451,8 +374,8 @@
                           (cdr bindings)))
                ((and (not (##identifier-assigned? var))
                      (pair? exp)
-                     (eqv? (car exp) 'letrec))
-                ;; assimilating nested letrecs
+                     (eqv? (car exp) '##fix))
+                ;; assimilating nested ##fixes
                 (classify unref
                           (append (cadr exp) lambdas)
                           simple
@@ -462,7 +385,10 @@
                ((and (not (##identifier-assigned? var))
                      (pair? exp)
                      (##lambda-exp? (car exp))
-                     (partition-bindings exp vars)) =>
+                     (partition-bindings (map list (cadar exp) (cdr exp))
+                                         #f
+                                         all-vars
+                                         assimilate-let)) =>
                 ;; assimilating nested lets (closed applications)
                 (lambda (simple-lambdas)
                   (classify unref
@@ -482,6 +408,42 @@
                                   complex)
                             (cdr bindings))))))))))
 
+  (define (fix-letrec body vars unref lambdas simple complex)
+    (let* ((c-code (if (null? complex)
+                       '()
+                       (let ((sets (map (lambda (c t)
+                                          `(set! ,c ,t))
+                                        (map car complex)
+                                        (map cadr complex))))
+                         (list `((lambda ,(map cadr complex)
+                                   ,(if (null? (cdr sets))
+                                        (car sets)
+                                        `(begin ,@sets)))
+                                 ,@(map cadddr complex))))))
+           (b-code (let ((unref-exps (if (null? unref)
+                                         '()
+                                         (map cdr unref)))
+                         (old-body (if (and (pair? body)
+                                            (eqv? (car body) 'begin))
+                                       (cdr body)
+                                       (list body))))
+                     (append unref-exps c-code old-body)))
+           (l-code (let ((b*-code (if (null? (cdr b-code))
+                                      (car b-code)
+                                      (cons 'begin b-code))))
+                     (if (null? lambdas)
+                         b*-code
+                         `(##fix ,lambdas
+                                 ,b*-code)))))
+      (if (and (null? simple)
+               (null? complex))
+          l-code
+          `((lambda ,(append (map car simple)
+                             (map car complex))
+              ,l-code)
+            ,@(append (map cdr simple)
+                      (map caddr complex))))))
+
   ;; walks code calling fix-letrec on letrecs
   ;; and removing assignments to unreferenced variables
   (define (walk-exp e)
@@ -496,7 +458,9 @@
            `(lambda ,(cadr e)
               ,(walk-exp (caddr e))))
           ((letrec)
-           (fix-letrec e))
+           (let ((body (caddr e))
+                 (bindings (cadr e)))
+             (partition-bindings bindings body '() fix-letrec)))
           ((set!)
            (let ((assignee (cadr e))
                  (assigned (walk-exp (caddr e))))
@@ -519,7 +483,7 @@
       ((begin if) (all? (lambda (e)
                           (##simple-exp? e bound-vars))
                         (cdr e)))
-      ((lambda letrec) #f)
+      ((lambda ##fix) #f)
       ((quote) #t)
       ((set!) #f)
       (else (and (all? (lambda (e)

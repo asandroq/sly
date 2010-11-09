@@ -334,6 +334,7 @@
           #f))
 
     (let* ((new-body (walk-exp body))
+           (lambda-body? (##lambda-exp? new-body))
            (new-vars (map car bindings))
            (all-vars (append old-vars new-vars)))
       (let classify ((unref '())
@@ -365,7 +366,8 @@
                           simple
                           complex
                           (cdr bindings)))
-               ((and (not (##identifier-assigned? var))
+               ((and (or lambda-body?
+                         (not (##identifier-assigned? var)))
                      (##simple-exp? exp all-vars))
                 (classify unref
                           lambdas
@@ -386,7 +388,7 @@
                      (pair? exp)
                      (##lambda-exp? (car exp))
                      (partition-bindings (map list (cadar exp) (cdr exp))
-                                         #f
+                                         (caddar exp)
                                          all-vars
                                          assimilate-let)) =>
                 ;; assimilating nested lets (closed applications)

@@ -2,8 +2,8 @@
 (define (fact n)
       (define blah 1)
       (define bleh (+ 123 (car '(3 . 4))))
-      (define blih (- 456 (cdr '(6 . 7))))
       (define bloh (call/cc (lambda (k) (cons k 45))))
+      (define blih (- 456 (cdr '(6 . 7))))
       (define blooh (not blah))
 
       (define (bluh a b)

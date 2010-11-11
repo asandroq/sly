@@ -550,7 +550,78 @@
 
 (define ##effectless-primitives
   '(+ - * / < > append assoc assv assq car cdr cons integer? list
-      member memv memq number? pair? quotient remainder symbol?))
+      member memv memq not number? pair? quotient remainder symbol?))
+
+;;
+;; Assignment and global conversion
+;;
+
+(define (##convert-assignments e)
+
+  (define (convert-lambda l)
+    (let loop ((args (cadr l))
+               (new-args '())
+               (mapping '()))
+      (if (null? args)
+          (if (null? mapping)
+              `(lambda ,(cadr l)
+                 ,(walk-exp (caddr l)))
+              `(lambda ,(reverse new-args)
+                 ((lambda ,(map car mapping)
+                    ,(walk-exp (caddr l)))
+                  ,@(map (lambda (m)
+                           `(##make-box ,(cdr m)))
+                         mapping))))
+          (let ((arg (car args)))
+            (if (##identifier-assigned? arg)
+                (let ((new-arg (##make-identifier 'svar)))
+                  (##identifier-referenced-set! new-arg #t)
+                  (loop (cdr args)
+                        (cons new-arg new-args)
+                        (cons (cons arg new-arg) mapping)))
+                (loop (cdr args)
+                      (cons arg new-args)
+                      mapping))))))
+
+  (define (walk-exp e)
+    (if (pair? e)
+        (case (car e)
+          ((quote)
+           e)
+          ((begin if)
+           `(,(car e) ,@(map walk-exp (cdr e))))
+          ((define)
+           `(define ,(cadr e) ,(walk-exp (caddr e))))
+          ((lambda)
+           (convert-lambda e))
+          ((##fix)
+           (let loop ((lambdas (cadr e))
+                      (converted '()))
+             (if (null? lambdas)
+                 `(##fix ,(reverse converted)
+                         ,(walk-exp (caddr e)))
+                 (let ((binding (car lambdas)))
+                   (loop (cdr lambdas)
+                         (cons (list (car binding)
+                                     (convert-lambda (cadr binding)))
+                               converted))))))
+          ((set!)
+           (let ((assignee (cadr e))
+                 (assigned (walk-exp (caddr e))))
+             (if (symbol? assignee)
+                 `(##global-set! ,assignee ,assigned)
+                 `(##box-set! ,assignee ,assigned))))
+          (else
+           (map walk-exp e)))
+        (cond
+         ((symbol? e)
+          `(##global-ref ,e))
+         ((and (##identifier? e)
+               (##identifier-assigned? e))
+          `(##box-ref ,e))
+         (else e))))
+
+  (walk-exp e))
 
 ;;
 ;; this pass transforms expressions into continuation-passing

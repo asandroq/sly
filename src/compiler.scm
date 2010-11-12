@@ -648,12 +648,16 @@
         call
         (let ((arg (car args)))
           (if (pair? arg)
-              (if (##lambda-exp? arg)
-                  (cps-args (cdr args) (append call (list (cps-lambda arg))))
-                  (let ((var (##make-identifier 'a)))
-                    (cps arg `(lambda (,var)
-                                ,(cps-args (cdr args)
-                                           (append call (list var)))))))
+              (cond
+               ((eqv? (car arg) 'quote)
+                (cps-args (cdr args) (append call (list arg))))
+               ((##lambda-exp? arg)
+                (cps-args (cdr args) (append call (list (cps-lambda arg)))))
+               (else
+                (let ((var (##make-identifier 'a)))
+                  (cps arg `(lambda (,var)
+                              ,(cps-args (cdr args)
+                                         (append call (list var))))))))
               (cps-args (cdr args) (append call (list arg)))))))
 
   (define (cps e k)
@@ -681,16 +685,10 @@
                                      (converted '()))
                             (if (null? lambdas)
                                 (reverse converted)
-                                (let* ((var (caar lambdas))
-                                       (lamb (cadar lambdas))
-                                       (args (cadr lamb))
-                                       (body (caddr e))
-                                       (cont (##make-identifier 'k))
-                                       (new-lamb `(lambda (,cont ,@args)
-                                                    ,(cps body cont))))
+                                (let ((l (car lambdas)))
                                   (loop (cdr lambdas)
-                                        (cons (list var
-                                                    new-lamb)
+                                        (cons (list (car l)
+                                                    (cps-lambda (cadr l)))
                                               converted)))))))
              `(##fix ,lambdas
                      ,(cps (caddr e) k))))
@@ -698,11 +696,15 @@
            (let ((app (car e))
                  (args (cdr e)))
              (if (pair? app)
-                 (if (##lambda-exp? app)
-                     (cps-args args `(,(cps-lambda app) ,k))
-                     (let ((var (##make-identifier 'p)))
-                       (cps app `(lambda (,var)
-                                   ,(cps-args args `(,var ,k))))))
+                 (cond
+                  ((##lambda-exp? app)
+                   (cps-args args `(,(cps-lambda app) ,k)))
+                  ((eqv? (car e) 'quote)
+                   (cps-args args `(,app ,k)))
+                  (else
+                   (let ((var (##make-identifier 'p)))
+                     (cps app `(lambda (,var)
+                                 ,(cps-args args `(,var ,k)))))))
                  (cps-args args `(,app ,k))))))
         `(,k ,e)))
 

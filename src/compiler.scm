@@ -575,6 +575,7 @@
           (let ((arg (car args)))
             (if (##identifier-assigned? arg)
                 (let ((new-arg (##make-identifier 'svar)))
+                  (##identifier-assigned-set! arg #f)
                   (##identifier-referenced-set! new-arg #t)
                   (loop (cdr args)
                         (cons new-arg new-args)
@@ -633,7 +634,7 @@
   (define (cps-sequence e+ k)
     (if (null? (cdr e+))
         (cps (car e+) k)
-        (cps (car e+) `(lambda (,(##make-identifier 'k))
+        (cps (car e+) `(lambda (,(##make-identifier 'v))
                          ,(cps-sequence (cdr e+) k)))))
 
   (define (cps-lambda e)
@@ -651,8 +652,6 @@
               (cond
                ((eqv? (car arg) 'quote)
                 (cps-args (cdr args) (append call (list arg))))
-               ((##lambda-exp? arg)
-                (cps-args (cdr args) (append call (list (cps-lambda arg)))))
                (else
                 (let ((var (##make-identifier 'a)))
                   (cps arg `(lambda (,var)
@@ -671,7 +670,9 @@
            (let ((var (##make-identifier 'k))
                  (cont (##make-identifier 'k))
                  (conseq (caddr e))
-                 (altern (cadddr e)))
+                 (altern (if (null? (cdddr e))
+                             #f
+                             (cadddr e))))
              (cps (cadr e) `(lambda (,var)
                               ((lambda (,cont)
                                  (##test (lambda () ,(cps conseq cont))
@@ -679,7 +680,9 @@
                                          ,var))
                                ,k)))))
           ((lambda)
-           `(,k (cps-lambda e)))
+           (let ((name (##make-identifier 'f)))
+             `(##fix ((,name ,(cps-lambda e)))
+                (,k ,name))))
           ((##fix)
            (let ((lambdas (let loop ((lambdas (cadr e))
                                      (converted '()))
@@ -689,16 +692,18 @@
                                   (loop (cdr lambdas)
                                         (cons (list (car l)
                                                     (cps-lambda (cadr l)))
-                                              converted)))))))
-             `(##fix ,lambdas
-                     ,(cps (caddr e) k))))
+                                              converted))))))
+                 (body (cps (caddr e) k)))
+             (if (eqv? (car body) '##fix)
+                 (let ((other-lambdas (cadr body))
+                       (new-body (caddr body)))
+                   `(##fix ,(append lambdas other-lambdas) new-body))
+                 `(##fix ,lambdas ,body))))
           (else
            (let ((app (car e))
                  (args (cdr e)))
              (if (pair? app)
                  (cond
-                  ((##lambda-exp? app)
-                   (cps-args args `(,(cps-lambda app) ,k)))
                   ((eqv? (car e) 'quote)
                    (cps-args args `(,app ,k)))
                   (else

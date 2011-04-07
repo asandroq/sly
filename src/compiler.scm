@@ -634,7 +634,7 @@
          (else e))))
 
   ;; primitives implemented by VM instructions
-  (define vm-prims '(+ - * / car cdr cons null? bool? char? fixnum? pair?
+  (define vm-prims '(+ - * / = car cdr cons null? bool? char? fixnum? pair?
                        symbol? zero? not))
 
   (walk-exp e))

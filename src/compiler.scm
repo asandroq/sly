@@ -86,7 +86,7 @@
 
 (define (##identifier? id)
   (and (vector? id)
-       (eqv? (vector-ref id 0) 'ident)))
+       (eqv? (vector-ref id 0) '##ident)))
 
 (define (##identifier-name id)
   (vector-ref id 1))
@@ -556,12 +556,15 @@
 ;; Assignment and global conversion
 ;;
 
-(define (##make-primitive sym)
-  (vector 'primitive sym))
+(define (##make-primitive name)
+  (vector 'primitive name))
 
 (define (##primitive? a)
   (and (vector? a)
        (eqv? (vector-ref a 0) 'primitive)))
+
+(define (##primitive-name a)
+  (vector-ref a 1))
 
 (define (##convert-assignments e)
 

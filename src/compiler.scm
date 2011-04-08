@@ -696,18 +696,8 @@
             (let loop ((bindings (cadr e))
                        (new-bindings '()))
               (if (null? bindings)
-                  (let ((bindings (reverse new-bindings))
-                        (new-body (cps-k (caddr e) k)))
-                    (if (and (pair? new-body)
-                             (eqv? '##fix (car new-body)))
-                        ;; merging FIXes
-                        (let ((internal-bindings (cadr new-body))
-                              (internal-body (caddr new-body)))
-                          `(##fix ,(append bindings
-                                           internal-bindings)
-                             ,internal-body))
-                        `(##fix ,bindings
-                           ,new-body)))
+                  `(##fix ,(reverse new-bindings)
+                     ,(cps-k (caddr e) k))
                   (let* ((binding (car bindings))
                          (i (car binding))
                          (l (cadr binding)))
@@ -763,18 +753,8 @@
             (let loop ((bindings (cadr e))
                        (new-bindings '()))
               (if (null? bindings)
-                  (let ((bindings (reverse new-bindings))
-                        (new-body (cps-c (caddr e) c)))
-                    (if (and (pair? new-body)
-                             (eqv? (car new-body) '##fix))
-                        ;; merging FIXes
-                        (let ((internal-bindings (cadr new-body))
-                              (internal-body (caddr new-body)))
-                          `(##fix ,(append bindings
-                                           internal-bindings)
-                             ,internal-body))
-                        `(##fix ,bindings
-                           ,new-body)))
+                  `(##fix ,(reverse new-bindings)
+                     ,(cps-c (caddr e) c))
                   (let* ((binding (car bindings))
                          (i (car binding))
                          (l (cadr binding)))

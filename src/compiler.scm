@@ -460,7 +460,7 @@
                              (loop '() (cdr complex) (cons set sets))))
                        (if (null? complex)
                            (let* ((binding (car unref))
-                                  (exp (cdr unref)))
+                                  (exp (cdr binding)))
                              (loop (cdr unref) '() (cons exp sets)))
                            (let ((fu (caar unref))
                                  (fc (caar complex)))

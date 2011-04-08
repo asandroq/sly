@@ -1,6 +1,6 @@
 ;;;
 ;;; The Sly Scheme compiler
-;;; Copyright (c) 2009 Alex Queiroz <asandroq@gmail.com>
+;;; Copyright (c) 2009-2011 Alex Queiroz <asandroq@gmail.com>
 ;;;
 ;;; Permission is hereby granted, free of charge, to any person obtaining a copy
 ;;; of this software and associated documentation files (the "Software"), to deal

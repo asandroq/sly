@@ -646,6 +646,9 @@
 ;; this pass transforms expressions into continuation-passing
 ;; style
 ;;
+;; from:
+;; http://matt.might.net/articles/cps-conversion/
+;;
 
 (define (##to-cps e)
 
@@ -754,8 +757,8 @@
                            `(##test ,l1 ,l2 ,test))))))
            ((eqv? op 'lambda)
             (let ((l (##make-identifier 'l)))
-              `(##fix ((,l (cps-lambda e)))
-                 `(,c ,l))))
+              `(##fix ((,l ,(cps-lambda e)))
+                 (,c ,l))))
            ((eqv? op '##fix)
             (let loop ((bindings (cadr e))
                        (new-bindings '()))

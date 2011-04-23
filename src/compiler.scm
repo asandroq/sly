@@ -750,7 +750,7 @@
 
 ;; an identifier is the meaning of a variable
 (define (##make-identifier name)
-  (vector '##ident (rename-var name) #f #f))
+  (vector '##ident (rename-var name) #f #f #f))
 
 (define (##identifier? id)
   (and (vector? id)
@@ -770,6 +770,26 @@
 
 (define (##identifier-assigned-set! id bool)
   (vector-set! id 3 bool))
+
+;; reused slot
+(define (##identifier-uses id)
+  (vector-ref id 2))
+
+(define (##identifier-uses-set! id n)
+  (vector-set! id 2 n))
+
+;; reused slot
+(define (##identifier-calls id)
+  (vector-ref id 3))
+
+(define (##identifier-calls-set! id n)
+  (vector-set! id 3 n))
+
+(define (##identifier-lambda id)
+  (vector-ref id 4))
+
+(define (##identifier-lambda-set! id l)
+  (vector-set! id 4 l))
 
 ;; a primitive gets special treatment from the VM
 (define (##make-primitive name)

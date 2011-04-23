@@ -80,29 +80,6 @@
 ;;; macro expansion
 ;;;
 
-;; an identifier is the meaning of a variable
-(define (##make-identifier name)
-  (vector 'ident name #f #f))
-
-(define (##identifier? id)
-  (and (vector? id)
-       (eqv? (vector-ref id 0) '##ident)))
-
-(define (##identifier-name id)
-  (vector-ref id 1))
-
-(define (##identifier-referenced? id)
-  (vector-ref id 2))
-
-(define (##identifier-referenced-set! id bool)
-  (vector-set! id 2 bool))
-
-(define (##identifier-assigned? id)
-  (vector-ref id 3))
-
-(define (##identifier-assigned-set! id bool)
-  (vector-set! id 3 bool))
-
 ;; expands top-level expressions, doing macro
 ;; expansion, internal defines etc. as per:
 ;;
@@ -556,16 +533,6 @@
 ;; Assignment and global conversion
 ;;
 
-(define (##make-primitive name)
-  (vector 'primitive name))
-
-(define (##primitive? a)
-  (and (vector? a)
-       (eqv? (vector-ref a 0) 'primitive)))
-
-(define (##primitive-name a)
-  (vector-ref a 1))
-
 (define (##convert-assignments e)
 
   (define (convert-lambda l)
@@ -781,6 +748,40 @@
 
   (cps-c e 'halt))
 
+;; an identifier is the meaning of a variable
+(define (##make-identifier name)
+  (vector '##ident (rename-var name) #f #f))
+
+(define (##identifier? id)
+  (and (vector? id)
+       (eqv? (vector-ref id 0) '##ident)))
+
+(define (##identifier-name id)
+  (vector-ref id 1))
+
+(define (##identifier-referenced? id)
+  (vector-ref id 2))
+
+(define (##identifier-referenced-set! id bool)
+  (vector-set! id 2 bool))
+
+(define (##identifier-assigned? id)
+  (vector-ref id 3))
+
+(define (##identifier-assigned-set! id bool)
+  (vector-set! id 3 bool))
+
+;; a primitive gets special treatment from the VM
+(define (##make-primitive name)
+  (vector 'primitive name))
+
+(define (##primitive? a)
+  (and (vector? a)
+       (eqv? (vector-ref a 0) 'primitive)))
+
+(define (##primitive-name a)
+  (vector-ref a 1))
+
 ;;;
 ;;; core language compilation
 ;;;
@@ -974,9 +975,7 @@
     (lambda (n)
       (set! c (+ c 1))
       (string->symbol
-       (string-append "#:"
-                      (symbol->string n)
-                      "v"
+       (string-append (symbol->string n)
                       (number->string c))))))
 
 ;; tests is an expression is a valid lambda expression

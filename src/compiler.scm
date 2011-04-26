@@ -624,13 +624,12 @@
 
   (walk-exp e))
 
-;;
-;; this pass transforms expressions into continuation-passing
-;; style
-;;
-;; from:
-;; http://matt.might.net/articles/cps-conversion/
-;;
+;;;
+;;; CPS transformation
+;;;
+;;; from:
+;;; http://matt.might.net/articles/cps-conversion/
+;;;
 
 (define (##to-cps e)
 
@@ -763,6 +762,65 @@
 
   (cps-c e 'halt))
 
+;;;
+;;; AST creation
+;;; from this point onwards the code must be analysed and the tree annotated.
+;;; to make this easier, we transform the source tree into an object tree.
+;;;
+
+(define (##objectify e)
+
+(define (objectify-lambda e)
+
+  (define (parse n* regular)
+    (cond
+     ((null? n*)
+      (objectify-internal (reverse regular) #f))
+     ((pair? n*)
+      (parse (cdr n*) (cons (car n*) regular)))
+     (else
+      (objectify-internal (reverse regular) n*))))
+
+  (define (objectify-internal n* n)
+    (let ((body (objectify (caddr e))))
+      (##make-lambda (cons (if n '>= '=)
+                           (length n*))
+                     (if n n* (append n* (list n)))
+                     body)))
+
+  (parse (cadr e) '()))
+
+  (define (objectify e)
+    (if (pair? e)
+        (let ((op (car e)))
+          (cond
+           ((eqv? op '##fix)
+            (let loop ((bindings (cadr e))
+                       (idents '()))
+              (if (null? bindings)
+                  (##make-fix idents (objectify (caddr e)))
+                  (let* ((binding (car bindings))
+                         (ident (car binding))
+                         (proc (cadr binding)))
+                    (##identifier-lambda-set! ident (objectify proc))
+                    (loop (cdr bindings) (cons ident idents))))))
+           ((eqv? op 'if)
+            (##make-conditional (objectify (cadr e))
+                                (objectify (caddr e))
+                                (objectify (cadddr e))))
+           ((eqv? op 'lambda)
+            (objectify-lambda e))
+           ((eqv? op 'quote)
+            (##make-constant (cadr e)))
+           (else
+            (##make-application (objectify op)
+                                (map objectify (cdr e))))))
+        (if (##identifier? e)
+            e
+            (##make-constant e))))
+
+  (objectify e))
+
 ;; an identifier is the meaning of a variable
 (define (##make-identifier name)
   (vector '##ident (rename-var name) #f #f #f))
@@ -808,202 +866,40 @@
 
 ;; a primitive gets special treatment from the VM
 (define (##make-primitive name)
-  (vector 'primitive name))
+  (vector '##prim name))
 
 (define (##primitive? a)
   (and (vector? a)
-       (eqv? (vector-ref a 0) 'primitive)))
+       (eqv? (vector-ref a 0) '##prim)))
 
 (define (##primitive-name a)
   (vector-ref a 1))
 
-;;;
-;;; core language compilation
-;;;
+;; application node
+(define (##make-application op args)
+  (vector '##app op args))
 
-;; compiles toplevel
-(define (meaning-toplevel e+)
-  (if (null? (cdr e+))
-      (meaning (car e+) '() #t)
-      (let ((m (meaning (car e+) '() #f))
-            (m+ (meaning-toplevel (cdr e+))))
-        (vector 'sequence m m+))))
+;; conditional node
+(define (##make-conditional test conseq altern)
+  (vector '##cond test conseq altern))
 
-;;
-;; transforms expressions into a syntax tree,
-;; calculates lexical addresses, collect free
-;; and assigned bindings
-;;
-(define (meaning e r tail?)
-  (if (pair? e)
-      (case (car e)
-        ((quote)
-         (if (= (length e) 2)
-             (meaning-quote (cadr e))
-             (error "invalid quote expression")))
-        ((begin)
-         (if (> (length e) 1)
-             (meaning-sequence (cdr e) r tail?)
-             (error "empty 'begin'" e)))
-        ((define)
-         (meaning-define (cadr e) (caddr e)))
-        ((if)
-         (case (length e)
-           ((3)
-            (meaning-alternative (cadr e) (caddr e) *undef* r tail?))
-           ((4)
-            (meaning-alternative (cadr e) (caddr e) (cadddr e) r tail?))
-           (else
-            (error "ill-formed 'if'" e))))
-        ((lambda)
-         (if (##lambda-exp? e)
-             (meaning-lambda (cadr e) (caddr e) r)
-             (error "ill-formed 'lambda'" e)))
-        ((set!)
-         (if (and (= (length e) 3)
-                  (symbol? (cadr e)))
-             (meaning-assignment (cadr e) (caddr e) r)
-             (error "ill-formed 'set!'" e)))
-        (else
-         (meaning-application (car e) (cdr e) r tail?)))
-      (if (symbol? e)
-          (meaning-reference e r)
-          (meaning-quote e))))
+;; constant node
+(define (##make-constant const)
+  (vector '##const const))
 
-(define (meaning-reference n r)
-  (vector 'refer
-          n
-          (lookup n r)
-          #f
-          '()))
+;; fix node
+(define (##make-fix lambdas body)
+  (vector '##fix lambdas body))
 
-(define (meaning-quote e)
-  (vector 'const e))
-
-(define (meaning-sequence e+ r tail?)
-  (if (null? (cdr e+))
-      (meaning (car e+) r tail?)
-      (vector 'sequence
-              (meaning (car e+) r #f)
-              (meaning-sequence (cdr e+) r tail?))))
-
-(define (meaning-call/cc e r tail?)
-  (if (##lambda-exp? e)
-      (if (one-symbol-list? (cadr e))
-          (vector 'call/cc
-                  (meaning e r tail?)
-                  (if tail?
-                      (list 'tail)
-                      '()))
-          (error "procedure must take one argument" e))
-      (error "expression is not a procedure" e)))
-
-(define (meaning-define n e)
-  (meaning-assignment n e '()))
-
-(define (meaning-alternative test then else r tail?)
-  (vector 'alternative
-          (meaning test r #f)
-          (meaning then r tail?)
-          (if (eq? else *undef*)
-              (vector 'undef)
-              (meaning else r tail?))))
-
-(define (meaning-lambda n* e r)
-
-  (define (parse n* regular)
-    (cond
-     ((null? n*)
-      (meaning-internal (reverse regular) #f e r))
-     ((symbol? n*)
-      (meaning-internal (reverse regular) n* e r))
-     ((pair? n*)
-      (parse (cdr n*) (cons (car n*) regular)))
-     (else
-      (error "ill-formed 'lambda' arguments" n*))))
-
-  (define (meaning-internal n* n e r)
-    (let* ((an* (map (lambda (n)
-                       (cons n (rename-var n)))
-                     (if n
-                         (append n* (list n))
-                         n*)))
-           (r2 (cons an* r))
-           (m (meaning e r2 #t))
-           (bound (map cdr an*))
-           (free (collect-free m bound))
-           (sets (collect-sets m bound))
-           (m2 (flag-boxes m sets))
-           (m3 (calculate-addresses m2 bound free)))
-      (vector 'lambda
-              (cons (if n '>= '=)
-                    (length n*))
-              bound
-              sets
-              (map (lambda (n)
-                     (meaning-reference n r))
-                   free)
-              m3)))
-
-  (parse n* '()))
-
-(define (meaning-assignment n e r)
-  (let ((n2 (lookup n r))
-        (prim? (assq n *primitives*)))
-    (if (and prim?
-             (eq? n n2))
-        (error "assignment to primitive not allowed" n)
-        (vector 'assign
-                n
-                n2
-                #f
-                (meaning e r #f)))))
-
-(define (meaning-application e e* r tail?)
-  (let ((m  (meaning e r #f))
-        (m* (meaning-args e* r)))
-    (let* ((prim (if (and (eq? (vector-ref m 0)
-                               'refer)
-                          (assq (vector-ref m 1)
-                                *primitives*))
-                     (list 'prim)
-                     '()))
-           (flags (if tail?
-                      (cons 'tail prim)
-                      prim)))
-      (vector 'apply
-              flags
-              m
-              m*))))
-
-(define (meaning-args e* r)
-  (if (null? e*)
-      (vector 'arg-null)
-      (vector 'arg-list
-              (meaning (car e*) r #f)
-              (meaning-args (cdr e*) r))))
-
-(define *undef* (list 'undef))
+;; lambda node
+(define (##make-lambda arity vars body)
+  (vector '##lambda arity vars body))
 
 (define (immediate? x)
   (or (char? x)
       (boolean? x)
       (integer? x)
       (null? x)))
-
-(define (lookup n r)
-  (if (null? r)
-      n
-      (let loop ((s (car r))
-                 (r (cdr r)))
-        (if (null? s)
-            (if (null? r)
-                n
-                (loop (car r) (cdr r)))
-            (let ((v (car s)))
-              (if (eq? n (car v))
-                  (cdr v)
-                  (loop (cdr s) r)))))))
 
 (define rename-var
   (let ((c 0))
@@ -1064,102 +960,6 @@
   (and (pair? e)
        (symbol? (car e))
        (null? (cdr e))))
-
-(define (collect-free m bound)
-  (case (vector-ref m 0)
-    ((refer)
-     (let ((n (vector-ref m 1))
-           (an (vector-ref m 2)))
-       (if (or (eq? n an)
-               (memq an bound))
-           '()
-           (list an))))
-    ((sequence)
-     (set-union (collect-free (vector-ref m 1) bound)
-                (collect-free (vector-ref m 2) bound)))
-    ((call/cc)
-     (collect-free (vector-ref m 1) bound))
-    ((alternative)
-     (set-union (collect-free (vector-ref m 1) bound)
-                (set-union (collect-free (vector-ref m 2) bound)
-                           (collect-free (vector-ref m 3) bound))))
-    ((lambda)
-     (collect-free (vector-ref m 5)
-                   (append (vector-ref m 2) bound)))
-    ((assign)
-     (set-union (let ((n (vector-ref m 1))
-                      (an (vector-ref m 2)))
-                  (if (or (eq? n an)
-                          (memq an bound))
-                      '()
-                      (list an)))
-                (collect-free (vector-ref m 4) bound)))
-    ((apply)
-     (set-union (collect-free (vector-ref m 2) bound)
-                (collect-free (vector-ref m 3) bound)))
-    ((arg-list)
-     (set-union (collect-free (vector-ref m 1) bound)
-                (collect-free (vector-ref m 2) bound)))
-    (else
-     '())))
-
-(define (collect-sets m bound)
-  (case (vector-ref m 0)
-    ((sequence)
-     (set-union (collect-sets (vector-ref m 1) bound)
-                (collect-sets (vector-ref m 2) bound)))
-    ((call/cc)
-     (collect-sets (vector-ref m 1) bound))
-    ((alternative)
-     (set-union (collect-sets (vector-ref m 1) bound)
-                (set-union (collect-sets (vector-ref m 2) bound)
-                           (collect-sets (vector-ref m 3) bound))))
-    ((lambda)
-     (collect-sets (vector-ref m 5) bound))
-    ((assign)
-     (let ((n (vector-ref m 1))
-           (an (vector-ref m 2)))
-       (if (and (not (eq? n an))
-                (memq an bound))
-           (list an)
-           '())))
-    ((apply)
-     (set-union (collect-sets (vector-ref m 2) bound)
-                (collect-sets (vector-ref m 3) bound)))
-    ((arg-list)
-     (set-union (collect-sets (vector-ref m 1) bound)
-                (collect-sets (vector-ref m 2) bound)))
-    (else
-     '())))
-
-;; flags references to assigned variables as boxes
-(define (flag-boxes m sets)
-
-  (define (refer-handler visitor m sets)
-    (let ((an (vector-ref m 2))
-          (flags (vector-ref m 4)))
-      (vector 'refer
-              (vector-ref m 1)
-              an
-              (vector-ref m 3)
-              (if (memq an sets)
-                  (cons 'box flags)
-                  flags))))
-
-  (define (lambda-handler visitor m sets)
-    (vector 'lambda
-            (vector-ref m 1)
-            (vector-ref m 2)
-            (vector-ref m 3)
-            (map visitor (vector-ref m 4))
-            (visitor (vector-ref m 5))))
-
-  (visit (list (cons 'refer
-                     refer-handler)
-               (cons 'lambda
-                     lambda-handler))
-         m
-         sets))
 
 (define (calculate-addresses m bound free)
 

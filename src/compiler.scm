@@ -822,6 +822,40 @@
 
   (objectify e))
 
+;; walks and annotate the tree regarding identifier use
+(define (##annotate-identifiers! e)
+
+  (define (annotate! e)
+    (cond
+     ((##application? e)
+      (let ((op (##application-op e)))
+        (if (##identifier? op)
+            (let ((calls (##identifier-calls op)))
+              (##identifier-calls-set! op (+ calls 1)))))
+      (for-each annotate! (##application-args e)))
+     ((##conditional? e)
+      (annotate! (##conditional-test e))
+      (annotate! (##conditional-conseq e))
+      (annotate! (##conditional-altern e)))
+     ((##fix? e)
+      (for-each (lambda (i)
+                  (##identifier-uses-set! i 0)
+                  (##identifier-calls-set! i 0)
+                  (annotate! (##identifier-lambda i)))
+                (##fix-lambdas e))
+      (annotate! (##fix-body e)))
+     ((##identifier? e)
+      (let ((uses (##identifier-uses e)))
+        (##identifier-uses-set! e (+ uses 1))))
+     ((##lambda? e)
+      (for-each (lambda (v)
+                  (##identifier-uses-set! v 0)
+                  (##identifier-calls-set! v 0))
+                (##lambda-vars e))
+      (annotate! (##lambda-body e)))))
+
+  (annotate! e))
+
 ;; an identifier is the meaning of a variable
 (define (##make-identifier name)
   (vector '##ident (rename-var name) #f #f #f))

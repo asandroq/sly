@@ -760,7 +760,7 @@
                                `(,op ,c ,@args))))))))
         `(,c ,e)))
 
-  (cps-c e 'halt))
+  (cps-c e '##halt))
 
 ;;;
 ;;; AST creation
@@ -770,25 +770,25 @@
 
 (define (##objectify e)
 
-(define (objectify-lambda e)
+  (define (objectify-lambda e)
 
-  (define (parse n* regular)
-    (cond
-     ((null? n*)
-      (objectify-internal (reverse regular) #f))
-     ((pair? n*)
-      (parse (cdr n*) (cons (car n*) regular)))
-     (else
-      (objectify-internal (reverse regular) n*))))
+    (define (parse n* regular)
+      (cond
+       ((null? n*)
+        (objectify-internal (reverse regular) #f))
+       ((pair? n*)
+        (parse (cdr n*) (cons (car n*) regular)))
+       (else
+        (objectify-internal (reverse regular) n*))))
 
-  (define (objectify-internal n* n)
-    (let ((body (objectify (caddr e))))
-      (##make-lambda (cons (if n '>= '=)
-                           (length n*))
-                     (if n n* (append n* (list n)))
-                     body)))
+    (define (objectify-internal n* n)
+      (let ((body (objectify (caddr e))))
+        (##make-lambda (cons (if n '>= '=)
+                             (length n*))
+                       (if n (append n* (list n)) n*)
+                       body)))
 
-  (parse (cadr e) '()))
+    (parse (cadr e) '()))
 
   (define (objectify e)
     (if (pair? e)
@@ -815,7 +815,8 @@
            (else
             (##make-application (objectify op)
                                 (map objectify (cdr e))))))
-        (if (##identifier? e)
+        (if (or (##identifier? e)
+                (##primitive? e))
             e
             (##make-constant e))))
 
@@ -879,21 +880,74 @@
 (define (##make-application op args)
   (vector '##app op args))
 
+(define (##application? a)
+  (and (vector? a)
+       (eqv? (vector-ref a 0) '##app)))
+
+(define (##application-op a)
+  (vector-ref a 1))
+
+(define (##application-args a)
+  (vector-ref a 2))
+
 ;; conditional node
 (define (##make-conditional test conseq altern)
   (vector '##cond test conseq altern))
 
+(define (##conditional? a)
+  (and (vector? a)
+       (eqv? (vector-ref a 0) '##cond)))
+
+(define (##conditional-test a)
+  (vector-ref a 1))
+
+(define (##conditional-conseq a)
+  (vector-ref a 2))
+
+(define (##conditional-altern a)
+  (vector-ref a 3))
+
 ;; constant node
-(define (##make-constant const)
-  (vector '##const const))
+(define (##make-constant value)
+  (vector '##const value))
+
+(define (##constant? a)
+  (and (vector? a)
+       (eqv? (vector-ref a 0) '##const)))
+
+(define (##constant-value a)
+  (vector-ref a 1))
 
 ;; fix node
 (define (##make-fix lambdas body)
   (vector '##fix lambdas body))
 
+(define (##fix? a)
+  (and (vector? a)
+       (eqv? (vector-ref a 0) '##fix)))
+
+(define (##fix-lambdas a)
+  (vector-ref a 1))
+
+(define (##fix-body a)
+  (vector-ref a 2))
+
 ;; lambda node
 (define (##make-lambda arity vars body)
   (vector '##lambda arity vars body))
+
+(define (##lambda? a)
+  (and (vector? a)
+       (eqv? (vector-ref a 0) '##lambda)))
+
+(define (##lambda-arity a)
+  (vector-ref a 1))
+
+(define (##lambda-vars a)
+  (vector-ref a 2))
+
+(define (##lambda-body a)
+  (vector-ref a 3))
 
 (define (immediate? x)
   (or (char? x)

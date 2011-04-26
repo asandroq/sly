@@ -859,15 +859,103 @@
      ((##lambda? e)
       (for-each (lambda (v)
                   (##identifier-uses-set! v 0)
-                  (##identifier-calls-set! v 0))
+                  (##identifier-calls-set! v 0)
+                  (##identifier-lambda-set! v #f))
                 (##lambda-vars e))
       (annotate! (##lambda-body e)))))
 
   (annotate! e))
 
+(define (##beta-reduce e)
+
+  ;; reducing lambdas that are known, do not escape
+  ;; and are called just once (guarantees smaller code size)
+  (define (reducible? i)
+    (and (##identifier? i)
+         (##identifier-lambda i)
+         (= (##identifier-uses i) 0)
+         (= (##identifier-calls i) 1)))
+
+  (define (subst e m)
+    (cond
+     ((##application? e)
+      (##make-application (subst (##application-op e) m)
+                          (map (lambda (a)
+                                 (subst a m))
+                               (##application-args e))))
+     ((##conditional? e)
+      (##make-conditional (subst (##conditional-test e) m)
+                          (subst (##conditional-conseq e) m)
+                          (subst (##conditional-altern e) m)))
+     ((##fix? e)
+      (##make-fix (map (lambda (l)
+                         (##identifier-lambda-set!
+                          l
+                          (subst (##identifier-lambda l) m))
+                         l)
+                       (##fix-lambdas e))
+                  (subst (##fix-body e) m)))
+     ((##identifier? e)
+      (let ((ret (assq e m)))
+        (if ret (cdr ret) e)))
+     ((##lambda? e)
+      (##make-lambda (##lambda-arity e)
+                     (##lambda-vars e)
+                     (subst (##lambda-body e) m)))
+     (else
+      e)))
+
+  (define (reduce e)
+    (cond
+     ((##application? e)
+      (let ((op (##application-op e)))
+        (if (reducible? op)
+            (let* ((args (##application-args e))
+                   (proc (##identifier-lambda op))
+                   (arity (##lambda-arity proc)))
+              ;; reducing only lambdas with fixed arity
+              (if (and (eqv? (car arity) '=)
+                       (= (length args) (cdr arity)))
+                  (let ((mapping (map cons
+                                      (##lambda-vars proc)
+                                      args)))
+                    (subst (##lambda-body proc) mapping))
+                  (##make-application op (map reduce args))))
+            (##make-application op (map reduce (##application-args e))))))
+     ((##conditional? e)
+      (##make-conditional (reduce (##conditional-test e))
+                          (reduce (##conditional-conseq e))
+                          (reduce (##conditional-altern e))))
+     ((##fix? e)
+      (let loop ((lambdas (##fix-lambdas e))
+                 (out '()))
+        (if (null? lambdas)
+            (if (null? out)
+                ;; removing empty FIXes
+                (reduce (##fix-body e))
+                (##make-fix out (reduce (##fix-body e))))
+            (let ((ident (car lambdas)))
+              (if (reducible? ident)
+                  (loop (cdr lambdas) out)
+                  (begin
+                    (##identifier-lambda-set!
+                     ident
+                     (reduce (##identifier-lambda ident)))
+                    (loop (cdr lambdas) (cons ident out))))))))
+     ((##lambda? e)
+      (##make-lambda (##lambda-arity e)
+                     (##lambda-vars e)
+                     (reduce (##lambda-body e))))
+     (else
+      e)))
+
+  (reduce e))
+
 ;; an identifier is the meaning of a variable
-(define (##make-identifier name)
-  (vector '##ident (rename-var name) #f #f #f))
+(define (##make-identifier name . rest)
+  (if (null? rest)
+      (vector '##ident (rename-var name) #f #f #f)
+      (vector '##ident name (car rest) (cadr rest) (caddr rest))))
 
 (define (##identifier? id)
   (and (vector? id)

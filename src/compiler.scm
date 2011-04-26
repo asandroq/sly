@@ -535,6 +535,18 @@
 
 (define (##convert-assignments e)
 
+  (define global-ref-prim (##make-primitive '##global-ref))
+
+  (define global-set-prim (##make-primitive '##global-set!))
+
+  (define make-global-prim (##make-primitive '##make-global))
+
+  (define box-ref-prim (##make-primitive '##box-ref))
+
+  (define box-set-prim (##make-primitive '##box-set!))
+
+  (define make-box-prim (##make-primitive '##make-box))
+
   (define (convert-lambda l)
     (let ((new-body (walk-exp (caddr l))))
       (let loop ((args (cadr l))
@@ -549,11 +561,12 @@
               `(lambda ,(if extra
                             (if (null? new-args)
                                 extra
-                                `(,@(reverse new-args) . ,extra)))
+                                `(,@(reverse new-args) . ,extra))
+                            (reverse new-args))
                  ((lambda ,(map car mapping)
                     ,new-body)
                   ,@(map (lambda (m)
-                           `(##make-box ,(cdr m)))
+                           `(,make-box-prim ,(cdr m)))
                          mapping)))))
          ((pair? args)
           (let ((arg (car args)))
@@ -586,36 +599,30 @@
            ((member op '(begin if))
             `(,op ,@(map walk-exp (cdr e))))
            ((eqv? op 'define)
-            `(##make-global ',(cadr e) ,(walk-exp (caddr e))))
+            `(,make-global-prim ',(cadr e) ,(walk-exp (caddr e))))
            ((eqv? op 'lambda)
             (convert-lambda e))
            ((eqv? op '##fix)
-            (let loop ((lambdas (cadr e))
-                       (converted '()))
-              (if (null? lambdas)
-                  `(##fix ,(reverse converted)
-                          ,(walk-exp (caddr e)))
-                  (let ((binding (car lambdas)))
-                    (loop (cdr lambdas)
-                          (cons (list (car binding)
-                                      (convert-lambda (cadr binding)))
-                                converted))))))
+            `(##fix ,(map (lambda (b)
+                            (list (car b) (convert-lambda (cadr b))))
+                          (cadr e))
+                    ,(walk-exp (caddr e))))
            ((eqv? op 'set!)
             (let ((assignee (cadr e))
                   (assigned (walk-exp (caddr e))))
               (if (symbol? assignee)
-                  `(##global-set! ',assignee ,assigned)
-                  `(##box-set! ,assignee ,assigned))))
+                  `(,global-set-prim ',assignee ,assigned)
+                  `(,box-set-prim ,assignee ,assigned))))
            ((member op vm-prims)
             `(,(##make-primitive op) ,@(map walk-exp (cdr e))))
            (else
             (map walk-exp e))))
         (cond
          ((symbol? e)
-          `(##global-ref ',e))
+          `(,global-ref-prim ',e))
          ((and (##identifier? e)
                (##identifier-assigned? e))
-          `(##box-ref ,e))
+          `(,box-ref-prim ,e))
          (else e))))
 
   ;; primitives implemented by VM instructions

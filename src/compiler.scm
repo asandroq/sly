@@ -935,7 +935,8 @@
                 (reduce (##fix-body e))
                 (##make-fix out (reduce (##fix-body e))))
             (let ((ident (car lambdas)))
-              (if (reducible? ident)
+              (if (and (= (##identifier-uses ident) 0)
+                       (< (##identifier-calls ident) 2))
                   (loop (cdr lambdas) out)
                   (begin
                     (##identifier-lambda-set!

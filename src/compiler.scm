@@ -866,14 +866,29 @@
 
   (annotate! e))
 
-(define (##beta-reduce e)
+;; this pass makes only optimisations that guarantee a smaller
+;; code size
+(define (##beta-contraction e)
 
-  ;; reducing lambdas that are known, do not escape
-  ;; and are called just once (guarantees smaller code size)
-  (define (reducible? i)
+  (define (dead? i)
     (and (##identifier? i)
-         (##identifier-lambda i)
-         (= (##identifier-uses i) 0)
+         (zero? (##identifier-uses i))
+         (zero? (##identifier-calls i))))
+
+  ;; a known function is bound in a FIX, do not escape
+  ;; and has fixed arity (for now)
+  (define (known? i)
+    (and (##identifier? i)
+         (zero? (##identifier-uses i))
+         (let ((proc (##identifier-lambda i)))
+           (and proc
+                (let ((arity (##lambda-arity proc)))
+                  (eqv? (car arity) '=))))))
+
+  ;; reducing lambdas that are known and are called
+  ;; just once
+  (define (reducible? i)
+    (and (known? i)
          (= (##identifier-calls i) 1)))
 
   (define (subst e m)
@@ -908,20 +923,34 @@
   (define (reduce e)
     (cond
      ((##application? e)
-      (let ((op (##application-op e)))
-        (if (reducible? op)
-            (let* ((args (##application-args e))
-                   (proc (##identifier-lambda op))
-                   (arity (##lambda-arity proc)))
-              ;; reducing only lambdas with fixed arity
-              (if (and (eqv? (car arity) '=)
-                       (= (length args) (cdr arity)))
-                  (let ((mapping (map cons
-                                      (##lambda-vars proc)
-                                      args)))
-                    (subst (##lambda-body proc) mapping))
-                  (##make-application op (map reduce args))))
-            (##make-application op (map reduce (##application-args e))))))
+      (let ((op (##application-op e))
+            (args (map reduce (##application-args e))))
+        (if (known? op)
+            (let* ((proc (##identifier-lambda op))
+                   (vars (##lambda-original-vars proc))
+                   (arity (length vars)))
+              (if (= (length args) arity)
+                  (if (reducible? op)
+                      ;; beta-reducing the lambda
+                      (let ((mapping (map cons
+                                          (##lambda-vars proc)
+                                          args)))
+                        (subst (##lambda-body proc) mapping))
+                      ;; eliminating unused arguments
+                      (let loop ((args args)
+                                 (vars vars)
+                                 (new-args '()))
+                        (if (null? vars)
+                            (##make-application op (reverse new-args))
+                            (let ((var (car vars))
+                                  (arg (car args)))
+                              (loop (cdr args)
+                                    (cdr vars)
+                                    (if (dead? var)
+                                        new-args
+                                        (cons arg new-args)))))))
+                  (##make-application op args)))
+            (##make-application op args))))
      ((##conditional? e)
       (let ((test (##conditional-test e))
             (conseq (##conditional-conseq e))
@@ -943,14 +972,19 @@
                 (reduce (##fix-body e))
                 (##make-fix out (reduce (##fix-body e))))
             (let ((ident (car lambdas)))
-              (if (and (= (##identifier-uses ident) 0)
-                       (< (##identifier-calls ident) 2))
+              (if (or (dead? ident)
+                      (reducible? ident))
                   (loop (cdr lambdas) out)
-                  (begin
-                    (##identifier-lambda-set!
-                     ident
-                     (reduce (##identifier-lambda ident)))
-                    (loop (cdr lambdas) (cons ident out))))))))
+                  (let ((proc (reduce (##identifier-lambda ident))))
+                    (if (known? ident)
+                        (let ((vars (filter (lambda (v)
+                                              (not (dead? v)))
+                                            (##lambda-vars proc))))
+                          (##lambda-arity-set! proc (cons '= (length vars)))
+                          (##lambda-vars-set! proc vars)))
+                    (begin
+                      (##identifier-lambda-set! ident proc)
+                      (loop (cdr lambdas) (cons ident out)))))))))
      ((##lambda? e)
       (##make-lambda (##lambda-arity e)
                      (##lambda-vars e)
@@ -1072,7 +1106,7 @@
 
 ;; lambda node
 (define (##make-lambda arity vars body)
-  (vector '##lambda arity vars body))
+  (vector '##lambda arity vars vars body))
 
 (define (##lambda? a)
   (and (vector? a)
@@ -1081,11 +1115,20 @@
 (define (##lambda-arity a)
   (vector-ref a 1))
 
+(define (##lambda-arity-set! a n)
+  (vector-set! a 1 n))
+
 (define (##lambda-vars a)
   (vector-ref a 2))
 
-(define (##lambda-body a)
+(define (##lambda-vars-set! a v)
+  (vector-set! a 2 v))
+
+(define (##lambda-original-vars a)
   (vector-ref a 3))
+
+(define (##lambda-body a)
+  (vector-ref a 4))
 
 (define (immediate? x)
   (or (char? x)

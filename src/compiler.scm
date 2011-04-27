@@ -953,10 +953,8 @@
   (reduce e))
 
 ;; an identifier is the meaning of a variable
-(define (##make-identifier name . rest)
-  (if (null? rest)
-      (vector '##ident (rename-var name) #f #f #f)
-      (vector '##ident name (car rest) (cadr rest) (caddr rest))))
+(define (##make-identifier name)
+  (vector '##ident (rename-var name) #f #f #f))
 
 (define (##identifier? id)
   (and (vector? id)

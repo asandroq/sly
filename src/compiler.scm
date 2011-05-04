@@ -994,6 +994,53 @@
 
   (reduce e))
 
+(define (##free-identifiers e)
+
+  (define (set-union a b)
+    (if (null? a)
+        b
+        (let ((aa (car a)))
+          (if (memq aa b)
+              (set-union (cdr a) b)
+              (set-union (cdr a) (cons aa b))))))
+
+  (define (collect e bound)
+    (cond
+     ((##application? e)
+      (set-union (collect (##application-op e) bound)
+                 (##fold '()
+                         (lambda (a b)
+                           (set-union (collect a bound) b))
+                         (##application-args e))))
+     ((##conditional? e)
+      (set-union (collect (##conditional-test e) bound)
+                 (set-union (collect (##conditional-conseq e) bound)
+                            (collect (##conditional-altern e) bound))))
+     ((##constant? e)
+      '())
+     ((##fix? e)
+      (let* ((fix-lambdas (##fix-lambdas e))
+             (new-bound (append bound fix-lambdas))
+             (lambdas (map ##identifier-lambda fix-lambdas)))
+        (set-union (##fold '()
+                           (lambda (a b)
+                             (set-union (collect a new-bound) b))
+                           lambdas)
+                   (collect (##fix-body e) new-bound))))
+     ((##identifier? e)
+      (if (memq e bound)
+          '()
+          (list e)))
+     ((##lambda? e)
+      (let ((new-bound (append bound (##lambda-vars e))))
+        (collect (##lambda-body e) new-bound)))
+     ((##primitive? e)
+      '())
+     (else
+      (error "Unknown node type"))))
+
+  (collect e '()))
+
 ;; an identifier is the meaning of a variable
 (define (##make-identifier name)
   (vector '##ident (rename-var name) #f #f #f))
@@ -1865,17 +1912,6 @@
 ;; Utilities
 ;;
 
-;; Produces the union of two sets
-(define (set-union set1 set2)
-  (let loop ((set1 set1)
-	     (set2 set2))
-    (if (null? set2)
-	set1
-	(let ((item (car set2)))
-	  (if (member item set1)
-	      (loop set1 (cdr set2))
-	      (loop (cons item set1) (cdr set2)))))))
-
 ;; Gives the numerical index of an item in a list
 (define (index-of item list)
   (let loop ((i 0)
@@ -1908,6 +1944,14 @@
           (if (pred a)
               (loop (cons a ret) (cdr coll))
               (loop ret (cdr coll)))))))
+
+(define (##fold s f l)
+  (let loop ((l l)
+             (ret s))
+    (if (null? l)
+        ret
+        (let ((a (car l)))
+          (loop (cdr l) (f a ret))))))
 
 (define (##before? a b list)
   (let loop ((list list))

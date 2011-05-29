@@ -529,108 +529,6 @@
   '(+ - * / < > append assoc assv assq car cdr cons integer? list
       member memv memq not number? pair? quotient remainder symbol?))
 
-;;
-;; Assignment and global conversion
-;;
-
-(define (##convert-assignments e)
-
-  (define global-ref-prim (##make-primitive '##global-ref))
-
-  (define global-set-prim (##make-primitive '##global-set!))
-
-  (define make-global-prim (##make-primitive '##make-global))
-
-  (define box-ref-prim (##make-primitive '##box-ref))
-
-  (define box-set-prim (##make-primitive '##box-set!))
-
-  (define make-box-prim (##make-primitive '##make-box))
-
-  (define (convert-lambda l)
-    (let ((new-body (walk-exp (caddr l))))
-      (let loop ((args (cadr l))
-                 (new-args '())
-                 (mapping '())
-                 (extra #f))
-        (cond
-         ((null? args)
-          (if (null? mapping)
-              `(lambda ,(cadr l)
-                 ,new-body)
-              `(lambda ,(if extra
-                            (if (null? new-args)
-                                extra
-                                `(,@(reverse new-args) . ,extra))
-                            (reverse new-args))
-                 ((lambda ,(map car mapping)
-                    ,new-body)
-                  ,@(map (lambda (m)
-                           `(,make-box-prim ,(cdr m)))
-                         mapping)))))
-         ((pair? args)
-          (let ((arg (car args)))
-            (if (##identifier-assigned? arg)
-                (let ((new-arg (##make-identifier 'svar)))
-                  (##identifier-assigned-set! arg #f)
-                  (##identifier-referenced-set! new-arg #t)
-                  (loop (cdr args)
-                        (cons new-arg new-args)
-                        (cons (cons arg new-arg) mapping)
-                        #f))
-                (loop (cdr args) (cons arg new-args) mapping #f))))
-         (else
-          (if (##identifier-assigned? args)
-              (let ((new-arg (##make-identifier 'svar)))
-                (##identifier-assigned-set! args #f)
-                (##identifier-referenced-set! new-arg #t)
-                (loop '()
-                      new-args
-                      (cons (cons args new-arg) mapping)
-                      new-arg))
-              (loop '() new-args mapping args)))))))
-
-  (define (walk-exp e)
-    (if (pair? e)
-        (let ((op (car e)))
-          (cond
-           ((eqv? op 'quote)
-            e)
-           ((member op '(begin if))
-            `(,op ,@(map walk-exp (cdr e))))
-           ((eqv? op 'define)
-            `(,make-global-prim ',(cadr e) ,(walk-exp (caddr e))))
-           ((eqv? op 'lambda)
-            (convert-lambda e))
-           ((eqv? op '##fix)
-            `(##fix ,(map (lambda (b)
-                            (list (car b) (convert-lambda (cadr b))))
-                          (cadr e))
-                    ,(walk-exp (caddr e))))
-           ((eqv? op 'set!)
-            (let ((assignee (cadr e))
-                  (assigned (walk-exp (caddr e))))
-              (if (symbol? assignee)
-                  `(,global-set-prim ',assignee ,assigned)
-                  `(,box-set-prim ,assignee ,assigned))))
-           ((member op vm-prims)
-            `(,(##make-primitive op) ,@(map walk-exp (cdr e))))
-           (else
-            (map walk-exp e))))
-        (cond
-         ((symbol? e)
-          `(,global-ref-prim ',e))
-         ((and (##identifier? e)
-               (##identifier-assigned? e))
-          `(,box-ref-prim ,e))
-         (else e))))
-
-  ;; primitives implemented by VM instructions
-  (define vm-prims '(+ - * / = car cdr cons null? bool? char? fixnum? pair?
-                       symbol? zero? not))
-
-  (walk-exp e))
-
 ;;;
 ;;; CPS transformation
 ;;;
@@ -641,11 +539,22 @@
 (define (##to-cps e)
 
   (define (cps-lambda e)
-    (let ((vars (cadr e))
-          (body (caddr e))
-          (k (##make-identifier 'k)))
-      `(lambda (,k ,@vars)
-         ,(cps-c body k))))
+    (let* ((k (##make-identifier 'k))
+           (body (cps-c (caddr e) k)))
+      (letrec ((parse (lambda (n* regular)
+                        (cond
+                         ((null? n*)
+                          (objectify (reverse regular) #f))
+                         ((pair? n*)
+                          (parse (cdr n*) (cons (car n*) regular)))
+                         (else
+                          (objectify (reverse regular) n* body)))))
+               (objectify (lambda (n* n)
+                            (##make-lambda (cons (if n '>= '=)
+                                                 (length n*))
+                                           (if n (append n* (list n)) n*)
+                                           body))))
+        (parse (cons k (cadr e)) '()))))
 
   (define (cps*-k e* k)
     (if (null? e*)
@@ -661,7 +570,7 @@
         (let ((op (car e)))
           (cond
            ((eqv? op 'quote)
-            (k e))
+            (k (##make-constant (cadr e))))
            ((eqv? op 'begin)
             (let ((rest (cddr e)))
               (cps-k (cadr e)
@@ -670,58 +579,71 @@
                          (lambda (hd)
                            (cps-k `(begin ,@rest) k))))))
            ((eqv? op 'if)
-            (let ((r (##make-identifier 'r))
-                  (c (##make-identifier 'k))
-                  (conseq (caddr e))
-                  (altern (if (null? (cdddr e))
-                              '(##void)
-                              (cadddr e))))
-              `(##fix ((,c (lambda (,r) ,(k r))))
-                 ,(cps-k (cadr e)
-                         (lambda (test)
-                           `(if ,test
-                                ,(cps-c conseq c)
-                                ,(cps-c altern c)))))))
+            (let* ((r (##make-identifier 'r))
+                   (c (##make-identifier 'k))
+                   (conseq (cps-c (caddr e) c))
+                   (altern (cps-c (if (null? (cdddr e))
+                                      42
+                                      (cadddr e))
+                                  c))
+                   (body (cps-k (cadr e)
+                                (lambda (test)
+                                  (##make-conditional test conseq altern))))
+                   (ret (##make-lambda '(= 1) (list r) (k r))))
+              (##identifier-lambda-set! c ret)
+              (##make-fix (list c) body)))
            ((eqv? op 'lambda)
             (let ((l (##make-identifier 'l)))
-              `(##fix ((,l ,(cps-lambda e)))
-                 ,(k l))))
+              (##identifier-lambda-set! l (cps-lambda e))
+              (##make-fix (list l) (k l))))
            ((eqv? op '##fix)
             (let loop ((bindings (cadr e))
-                       (new-bindings '()))
+                       (idents '()))
               (if (null? bindings)
-                  `(##fix ,(reverse new-bindings)
-                     ,(cps-k (caddr e) k))
+                  (##make-fix idents (cps-k (caddr e) k))
                   (let* ((binding (car bindings))
                          (i (car binding))
                          (l (cadr binding)))
-                    (loop (cdr bindings)
-                          (cons (list i (cps-lambda l))
-                                new-bindings))))))
+                    (##identifier-lambda-set! i (cps-lambda l))
+                    (loop (cdr bindings) (cons i idents))))))
+           ((or (eqv? op 'define)
+                (eqv? op 'set!))
+            (let ((ident (cadr e))
+                  (exp (caddr e)))
+              (cps-k exp
+                     (lambda (v)
+                      (##make-box-set ident v (k 42))))))
            ((##primitive? op)
             (let ((c (##make-identifier 'k))
                   (r (##make-identifier 'r)))
+              (##identifier-lambda-set! c (##make-lambda '(= 1) (list r) (k r)))
               (cps*-k (cdr e)
                       (lambda (args)
-                        `(##fix ((,c (lambda (,r) ,(k r))))
-                           (,op ,c ,@args))))))
+                        (##make-fix (list c)
+                                    (##make-application op (cons c args)))))))
            (else
             (let ((c (##make-identifier 'k))
                   (r (##make-identifier 'r)))
+              (##identifier-lambda-set! c (##make-lambda '(= 1) (list r) (k r)))
               (cps-k (car e)
                      (lambda (op)
                        (cps*-k (cdr e)
                                (lambda (args)
-                                 `(##fix ((,c (lambda (,r) ,(k r))))
-                                    (,op ,c ,@args))))))))))
-        (k e)))
+                                 (##make-fix (list c)
+                                             (##make-application op (cons c args)))))))))))
+        (if (##identifier? e)
+            (if (##identifier-assigned? e)
+                (let ((u (##make-identifier 'u)))
+                  (##make-box-ref e u (k u)))
+                (k e))
+            (k (##make-constant e)))))
 
   (define (cps-c e c)
     (if (pair? e)
         (let ((op (car e)))
           (cond
            ((eqv? op 'quote)
-            `(,c ,e))
+            (##make-application c (list (##make-constant (cadr e)))))
            ((eqv? op 'begin)
             (let ((rest (cddr e)))
               (if (null? rest)
@@ -730,104 +652,52 @@
                          (lambda (hd)
                            (cps-c `(begin ,@rest) c))))))
            ((eqv? op 'if)
-            (let ((conseq (caddr e))
-                  (altern (if (null? (cdddr e))
-                              (##void)
-                              (cadddr e))))
+            (let ((conseq (cps-c (caddr e) c))
+                  (altern (cps-c (if (null? (cdddr e))
+                                     42
+                                     (cadddr e))
+                                 c)))
               (cps-k (cadr e)
                      (lambda (test)
-                       `(if ,test
-                            ,(cps-c conseq c)
-                            ,(cps-c altern c))))))
+                       (##make-conditional test conseq altern)))))
            ((eqv? op 'lambda)
             (let ((l (##make-identifier 'l)))
-              `(##fix ((,l ,(cps-lambda e)))
-                 (,c ,l))))
+              (##identifier-lambda-set! l (cps-lambda e))
+              (##make-fix (list l)
+                          (##make-application c (list l)))))
            ((eqv? op '##fix)
             (let loop ((bindings (cadr e))
-                       (new-bindings '()))
+                       (idents '()))
               (if (null? bindings)
-                  `(##fix ,(reverse new-bindings)
-                     ,(cps-c (caddr e) c))
+                  (##make-fix idents (cps-c (caddr e) c))
                   (let* ((binding (car bindings))
                          (i (car binding))
                          (l (cadr binding)))
-                    (loop (cdr bindings)
-                          (cons (list i (cps-lambda l))
-                                new-bindings))))))
+                    (##identifier-lambda-set! i (cps-lambda l))
+                    (loop (cdr bindings) (cons i idents))))))
+           ((or (eqv? op 'define)
+                (eqv? op 'set!))
+            (cps-k (caddr e)
+                   (lambda (v)
+                     (##make-box-set (cadr e) v (cps-c 42 c)))))
            ((##primitive? op)
             (cps*-k (cdr e)
                     (lambda (args)
-                      `(,op ,c ,@args))))
+                      (##make-application op (cons c args)))))
            (else
             (cps-k (car e)
                    (lambda (op)
                      (cps*-k (cdr e)
                              (lambda (args)
-                               `(,op ,c ,@args))))))))
-        `(,c ,e)))
+                               (##make-application op (cons c args)))))))))
+        (if (##identifier? e)
+            (if (##identifier-assigned? e)
+                (let ((u (##make-identifier 'u)))
+                  (##make-box-ref e u (##make-application c (list u))))
+                (##make-application c (list e)))
+            (##make-application c (list (##make-constant e))))))
 
-  (cps-c e '##halt))
-
-;;;
-;;; AST creation
-;;; from this point onwards the code must be analysed and the tree annotated.
-;;; to make this easier, we transform the source tree into an object tree.
-;;;
-
-(define (##objectify e)
-
-  (define (objectify-lambda e)
-
-    (define (parse n* regular)
-      (cond
-       ((null? n*)
-        (objectify-internal (reverse regular) #f))
-       ((pair? n*)
-        (parse (cdr n*) (cons (car n*) regular)))
-       (else
-        (objectify-internal (reverse regular) n*))))
-
-    (define (objectify-internal n* n)
-      (let ((body (objectify (caddr e))))
-        (##make-lambda (cons (if n '>= '=)
-                             (length n*))
-                       (if n (append n* (list n)) n*)
-                       body)))
-
-    (parse (cadr e) '()))
-
-  (define (objectify e)
-    (if (pair? e)
-        (let ((op (car e)))
-          (cond
-           ((eqv? op '##fix)
-            (let loop ((bindings (cadr e))
-                       (idents '()))
-              (if (null? bindings)
-                  (##make-fix idents (objectify (caddr e)))
-                  (let* ((binding (car bindings))
-                         (ident (car binding))
-                         (proc (cadr binding)))
-                    (##identifier-lambda-set! ident (objectify proc))
-                    (loop (cdr bindings) (cons ident idents))))))
-           ((eqv? op 'if)
-            (##make-conditional (objectify (cadr e))
-                                (objectify (caddr e))
-                                (objectify (cadddr e))))
-           ((eqv? op 'lambda)
-            (objectify-lambda e))
-           ((eqv? op 'quote)
-            (##make-constant (cadr e)))
-           (else
-            (##make-application (objectify op)
-                                (map objectify (cdr e))))))
-        (if (or (##identifier? e)
-                (##primitive? e))
-            e
-            (##make-constant e))))
-
-  (objectify e))
+  (cps-c e (##make-primitive '##halt)))
 
 ;; walks and annotate the tree regarding identifier use
 (define (##annotate-identifiers! e)
@@ -1175,6 +1045,39 @@
 
 (define (##lambda-body a)
   (vector-ref a 4))
+
+;; assignment
+(define (##make-box-ref b u c)
+  (vector 'box-ref b u c))
+
+(define (##box-ref? a)
+  (and (vector? a)
+       (eqv? (vector-ref a 0) 'box-ref)))
+
+(define (##box-ref-case a)
+  (vector-ref a 1))
+
+(define (##box-ref-contents a)
+  (vector-ref a 2))
+
+(define (##box-ref-body a)
+  (vector-ref a 3))
+
+(define (##make-box-set b v c)
+  (vector 'box-set b v c))
+
+(define (##box-set? a)
+  (and (vector? a)
+       (eqv? (vector-ref a 0) 'box-set)))
+
+(define (##box-set-case a)
+  (vector-ref a 1))
+
+(define (##box-set-value a)
+  (vector-ref a 2))
+
+(define (##box-set-body a)
+  (vector-ref a 3))
 
 (define (immediate? x)
   (or (char? x)
